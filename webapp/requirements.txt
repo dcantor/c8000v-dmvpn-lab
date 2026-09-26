@@ -1,0 +1,8 @@
+# the versions the sibling portals run on this host's Python 3.14 (older pydantic has no cp314 wheel)
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+pydantic==2.13.5
+paramiko==4.0.0
+netmiko==4.7.0
+requests==2.32.3
+labportal @ git+https://github.com/dcantor/lab-portal

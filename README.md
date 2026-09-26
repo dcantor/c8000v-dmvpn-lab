@@ -45,15 +45,73 @@ pings every other one across the overlay. Built and configured as code: libvirt 
 | Path | Purpose |
 |---|---|
 | `lab.conf` | the inventory: roles, OOB / WAN / tunnel / LAN addressing, `LINKS`, the DMVPN service, VM shapes |
-| `lab.sh` | libvirt controller — `up down bootstrap wait nac configure verify hosts test status inventory console ssh log rebuild clean` |
+| `lab.sh` | libvirt controller — `up down bootstrap wait nac configure verify hosts test nautobot webapp status inventory console ssh log rebuild clean` |
 | `lab.sh inventory` | the lab as JSON (assembled by `tools/inventory.py`): the one contract the renderer and the tests read |
 | `tools/render.py` | inventory → C8000v day-0 (`nodes/<n>/iosxe_config.txt`), the provider (`nodes/mpls/vyos_config.txt`) and `nac/data/devices.nac.yaml` |
 | `tools/gen_configs.py` | writes the renders; `--check` exits 1 if any is stale (a test asserts it) |
 | `nac/data/device_groups.nac.yaml` | what every DMVPN router shares: the IKEv2 / IPsec suite |
 | `nac/data/global.nac.yaml` | baseline: domain, SSH / AAA / VTY hardening, management ACL, banner |
 | `tools/console.py`, `vyos_console.py`, `vyos_push.py`, `ios_cmd.py`, `vyos_cmd.py`, `host_cmd.py` | serial-console day-0, day-N over SSH, op-mode reads, the host ping matrix |
-| `tests/suites/` | `01_management`, `02_underlay`, `03_dmvpn`, `04_routing`, `05_nac_compliance` |
+| `tests/suites/` | `01_management`, `02_underlay`, `03_dmvpn`, `04_routing`, `05_nac_compliance`, `06_nautobot` |
+| `nautobot/` | `seed.py` (lab.conf → Nautobot), `render.py` (Nautobot → the same renderer, `--check`), `remove_customer.py`, the saved GraphQL query |
+| `webapp/` | the portal: `app.py` (the runs), `customers.py` (allocate, validate, plan), `labconf.py` (edit `lab.conf`), `state.py` (what the routers are doing), `static/index.html` |
 | `results/` | one folder per test run: `configs/pre-run`, `configs/post-run`, the diff, Robot report / log |
+
+## Nautobot is the source of truth
+
+`./lab.sh nautobot seed` writes the lab into the shared Nautobot (the `nms` VM of the cat9000v lab,
+http://10.0.0.10:8080):
+- **Locations:** site `c8000v-dmvpn-lab` with regions `c8d-east`, `c8d-central` and `c8d-west`.
+- **Devices:** every device under its libvirt name (`c8d-hub-east`, …), because Nautobot names are global and
+  `vyos-dmvpn` already has a `hub-east`.
+- **Interfaces:** every interface with its lab MAC, including Loopback0, Loopback10 and Tunnel0.
+- **IPAM:** every address, and the prefixes with roles.
+- **Cables:** a cable per link.
+- **BGP:** AS 65100 and AS 65000, a routing instance per router, and a peering per session (hub↔hub,
+  hub (rr)↔customer (rr-client), site (customer)↔provider).
+- **Config context:** the service data that `tools/render.py` reads.
+
+`./lab.sh nautobot render --check` rebuilds the inventory from the saved GraphQL query `c8000v-dmvpn-lab-model`,
+hands it to the *same* renderer, and compares all eight rendered files byte for byte:
+
+```
+$ ./lab.sh nautobot render --check
+nac/data/devices.nac.yaml: Nautobot == lab.conf (933 lines)
+nodes/cust1/iosxe_config.txt: Nautobot == lab.conf (43 lines)
+...
+nodes/mpls/vyos_config.txt: Nautobot == lab.conf (68 lines)
+```
+
+The seed is idempotent (`0 changes (already in sync)` on a second run), and `seed --check` is a dry run that exits 1
+on drift. The pre-shared key and NHRP secret are deliberately not in Nautobot; they stay in `lab.conf`.
+
+## The provisioning portal
+
+`./lab.sh webapp` serves **http://192.168.50.231:8094** (Swagger at `/docs`), built on the shared
+[lab-portal](../lab-portal) run engine and registered with the lab hub on :8088.
+
+| View | What it does |
+|---|---|
+| The cloud | every C8000v with what it is *actually* doing: NHRP registrations (hub) or NHS (customer), IPsec sessions, overlay BGP, the provider session, live customer-to-customer shortcuts; the provider's eBGP customers; a health line |
+| Provision | add a customer, remove one, deploy the model, dry run (terraform plan + Nautobot check), run the tests |
+| Runs | every run with its steps, log and test report; a failed run resumes from the step that failed |
+
+**Adding a customer never touches a hub.** Its pipeline:
+
+```
+validate → lab.conf + render → the C8000v and its host → day-0 (license reload) → terraform apply
+        → the provider's new link → Nautobot → verify → tests
+```
+
+Terraform adds resources on the new router only. The customer registers with NHRP, arrives on the hubs' BGP
+listen range, and reaches the provider on its listen range. Every value in the wizard is the next free one: `custN`,
+index `10+N` (which fixes `100.70.<idx>.0/30`, `172.28.0.<idx>` and `10.255.5.<idx>`), `10.5.0.2N`, and
+`192.168.6N.0/24`. **Removing one** works in reverse:
+1. Terraform forgets the router's resources.
+2. The VMs are deleted.
+3. The customer is taken out of `lab.conf`.
+4. The provider's port is released: the push removes its address and disables it.
+5. The customer is removed from Nautobot.
 
 ## Design notes
 

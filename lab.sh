@@ -438,11 +438,12 @@ cmd_clean() {      # destroy VMs and delete overlay disks (the base images are u
 }
 
 cmd_status() {
-  printf '%-12s %-9s %-15s %-10s %-13s %-12s %-16s %-7s\n' NODE ROLE VM STATE MGMT-IP NBMA TUNNEL0 CONSOLE
+  # NODE ROLE STATE first: the lab hub (lab-portal) reads those three columns to count this lab's VMs
+  printf '%-12s %-9s %-10s %-15s %-13s %-12s %-16s %-7s\n' NODE ROLE STATE VM MGMT-IP NBMA TUNNEL0 CONSOLE
   local n t
   for n in "${ALL_NODES[@]}"; do
     t="${T_IDX[$n]:-}"
-    printf '%-12s %-9s %-15s %-10s %-13s %-12s %-16s %-7s\n' "$n" "${ROLE[$n]}" "$(dom "$n")" "$(state "$n")" "${MGMT_IP[$n]}" \
+    printf '%-12s %-9s %-10s %-15s %-13s %-12s %-16s %-7s\n' "$n" "${ROLE[$n]}" "$(state "$n")" "$(dom "$n")" "${MGMT_IP[$n]}" \
       "${t:+$WAN_NET.$t.2}" "${t:+${DMVPN_OVERLAY%.*}.$t}" "${CONSOLE_PORT[$n]}"
   done
   echo; echo "DMVPN: one phase 3 cloud, Tunnel0 $DMVPN_OVERLAY, network-id $DMVPN_NETWORK_ID, iBGP AS $DMVPN_AS; provider AS $PROVIDER_AS"
@@ -528,12 +529,20 @@ cmd_nautobot() {   # seed [--check] | render [--check|--write|--inventory] | tok
   case "$sub" in
     token) nautobot_token ;;
     seed|render) NAUTOBOT_URL="$NAUTOBOT_URL" NAUTOBOT_TOKEN="$(nautobot_token)" "$PY" "$LAB_DIR/nautobot/$sub.py" "$@" ;;
-    *) die "unknown nautobot subcommand: $sub (seed | render | token)" ;;
+    remove-customer) NAUTOBOT_URL="$NAUTOBOT_URL" NAUTOBOT_TOKEN="$(nautobot_token)" "$PY" "$LAB_DIR/nautobot/remove_customer.py" \
+                       --domain-prefix "$DOMAIN_PREFIX" "$@" ;;
+    *) die "unknown nautobot subcommand: $sub (seed | render | remove-customer | token)" ;;
   esac
 }
 
 cmd_hosts() {      # `hosts` = ping matrix between the LAN hosts, `hosts run NAME CMD`
   need_python; "$PY" "$LAB_DIR/tools/host_cmd.py" "${1:-matrix}" "${@:2}"
+}
+
+cmd_webapp() {     # the DMVPN provisioning portal (FastAPI/uvicorn) on http://<host>:8094
+  [[ -x "$LAB_DIR/webapp/.venv/bin/uvicorn" ]] || "$LAB_DIR/webapp/setup.sh"
+  export PATH="$HOME/.local/bin:$PATH"
+  cd "$LAB_DIR/webapp" && exec .venv/bin/uvicorn app:app --host "${WEBAPP_HOST:-0.0.0.0}" --port "${WEBAPP_PORT:-8094}" "$@"
 }
 
 cmd_test() {       # Robot Framework suites; results in results/<date>_<time>/
@@ -552,7 +561,8 @@ usage: ./lab.sh <command> [node ...]
   verify             provider, underlay, NHRP, IPsec, iBGP, host ping matrix
   hosts [run N CMD]  ping matrix between the LAN hosts (or run a command on one)
   test [robot args]  run the Robot Framework suites -> results/<date>_<time>/
-  nautobot <sub>     seed [--check] | render [--check|--write|--inventory] | token   (shared Nautobot)
+  nautobot <sub>     seed [--check] | render [--check|--write|--inventory] | remove-customer NAME .. | token
+  webapp             serve the provisioning portal on :8094
   status             nodes, VMs, addresses, links
   inventory          the lab as JSON — the contract every tool reads
   down [node..]      save (C8000v) and stop VMs
@@ -568,6 +578,6 @@ U
 
 cmd="${1:-}"; shift || true
 case "$cmd" in
-  up|down|bootstrap|configure|wait|status|inventory|console|ssh|log|nac|verify|hosts|test|nautobot|rebuild|clean) "cmd_$cmd" "$@" ;;
+  up|down|bootstrap|configure|wait|status|inventory|console|ssh|log|nac|verify|hosts|test|nautobot|webapp|rebuild|clean) "cmd_$cmd" "$@" ;;
   *) usage; [[ -z "$cmd" || "$cmd" == help || "$cmd" == -h ]] && exit 0; exit 1 ;;
 esac

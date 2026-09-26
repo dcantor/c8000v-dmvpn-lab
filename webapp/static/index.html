@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>C8000v DMVPN Portal</title>
+<style>
+:root { --ink:#07161c; --teal:#0e7490; --green:#15803d; --amber:#b45309; --red:#b91c1c;
+        --bg:#f6f8f9; --card:#fff; --line:#dce3e7; --body:#1f2937; --muted:#64748b; --pill:#e8eef1; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#0b1418; --card:#111f25; --line:#24343b; --body:#e5eaec; --muted:#8fa3ab; --pill:#1c2c33; } }
+:root[data-theme=dark] { --bg:#0b1418; --card:#111f25; --line:#24343b; --body:#e5eaec; --muted:#8fa3ab; --pill:#1c2c33; }
+* { box-sizing:border-box } body { margin:0; background:var(--bg); color:var(--body);
+  font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif }
+header { background:var(--ink); color:#fff; padding:10px 20px; display:flex; gap:20px; align-items:center; flex-wrap:wrap }
+header h1 { font-size:18px; margin:0 } header .sub { font-size:12px; color:#8fa3bf }
+nav { display:flex; gap:4px; flex-wrap:wrap } nav a { color:#c7d2e4; text-decoration:none; padding:5px 11px; border-radius:6px; font-size:14px }
+nav a.on, nav a:hover { background:#1b2a3a; color:#fff } .right { margin-left:auto; font-size:12px; color:#8fa3bf }
+.right a { color:#9fd7e4 }
+main { padding:18px 16px; max-width:1500px; margin:0 auto } .view { display:none } .view.on { display:block }
+.card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-bottom:14px; overflow-x:auto }
+.card h2 { font-size:15px; margin:0 0 10px } .card h2 small { font-weight:400; color:var(--muted); font-size:12.5px; margin-left:8px }
+table { width:100%; border-collapse:collapse; font-size:13.5px } th { text-align:left; color:var(--muted); font-weight:600;
+  border-bottom:1px solid var(--line); padding:6px 8px; white-space:nowrap }
+td { padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:top } tr:last-child td { border-bottom:0 }
+.mono { font-family:"DejaVu Sans Mono",Consolas,monospace; font-size:12.5px }
+.pill { display:inline-block; padding:1px 8px; border-radius:999px; font-size:11.5px; font-weight:600; background:var(--pill); color:var(--body) }
+.pill.ok { background:#dcf5e4; color:#15803d } .pill.bad { background:#fde2e2; color:#b91c1c }
+.pill.warn { background:#fdf0d5; color:#b45309 } .pill.teal { background:#d7eef3; color:#0e7490 }
+.kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; margin-bottom:14px }
+.kpi { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 14px }
+.kpi .n { font-size:25px; font-weight:600; color:var(--teal) } .kpi .l { color:var(--muted); font-size:12px }
+.tasks { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:10px }
+button { font:inherit; padding:5px 12px; border:1px solid var(--line); background:var(--card); color:var(--body);
+  border-radius:7px; cursor:pointer } button:hover { border-color:var(--teal) }
+button.primary { background:var(--teal); color:#fff; border-color:var(--teal) } button.danger { color:var(--red) }
+button.task { text-align:left; display:flex; flex-direction:column; gap:3px; padding:11px 13px }
+button.task .t { font-weight:600 } button.task .w { font-size:12.5px; color:var(--muted); font-weight:400 }
+button.task .m { font-size:11.5px; color:var(--teal) }
+dialog { border:1px solid var(--line); border-radius:12px; padding:18px 20px; max-width:900px; width:94%;
+  background:var(--card); color:var(--body) } dialog::backdrop { background:rgba(7,22,28,.55) }
+label { display:block; font-size:12px; color:var(--muted); margin-bottom:3px }
+input { width:100%; padding:5px 8px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--body); font:inherit; font-size:13.5px }
+.row { display:flex; gap:10px; flex-wrap:wrap } .row > div { flex:1; min-width:140px }
+.hint { color:var(--muted); font-size:12.5px; margin:6px 0 0 } .msg { color:var(--red); font-size:13px; white-space:pre-wrap; margin:8px 0 0 }
+.actions { display:flex; gap:8px; margin-top:14px; align-items:center }
+pre.out { background:#0c2129; color:#d7e3e8; padding:12px 14px; border-radius:8px; overflow:auto; max-height:420px; font-size:12.5px }
+.steps { padding-left:18px } .steps li { margin-bottom:5px } .steps .s { font-weight:600 } .steps .d { color:var(--muted); font-size:12.5px }
+</style></head><body>
+<header>
+  <div><h1>C8000v DMVPN Portal</h1>
+    <div class="sub">three hubs &middot; Catalyst 8000v customers &middot; a VyOS MPLS provider &middot; Network-as-Code &middot; Nautobot</div></div>
+  <nav><a href="#cloud" data-view="cloud" class="on">The cloud</a><a href="#provision" data-view="provision">Provision</a>
+       <a href="#runs" data-view="runs">Runs</a><a href="/docs" target="_blank">API</a></nav>
+  <div class="right"><span id="hdr"></span> &middot; <a href="#" id="theme">&#9790; dark</a></div>
+</header>
+<main>
+
+<section id="v-cloud" class="view on">
+  <div class="kpis" id="kpis"></div>
+  <div class="card"><h2>The cloud <small>every C8000v, and what it is actually doing</small>
+    <span style="float:right"><button onclick="load(true)">Refresh</button></span></h2>
+    <table id="cloud"><thead><tr><th>Router</th><th>Role</th><th>Tunnel0</th><th>NBMA</th><th>NHRP</th>
+      <th>IPsec</th><th>Overlay BGP</th><th>Provider</th><th>Shortcuts</th><th>LAN</th><th>Host</th></tr></thead><tbody></tbody></table>
+    <p class="hint" id="cloud-hint"></p></div>
+  <div class="card"><h2>The provider <small>a VyOS router standing in for the MPLS network: it carries the sites' WAN addresses and nothing else</small></h2>
+    <table id="prov"><thead><tr><th>Router</th><th>AS</th><th>Accepts</th><th>Interfaces up</th><th>eBGP customers</th><th>Attached</th></tr></thead><tbody></tbody></table></div>
+  <div class="card"><h2>Health</h2><div id="health"></div></div>
+</section>
+
+<section id="v-provision" class="view">
+  <div class="card"><h2>What do you want to do? <small>every change is a run: pick one, review what it will do, then watch it</small></h2>
+    <div class="tasks" id="tasks"></div></div>
+</section>
+
+<section id="v-runs" class="view">
+  <div class="card"><h2>Runs <small>one at a time; a failed run resumes from the step that failed</small></h2>
+    <table id="runs"><thead><tr><th>Started</th><th>Mode</th><th>Customer</th><th>Status</th><th>Tests</th></tr></thead><tbody></tbody></table></div>
+  <div class="card"><h2 id="run-title">Run</h2><div id="run-body" class="hint">select a run</div></div>
+</section>
+</main>
+
+<dialog id="wiz"><h2>Add a customer</h2>
+  <div class="row"><div><label>Name</label><input id="w-name"></div>
+    <div><label>Region</label><input id="w-region"></div>
+    <div><label>Management address</label><input id="w-mgmt"></div>
+    <div><label>Site LAN</label><input id="w-lan"></div></div>
+  <div class="row" style="margin-top:9px">
+    <div><label>Index (WAN /30, tunnel, router-id)</label><input id="w-tidx" type="number"></div>
+    <div><label>Provider port</label><input id="w-pport"></div>
+    <div><label>LAN host</label><input id="w-host"></div>
+    <div><label>Host management</label><input id="w-hmgmt"></div></div>
+  <table style="margin-top:12px"><tbody id="w-plan"></tbody></table>
+  <p class="hint" id="w-note"></p>
+  <label style="margin-top:10px"><input type="checkbox" id="w-test" checked style="width:auto"> run the suites at the end</label>
+  <div class="msg" id="w-msg"></div>
+  <div class="actions"><button class="primary" id="w-go">Provision the customer</button><button id="w-check">Re-check</button>
+    <span style="flex:1"></span><button onclick="wiz.close()">Cancel</button></div></dialog>
+
+<dialog id="rm"><h2 id="rm-title">Remove a customer</h2><div id="rm-body"></div>
+  <div class="msg" id="rm-msg"></div>
+  <div class="actions"><button class="danger" id="rm-go">Remove it</button>
+    <span style="flex:1"></span><button onclick="rm.close()">Cancel</button></div></dialog>
+
+<script>
+const $ = id => document.getElementById(id), esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const J = { method: 'POST', headers: { 'content-type': 'application/json' } };
+let ST = null, SPEC = null, watching = null;
+function applyTheme() { let t = null; try { t = localStorage.getItem('c8d-theme'); } catch (e) {}
+  const dark = t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light'; $('theme').textContent = dark ? '☀ light' : '☾ dark'; }
+applyTheme(); $('theme').onclick = e => { e.preventDefault();
+  try { localStorage.setItem('c8d-theme', document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'); } catch (x) {}
+  applyTheme(); };
+document.querySelectorAll('nav a[data-view]').forEach(a => a.onclick = e => { e.preventDefault(); show(a.dataset.view); });
+function show(v) { document.querySelectorAll('.view').forEach(x => x.classList.toggle('on', x.id === 'v-' + v));
+  document.querySelectorAll('nav a[data-view]').forEach(a => a.classList.toggle('on', a.dataset.view === v));
+  location.hash = v; if (v === 'runs') loadRuns(); }
+const pill = (ok, text, warn) => `<span class="pill ${ok ? 'ok' : (warn ? 'warn' : 'bad')}">${esc(text)}</span>`;
+
+const TASKS = [
+  { title: 'Add a customer', what: 'A new site: a C8000v and its LAN host, a link into the provider, Tunnel0 registered with all three hubs. No hub changes.', meta: 'about 15 minutes (C8000v first boot)', go: openWizard },
+  { title: 'Remove a customer', what: 'Decommission a customer: Terraform forgets it, the VMs are deleted, out of lab.conf and Nautobot, its provider port released.', meta: 'about 3 minutes', go: pickCustomer },
+  { title: 'Deploy the model', what: 'Re-render from lab.conf, terraform apply to every C8000v, push the provider, seed Nautobot and compare.', meta: 'nothing is created', go: () => start({ mode: 'deploy' }) },
+  { title: 'Dry run', what: 'terraform plan against the routers, and Nautobot’s rendering compared with lab.conf’s. Changes nothing.', meta: 'read only', go: () => start({ mode: 'plan', options: { test: false } }) },
+  { title: 'Run the tests', what: 'The Robot Framework suites against the live lab, with the evidence kept.', meta: 'about 10 minutes', go: () => start({ mode: 'test' }) },
+];
+function renderTasks() {
+  $('tasks').innerHTML = TASKS.map((t, i) => `<button type="button" class="task" data-i="${i}">
+    <span class="t">${esc(t.title)}</span><span class="w">${esc(t.what)}</span><span class="m">${esc(t.meta)}</span></button>`).join('');
+  $('tasks').querySelectorAll('button').forEach(b => b.onclick = () => TASKS[b.dataset.i].go());
+}
+
+async function load(refresh) {
+  ST = await (await fetch('/api/state' + (refresh ? '?refresh=true' : ''))).json();
+  const cloud = ST.cloud || {}, H = ST.hubs, CU = ST.customers, h = ST.health || {};
+  const regs = CU.reduce((a, c) => a + ((cloud[c] || {}).nhs_up || []).length, 0);
+  $('kpis').innerHTML = [['Hubs', H.length], ['Customers', CU.length], ['Registrations', `${regs} / ${H.length * CU.length}`],
+      ['Shortcuts live', h.shortcuts ?? 0], ['Overlay AS', ST.service.as], ['Provider AS', ST.provider.as]]
+    .map(([l, n]) => `<div class="kpi"><div class="n">${esc(n)}</div><div class="l">${esc(l)}</div></div>`).join('');
+  $('cloud').querySelector('tbody').innerHTML = [...H, ...CU].map(n => {
+    const s = cloud[n] || {}, m = ST.nodes[n] || {}, hub = m.role === 'hub';
+    if (s.error) return `<tr><td><b>${esc(n)}</b></td><td colspan="10">${pill(false, 'unreachable: ' + s.error)}</td></tr>`;
+    const wantOv = hub ? H.length - 1 + CU.length : H.length;
+    const nhrp = hub ? pill((s.registered || []).length >= CU.length, `${(s.registered || []).length} registered`)
+                     : pill((s.nhs_up || []).length >= H.length, `${(s.nhs_up || []).length} / ${H.length} hubs`);
+    return `<tr><td><b>${esc(n)}</b> <span class="hint">${esc(m.region || '')}</span></td>
+      <td><span class="pill ${hub ? 'teal' : ''}">${hub ? 'hub' : 'customer'}</span></td>
+      <td class="mono">${esc(m.tunnel_ip)}</td><td class="mono">${esc(m.nbma)}</td><td>${nhrp}</td>
+      <td>${pill((s.sa || 0) >= wantOv, s.sa ?? '?', true)}</td>
+      <td>${pill((s.overlay_up || 0) >= wantOv, `${s.overlay_up ?? '?'} / ${wantOv}`, true)}</td>
+      <td>${pill((s.underlay_up || 0) >= 1, (s.underlay_up || 0) >= 1 ? 'established' : 'down')}</td>
+      <td>${hub ? '<span class="hint">—</span>' : ((s.shortcuts || []).map(x => `<span class="pill teal">${esc(x)}</span>`).join(' ') || '<span class="hint">none</span>')}</td>
+      <td class="mono">${esc(m.lan || '')}</td>
+      <td>${m.host ? `${esc(m.host)} ${pill((ST.hosts_up || {})[m.host], (ST.hosts_up || {})[m.host] ? 'up' : 'down')}` : ''}</td></tr>`;
+  }).join('');
+  $('cloud-hint').textContent = `A customer registers with every hub, so NHRP should read ${H.length} / ${H.length}. `
+    + `Shortcuts are customer-to-customer tunnels NHRP has resolved (phase 3); they come and go with traffic.`;
+  const PS = ST.provider_state || {};
+  $('prov').querySelector('tbody').innerHTML = (ST.provider.nodes || []).map(p => {
+    const s = PS[p] || {}, wired = (ST.nodes[p].ports || []).filter(x => x.peer).map(x => `${x.peer} (${x.name})`);
+    return `<tr><td><b>${esc(p)}</b></td><td class="mono">AS ${esc(ST.provider.as)}</td><td class="mono">${esc(ST.provider.wan_net)}</td>
+      <td>${s.error ? pill(false, s.error) : pill(true, (s.up ?? '?') + ' up')}</td>
+      <td>${pill(s.customers_up === H.length + CU.length, `${s.customers_up ?? '?'} / ${H.length + CU.length}`, true)}</td>
+      <td class="hint">${wired.map(esc).join(', ')}</td></tr>`; }).join('');
+  $('health').innerHTML = h.ok ? pill(true, 'everything the model expects is true')
+    : '<ul>' + (h.problems || []).map(p => `<li>${esc(p)}</li>`).join('') + '</ul>';
+  $('hdr').textContent = `${CU.length} customers · ${h.shortcuts ?? 0} shortcuts · ${h.ok ? 'healthy' : (h.problems || []).length + ' problems'}`;
+}
+
+function specFromForm() {
+  const t = parseInt($('w-tidx').value, 10), base = SPEC;
+  const wan = `100.70.${t}.0/30`;
+  return { ...base, name: $('w-name').value.trim(), region: $('w-region').value.trim(), mgmt_ip: $('w-mgmt').value.trim(),
+    lan: $('w-lan').value.trim(), t_idx: t, tunnel_ip: `172.28.0.${t}`, nbma: `100.70.${t}.2`, router_id: `10.255.5.${t}`,
+    wan_prefix: wan, provider_port: $('w-pport').value.trim(), host: $('w-host').value.trim(), host_mgmt: $('w-hmgmt').value.trim() };
+}
+async function check() {
+  const spec = specFromForm();
+  const v = await (await fetch('/api/customers/validate', { ...J, body: JSON.stringify(spec) })).json();
+  if (v.detail) { $('w-msg').textContent = JSON.stringify(v.detail); return null; }
+  const p = v.plan;
+  $('w-plan').innerHTML = [['VM', p.vm], ['Cloud', p.cloud], ['WAN', p.wan], ['LAN', p.lan], ['Changes', 'the new router, ' + p.changed.join(', ') + ', Nautobot']]
+    .map(([k, x]) => `<tr><th>${esc(k)}</th><td>${esc(x)}</td></tr>`).join('');
+  $('w-note').textContent = p.untouched;
+  $('w-msg').textContent = (v.problems || []).join('\n');
+  return (v.problems || []).length ? null : spec;
+}
+async function openWizard() {
+  const r = await fetch('/api/customers/suggest'); SPEC = await r.json();
+  if (!r.ok) { alert(SPEC.detail); return; }
+  $('w-name').value = SPEC.name; $('w-region').value = SPEC.region; $('w-mgmt').value = SPEC.mgmt_ip; $('w-lan').value = SPEC.lan;
+  $('w-tidx').value = SPEC.t_idx; $('w-pport').value = SPEC.provider_port; $('w-host').value = SPEC.host; $('w-hmgmt').value = SPEC.host_mgmt;
+  $('w-msg').textContent = ''; await check(); wiz.showModal();
+}
+$('w-check').onclick = check;
+$('w-go').onclick = async () => { const spec = await check(); if (!spec) return;
+  wiz.close(); start({ mode: 'customer', customer: spec, options: { test: $('w-test').checked } }); };
+
+async function pickCustomer() {
+  const name = prompt('Which customer should be removed?\n\n' + ST.customers.join(', '));
+  if (!name) return;
+  const r = await fetch(`/api/customers/${encodeURIComponent(name.trim())}/removal`);
+  if (!r.ok) { alert((await r.json()).detail); return; }
+  const p = await r.json();
+  $('rm-title').textContent = `Remove ${p.name}`;
+  $('rm-body').innerHTML = `<p>This deletes the C8000v and its LAN host, and takes the customer out of lab.conf, Terraform's state and Nautobot.</p>
+    <table><tr><th>VMs</th><td>${esc(p.name)} (${esc(p.mgmt_ip)}) and ${esc(p.host)} (${esc(p.host_mgmt)})</td></tr>
+    <tr><th>Cloud</th><td class="mono">Tunnel0 ${esc(p.tunnel_ip)}, NBMA ${esc(p.nbma)}</td></tr>
+    <tr><th>Site LAN</th><td class="mono">${esc(p.lan)}</td></tr>
+    <tr><th>Provider port released</th><td class="mono">${esc(p.provider)} ${esc(p.provider_port)} (${esc(p.wan_prefix)})</td></tr></table>
+    <p class="hint">The hubs are not touched: the customer simply stops registering, and its BGP sessions go away.</p>`;
+  $('rm-go').onclick = () => { rm.close(); start({ mode: 'remove', name: p.name }); };
+  rm.showModal();
+}
+
+async function start(body) {
+  const r = await fetch('/api/runs', { ...J, body: JSON.stringify(body) });
+  const run = await r.json();
+  if (!r.ok) { alert(run.detail || 'could not start'); return; }
+  show('runs'); watch(run.id);
+}
+const stCls = s => s === 'success' ? 'ok' : (s === 'failed' || s === 'interrupted') ? 'bad' : 'warn';
+async function loadRuns() {
+  const runs = await (await fetch('/api/runs')).json();
+  $('runs').querySelector('tbody').innerHTML = runs.map(r => `<tr style="cursor:pointer" onclick="watch('${esc(r.id)}')">
+    <td class="hint">${new Date(r.started * 1000).toLocaleString()}</td><td>${esc(r.mode)}</td><td>${esc(r.customer || '')}</td>
+    <td><span class="pill ${stCls(r.status)}">${esc(r.status)}</span></td>
+    <td>${r.tests ? `${r.tests.passed}/${r.tests.total}` : ''}</td></tr>`).join('')
+    || '<tr><td colspan="5" class="hint">nothing has run yet</td></tr>';
+}
+async function watch(id) {
+  clearInterval(watching); watching = null;
+  let done = false;
+  const tick = async () => {
+    const r = await (await fetch(`/api/runs/${encodeURIComponent(id)}`)).json();
+    const log = (r.log || []).map(x => typeof x === 'string' ? x : x.line).join('\n');
+    $('run-title').innerHTML = `${esc(r.mode)} ${esc(r.customer || '')} <span class="pill ${stCls(r.status)}">${esc(r.status)}</span>
+      ${['failed', 'interrupted'].includes(r.status) ? `<button onclick="resume('${esc(r.id)}')">Resume</button>` : ''}`;
+    $('run-body').innerHTML = `<ol class="steps">${(r.steps || []).map(s => `<li><span class="pill ${stCls(s.status)}">${esc(s.status)}</span>
+      <span class="s">${esc(s.title || s.name)}</span>${s.summary ? `<div class="d">${esc(s.summary)}</div>` : ''}</li>`).join('')}</ol>
+      ${r.tests ? `<p><b>Tests:</b> ${r.tests.passed}/${r.tests.total} passed${r.results_dir ? ` — <a href="/results/${esc(r.results_dir)}/report.html" target="_blank">report</a>` : ''}</p>` : ''}
+      <pre class="out">${esc(log.slice(-8000))}</pre>`;
+    const pre = $('run-body').querySelector('pre'); if (pre) pre.scrollTop = pre.scrollHeight;
+    if (['success', 'failed', 'cancelled', 'interrupted'].includes(r.status)) { done = true; clearInterval(watching); watching = null; loadRuns(); load(true); }
+  };
+  await tick(); if (!done) watching = setInterval(tick, 3000);
+}
+async function resume(id) { const r = await fetch(`/api/runs/${encodeURIComponent(id)}/resume`, { method: 'POST' });
+  const run = await r.json(); if (!r.ok) { alert(run.detail); return; } watch(run.id); }
+
+renderTasks(); show(location.hash.slice(1) || 'cloud'); load(); setInterval(() => { if (!watching) load(); }, 30000);
+</script></body></html>
