@@ -200,7 +200,7 @@ class Renderer:
 
     def device(self, n):
         hub = n["role"] == "hub"
-        wan, t = n["wan"], n["t_idx"]
+        wan = n["wan"]
         ethernets = [{"type": "GigabitEthernet", "id": "2", "description": f"WAN: {wan['peer']} {wan['peer_port']} (provider AS {self.prov['as']})",
                       "shutdown": False,
                       "ipv4": {"address": addr(wan["ip"]), "address_mask": mask(wan["prefix"])}}]

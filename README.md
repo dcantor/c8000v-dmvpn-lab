@@ -1,0 +1,110 @@
+# c8000v-dmvpn-lab — DMVPN on Catalyst 8000v over a simulated MPLS provider
+
+Three Catalyst 8000v **hubs** (East, Central, West) and three C8000v **customer** routers form one DMVPN phase 3
+cloud. Underneath, a VyOS router plays the **MPLS provider**: every hub and customer peers eBGP with it, and it
+carries their WAN addresses — nothing else. Behind every customer router sits a small Alpine **host**, and every host
+pings every other one across the overlay. Built and configured as code: libvirt VMs (`lab.sh`), one renderer
+(`tools/render.py`), Cisco Network-as-Code / Terraform for the C8000vs (`nac/`), and Robot Framework validation
+(`tests/`).
+
+```
+        hub-east            hub-central            hub-west       C8000v · Tunnel0 172.28.0.1-.3 · NHRP servers + BGP route reflectors
+       Lo10 .71.1          Lo10 .72.1            Lo10 .73.1
+          Gi2 .2              Gi2 .2                 Gi2 .2
+            │ 100.70.1.0/30     │ 100.70.2.0/30        │ 100.70.3.0/30
+            └───────────┐       │       ┌──────────────┘
+                     eth1│  eth2│  eth3│
+                      ┌──┴──────┴──────┴──┐
+                      │       mpls        │   VyOS, AS 65000: one eBGP session per site (listen range, as-override)
+                      └──┬──────┬──────┬──┘
+                     eth4│  eth5│  eth6│
+            ┌───────────┘       │       └──────────────┐
+            │ 100.70.11.0/30    │ 100.70.12.0/30       │ 100.70.13.0/30
+          cust1               cust2                  cust3        C8000v · Tunnel0 172.28.0.11-.13
+            │Gi3 .1             │Gi3 .1                │Gi3 .1
+        host-cust1          host-cust2             host-cust3     Alpine · 192.168.61/62/63.2
+
+   overlay: mGRE Tunnel0 172.28.0.0/24 · NHRP phase 3 (hubs redirect, customers shortcut) · IKEv2 PSK + IPsec
+   routing: eBGP AS 65100 <-> AS 65000 on Gi2 (underlay) · iBGP AS 65100 over Tunnel0, hubs = route reflectors
+```
+
+## Quick start
+
+```bash
+./lab.sh up               # define networks + VMs and start them (C8000vs three at a time)
+./lab.sh bootstrap        # first boot only: day-0 over the consoles, license reload, wait for RESTCONF (~10-15 min)
+./lab.sh nac init && ./lab.sh nac apply -parallelism=1     # push the C8000v model
+./lab.sh verify           # provider sessions, NHRP, IPsec, iBGP, host ping matrix
+./lab.sh test             # Robot suites -> results/<date>_<time>/
+./lab.sh ssh cust1        # admin / admin (VyOS vyos / vyos, hosts lab / lab)
+./lab.sh down
+```
+
+## What is where
+
+| Path | Purpose |
+|---|---|
+| `lab.conf` | the inventory: roles, OOB / WAN / tunnel / LAN addressing, `LINKS`, the DMVPN service, VM shapes |
+| `lab.sh` | libvirt controller — `up down bootstrap wait nac configure verify hosts test status inventory console ssh log rebuild clean` |
+| `lab.sh inventory` | the lab as JSON (assembled by `tools/inventory.py`): the one contract the renderer and the tests read |
+| `tools/render.py` | inventory → C8000v day-0 (`nodes/<n>/iosxe_config.txt`), the provider (`nodes/mpls/vyos_config.txt`) and `nac/data/devices.nac.yaml` |
+| `tools/gen_configs.py` | writes the renders; `--check` exits 1 if any is stale (a test asserts it) |
+| `nac/data/device_groups.nac.yaml` | what every DMVPN router shares: the IKEv2 / IPsec suite |
+| `nac/data/global.nac.yaml` | baseline: domain, SSH / AAA / VTY hardening, management ACL, banner |
+| `tools/console.py`, `vyos_console.py`, `vyos_push.py`, `ios_cmd.py`, `vyos_cmd.py`, `host_cmd.py` | serial-console day-0, day-N over SSH, op-mode reads, the host ping matrix |
+| `tests/suites/` | `01_management`, `02_underlay`, `03_dmvpn`, `04_routing`, `05_nac_compliance` |
+| `results/` | one folder per test run: `configs/pre-run`, `configs/post-run`, the diff, Robot report / log |
+
+## Design notes
+
+- **One renderer.** `lab.conf` → `lab.sh inventory` → `tools/render.py` produces every configuration file. Nothing
+  else writes configuration, so a fact (an address, an AS, a key) is stated once.
+- **The provider carries WAN addresses only.** Each router offers AS 65000 exactly its own Gi2 /30 (`WAN-OUT`) and
+  accepts only `100.70.0.0/16` (`WAN-IN`). The provider accepts the sites through `bgp listen range` and applies
+  `as-override` because every site is AS 65100. There are no static or default routes in the global table, so a lost
+  access link withdraws that site's NBMA address everywhere within the 9-second hold time.
+- **The planes are kept apart.** The overlay route-map `OVERLAY` passes only site LANs (`192.168.x.0/24`) and
+  router-ids (`10.255.5.x/32`), in and out, so a WAN /30 can never be learned through the tunnel it is the source of.
+- **Three hubs, one cloud.** Every customer lists all three hubs as NHS (`ip nhrp nhs … nbma … multicast`) and peers
+  iBGP with all three. The hubs know each other by static NHRP maps and peer iBGP as non-clients.
+- **Adding a customer never touches a hub or the provider.** Hubs accept customers with `bgp listen range
+  172.28.0.0/24 peer-group CUSTOMERS`; the provider accepts them on `100.70.0.0/16`, and has eight customer ports
+  pre-wired (eth4-eth11) so its VM never needs redefining.
+- **Phase 3.** Hubs `ip nhrp redirect`, customers `ip nhrp shortcut`. The hubs reflect routes with the originating
+  router's tunnel address as next hop; the first packets go through a hub, the redirect triggers a resolution, and a
+  direct IPsec tunnel forms — `03_dmvpn` and `04_routing` prove it with a traceroute whose first hop is the far
+  customer.
+- **NAC gaps, handled as CLI templates.** The nac-iosxe 0.1.0 model has no tunnel NHRP fields and no BGP listen
+  range, so Tunnel0 and the hubs' `CUSTOMERS` peer-group are raw CLI templates generated per router. Terraform cannot
+  see drift inside those, so `05_nac_compliance` compares them with the running configuration directly. IPsec is
+  tunnel mode because the transform-set model has no `mode transport`.
+- **VM names are prefixed** `c8d-` in libvirt, because `vyos-dmvpn` already owns `hub-east`, `hub-central`,
+  `hub-west` and `mpls`. Everything else uses the short names.
+
+## Addressing
+
+| Purpose | Block |
+|---|---|
+| OOB management (`c8d-oob`, host 10.5.0.1) | `10.5.0.0/24`: hubs .11–.13, customers .21–.23, mpls .31, hosts .41–.43 |
+| Router ↔ provider | `100.70.<idx>.0/30`: provider .1, router .2 (the NBMA address) — idx 1–3 hubs, 11–13 customers |
+| DMVPN overlay (Tunnel0) | `172.28.0.0/24`: `.<idx>` |
+| Router-ids (Loopback0) | `10.255.5.<idx>`; the provider `10.255.5.254` |
+| Site LANs | customers `192.168.61/62/63.0/24` (Gi3 .1, host .2); hubs `192.168.71/72/73.0/24` on Loopback10 |
+
+Kept clear of the other labs on this host: consoles `55xx`, MACs `52:54:00:c9:<idx>:<port>`, UDP base `46000`.
+
+## Gotchas carried over from the other C8000v labs
+
+- **License boot level**: a fresh C8000v has no `crypto` CLI until `license boot level network-advantage addon
+  dna-advantage` is set and the router reloads; `lab.sh bootstrap` does that once.
+- `network 192.168.x.0 mask 255.255.255.0` is stored classful by IOS — the renderer models it without a mask.
+- `ip nhrp redirect` / `ip nhrp shortcut` are defaults on mGRE in 17.15 and show only in `show running-config all`.
+- RESTCONF answers 502 for a few minutes after boot; `lab.sh wait` / `bootstrap` poll for a real 200.
+- Apply with `-parallelism=1` to avoid `configuration database is locked` (409) races.
+
+## Requirements
+
+libvirt / qemu with your user in `libvirt`, `genisoimage`, `socat`, Terraform ≥ 1.9 (`~/.local/bin`), Python 3 (venv
+created by `tests/setup.sh`). The base images are shared with the other labs: the C8000v 17.15.06 qcow2 and
+`vyos-base.qcow2` from `cat8000v-ipsec`, `alpine-host.qcow2` from `srv6-core`. Footprint: about 26 GB RAM and 17 vCPUs
+(6 × 2 vCPU / 4 GB C8000v, 1 GB VyOS, 3 × 256 MB hosts).

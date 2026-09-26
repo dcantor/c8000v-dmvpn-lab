@@ -1,0 +1,19 @@
+query c8000v_dmvpn_lab_model {
+  config_contexts(name: ["c8000v-dmvpn-lab"]) { name data }
+  devices(location: ["c8000v-dmvpn-lab", "c8d-east", "c8d-central", "c8d-west"]) {
+    name
+    role { name }
+    location { name }
+    primary_ip4 { address }
+    interfaces {
+      name type mgmt_only mac_address
+      ip_addresses { address parent { prefix } }
+      connected_interface { name device { name role { name } } ip_addresses { address } }
+    }
+    bgp_routing_instances {
+      autonomous_system { asn }
+      router_id { address }
+      extra_attributes
+    }
+  }
+}
