@@ -244,7 +244,6 @@ host_seed() {   # cloud-init NoCloud seed for an Alpine LAN host: static address
   read -r pn pp pfx _ <<<"$peer"
   cidr="$(link_ip "$n" 1)"; gw="$(link_addr "$pn" "$pp")"
   echo "[$n] building cloud-init (NoCloud) seed ISO"
-  printf 'instance-id: %s-001\nlocal-hostname: %s\n' "$n" "$n" > "$d/meta-data"
   cat > "$d/network-config" <<U
 version: 2
 ethernets:
@@ -257,7 +256,9 @@ ethernets:
     match: { macaddress: "$(mac "$n" 1)" }
     set-name: eth1
     addresses: [$cidr]
-    routes: [{ to: 192.168.0.0/16, via: $gw }]
+    # the site LANs, and the overlay: a customer answers a traceroute from its tunnel address, and without a route
+    # back to it the host's reverse-path filter drops the reply
+    routes: [{ to: 192.168.0.0/16, via: $gw }, { to: $DMVPN_OVERLAY, via: $gw }]
 U
   cat > "$d/user-data" <<U
 #cloud-config
@@ -279,6 +280,8 @@ runcmd:
   - rc-update add node-exporter default
   - rc-service node-exporter restart
 U
+  # a new instance-id whenever the seed changes, so cloud-init re-applies it on the next boot
+  printf 'instance-id: %s-%s\nlocal-hostname: %s\n' "$n" "$(cat "$d/network-config" "$d/user-data" | md5sum | cut -c1-8)" "$n" > "$d/meta-data"
   genisoimage -quiet -o "$d/seed.iso.tmp" -V cidata -J -r "$d/user-data" "$d/meta-data" "$d/network-config" && mv -f "$d/seed.iso.tmp" "$d/seed.iso"
 }
 
@@ -389,10 +392,11 @@ cmd_bootstrap() {  # day-0 over the serial consoles, every node in parallel; eac
       ssh_ready "$n" && echo "[$n] ready" || { echo "[$n] SSH NOT ready"; rc=1; }
       continue
     fi
+    # judge by the helpers' own verdict lines: an IOS console is full of words like "exec-timeout" and "Warning!!!"
     log="$(node_dir "$n")/bootstrap.log"
-    if grep -qE "Invalid|Commit failed|warning|!!|Traceback|[Tt]imeout" "$log" 2>/dev/null
-      then echo "[$n] day-0 PROBLEM — see $log"; rc=1
-      else echo "[$n] day-0 applied"; fi
+    if grep -qE "^\[$n\] ready: " "$log" 2>/dev/null && ! grep -qE "^!! |^Traceback|Commit failed|^\[$n\] warning:" "$log"
+      then echo "[$n] day-0 applied"
+      else echo "[$n] day-0 PROBLEM — see $log"; rc=1; fi
   done
   return $rc
 }
@@ -513,6 +517,21 @@ cmd_verify() {     # a quick look at every layer, bottom up
   echo; echo "== LAN to LAN =="; need_python; "$PY" "$LAB_DIR/tools/host_cmd.py" matrix
 }
 
+# ---- Nautobot (the shared NMS of the cat9000v lab, http://10.0.0.10:8080) -------------------------------------------
+NAUTOBOT_URL="${NAUTOBOT_URL:-http://10.0.0.10:8080}"
+nautobot_token() { [[ -n "${NAUTOBOT_TOKEN:-}" ]] && { echo "$NAUTOBOT_TOKEN"; return; }
+  ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR lab@10.0.0.10 \
+      'grep ^NAUTOBOT_SUPERUSER_API_TOKEN /opt/nautobot/.env | cut -d= -f2'; }
+cmd_nautobot() {   # seed [--check] | render [--check|--write|--inventory] | token
+  need_python
+  local sub="${1:?seed|render|token}"; shift || true
+  case "$sub" in
+    token) nautobot_token ;;
+    seed|render) NAUTOBOT_URL="$NAUTOBOT_URL" NAUTOBOT_TOKEN="$(nautobot_token)" "$PY" "$LAB_DIR/nautobot/$sub.py" "$@" ;;
+    *) die "unknown nautobot subcommand: $sub (seed | render | token)" ;;
+  esac
+}
+
 cmd_hosts() {      # `hosts` = ping matrix between the LAN hosts, `hosts run NAME CMD`
   need_python; "$PY" "$LAB_DIR/tools/host_cmd.py" "${1:-matrix}" "${@:2}"
 }
@@ -533,6 +552,7 @@ usage: ./lab.sh <command> [node ...]
   verify             provider, underlay, NHRP, IPsec, iBGP, host ping matrix
   hosts [run N CMD]  ping matrix between the LAN hosts (or run a command on one)
   test [robot args]  run the Robot Framework suites -> results/<date>_<time>/
+  nautobot <sub>     seed [--check] | render [--check|--write|--inventory] | token   (shared Nautobot)
   status             nodes, VMs, addresses, links
   inventory          the lab as JSON — the contract every tool reads
   down [node..]      save (C8000v) and stop VMs
@@ -548,6 +568,6 @@ U
 
 cmd="${1:-}"; shift || true
 case "$cmd" in
-  up|down|bootstrap|configure|wait|status|inventory|console|ssh|log|nac|verify|hosts|test|rebuild|clean) "cmd_$cmd" "$@" ;;
+  up|down|bootstrap|configure|wait|status|inventory|console|ssh|log|nac|verify|hosts|test|nautobot|rebuild|clean) "cmd_$cmd" "$@" ;;
   *) usage; [[ -z "$cmd" || "$cmd" == help || "$cmd" == -h ]] && exit 0; exit 1 ;;
 esac
