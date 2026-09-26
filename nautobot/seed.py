@@ -78,6 +78,11 @@ if a.check:   # reads stay live; creates / deletes / raw writes become notes in 
         return True
 
     Endpoint.create, Record.update, Record.delete = _dry_create, (lambda self, data: True), _dry_delete
+    # a read filtered on something only pretended into existence finds nothing, as it would after a real create
+    _real_get, _real_filter = Endpoint.get, Endpoint.filter
+    _dry = lambda kw: any(str(v).startswith("dry-") for v in kw.values())   # noqa: E731
+    Endpoint.get = lambda self, *args, **kw: None if _dry(kw) else _real_get(self, *args, **kw)
+    Endpoint.filter = lambda self, *args, **kw: [] if _dry(kw) else _real_filter(self, *args, **kw)
     _real_post = requests.post
 
     class _DryResponse:
@@ -341,7 +346,15 @@ for n in inv["nodes"]:
 
 
 # ---- cables --------------------------------------------------------------------------------------------------------
+def pending(*objs):
+    """--check: an object that does not exist yet (or only as a dry record) has no cables or peerings to compare."""
+    return any(o is None or str(getattr(o, "id", "")).startswith("dry-") for o in objs)
+
+
 def ensure_cable(x, y, label):
+    if pending(x, y):
+        created.append(f"[dry] cable:{label}")
+        return
     for itf in (x, y):
         cur = requests.get(f"{a.url}/api/dcim/interfaces/{itf.id}/", params={"depth": 1}, headers=H, timeout=30).json().get("cable")
         if not cur:
@@ -377,6 +390,10 @@ for n in inv["nodes"]:
     if n["role"] == "host":
         continue
     rid = nb.ipam.ip_addresses.get(address=f"{n['router_id']}/32", namespace=ns.id)
+    if pending(devs[n["name"]], rid):
+        created.append(f"[dry] bgp-ri:{n['name']}")
+        ri[n["name"]] = None
+        continue
     inst = bgp.routing_instances.get(device=devs[n["name"]].id)
     own = PAS if n["role"] == "provider" else AS
     extra = {"log_neighbor_changes": True, "keepalive": SVC["keepalive"], "holdtime": SVC["holdtime_bgp"]}
@@ -411,6 +428,9 @@ def ip_obj(address):
 def ensure_peering(a_name, a_role, b_name, b_role, label, ip_a, ip_b, as_a, as_b):
     """One peering with two endpoints, matched on the A side by description."""
     a_desc, b_desc = f"to {b_name} ({label})", f"to {a_name} ({label})"
+    if pending(ri[a_name], ri[b_name], ip_a, ip_b, as_a, as_b):
+        created.append(f"[dry] bgp-peering:{a_name}-{b_name} {label}")
+        return
     ep_a = next((e for e in bgp.peer_endpoints.filter(routing_instance=ri[a_name].id) if e.description == a_desc), None)
     if ep_a is None:
         peering = bgp.peerings.create(status=active.id)

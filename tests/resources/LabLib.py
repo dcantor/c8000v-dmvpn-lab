@@ -127,6 +127,29 @@ class LabLib:
         return r.returncode
 
     @keyword
+    def lab_sh_exit_code(self, *args):
+        """Run ./lab.sh with arguments; return the exit code (output goes to the log)."""
+        r = subprocess.run([str(LAB_DIR / "lab.sh"), *args], capture_output=True, text=True, timeout=900)
+        logger.info(f"<pre>$ lab.sh {' '.join(args)}\n{r.stdout[-6000:]}\n{r.stderr[-2000:]}</pre>", html=True)
+        return r.returncode
+
+    @keyword
+    def nautobot_device_names(self, location):
+        """The names of the Nautobot devices at a location and its children (GraphQL)."""
+        import requests as rq
+        token = subprocess.run([str(LAB_DIR / "lab.sh"), "nautobot", "token"], capture_output=True, text=True).stdout.strip()
+        url = os.environ.get("NAUTOBOT_URL", "http://10.0.0.10:8080")
+        q = '{ locations(name: ["%s"]) { name devices { name } children { devices { name } } } }' % location
+        r = rq.post(f"{url}/api/graphql/", json={"query": q}, headers={"Authorization": f"Token {token}"}, timeout=60)
+        r.raise_for_status()
+        loc = r.json()["data"]["locations"]
+        if not loc:
+            return []
+        names = [d["name"] for d in loc[0]["devices"]] + [d["name"] for c in loc[0]["children"] for d in c["devices"]]
+        logger.info(f"{location}: {sorted(names)}")
+        return sorted(names)
+
+    @keyword
     def read_lab_file(self, rel):
         return (LAB_DIR / rel).read_text()
 
