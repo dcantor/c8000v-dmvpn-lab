@@ -113,7 +113,7 @@ class Run(RunBase):
         if self.mode == "deploy":
             steps = ["render", "nac", "provider", "nautobot", "check"]
         elif self.mode == "remove":
-            steps = ["rm_validate", "rm_nac", "rm_vm", "rm_labconf", "rm_provider", "rm_nautobot", "nautobot", "verify"]
+            steps = ["rm_validate", "rm_nac", "rm_vm", "rm_labconf", "nac", "rm_provider", "rm_nautobot", "nautobot", "verify"]
         else:
             steps = ["validate", "labconf", "vm", "bootstrap", "nac", "provider", "nautobot", "verify"]
         if self.options.get("test", self.mode != "plan"):
@@ -147,6 +147,8 @@ class Run(RunBase):
         s["summary"] = "day-0 applied, crypto licence active, RESTCONF answering"
 
     def do_nac(self, s):
+        # after a removal this changes no router — the departed one is already out of the state — but it rewrites
+        # Terraform's local copy of the model, which would otherwise read as drift in the next plan
         self.sh([LAB / "lab.sh", "nac", "init", "-input=false", "-no-color"])
         self.sh([LAB / "lab.sh", "nac", "apply", "-auto-approve", "-parallelism=1", "-input=false", "-no-color"],
                 timeout=3600)

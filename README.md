@@ -109,7 +109,8 @@ index `10+N` (which fixes `100.70.<idx>.0/30`, `172.28.0.<idx>` and `10.255.5.<i
 `192.168.6N.0/24`. **Removing one** works in reverse:
 1. Terraform forgets the router's resources.
 2. The VMs are deleted.
-3. The customer is taken out of `lab.conf`.
+3. The customer is taken out of `lab.conf`, and Terraform re-applies. No router changes; this only refreshes
+   Terraform's local copy of the model, which would otherwise show up as drift.
 4. The provider's port is released: the push removes its address and disables it.
 5. The customer is removed from Nautobot.
 
