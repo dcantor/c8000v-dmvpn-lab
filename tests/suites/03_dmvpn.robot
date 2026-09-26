@@ -30,12 +30,16 @@ Every hub is an NHRP server holding a registration for every customer
         END
     END
 
-The hubs know each other statically, not as clients
+The hubs know each other statically, not as clients, and the tunnel between them is protected
+    [Documentation]    A static NHRP map is never registered, so its state reads NHRP rather than UP; what proves the
+    ...                hub-to-hub path is the IPsec session to the other hub's NBMA address (and 04's iBGP session).
     FOR    ${h}    IN    @{HUBS}
         ${dm}=    Show    ${h}    show dmvpn | begin Interface
+        ${cs}=    Show    ${h}    show crypto session brief
         FOR    ${o}    IN    @{HUBS}
             Continue For Loop If    '${h}' == '${o}'
-            Should Match Regexp    ${dm}    (?m)^\\s*\\d+\\s+${ROUTERS}[${o}][nbma]\\s+${ROUTERS}[${o}][tunnel]\\s+UP\\s+\\S+\\s+S
+            Should Match Regexp    ${dm}    (?m)^\\s*\\d+\\s+${ROUTERS}[${o}][nbma]\\s+${ROUTERS}[${o}][tunnel]\\s+(UP|NHRP)\\s+\\S+\\s+S\\s*$
+            Should Match Regexp    ${cs}    (?m)^${ROUTERS}[${o}][nbma]\\s+Tu0\\s+.*\\sUA\\s*$
         END
     END
 

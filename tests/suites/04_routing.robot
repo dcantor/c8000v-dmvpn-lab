@@ -33,7 +33,7 @@ Every customer peers with all three hubs, and only with them in the overlay
         FOR    ${h}    IN    @{HUBS}
             Should Match Regexp    ${sum}    (?m)^${ROUTERS}[${h}][tunnel]\\s+4\\s+${BGP_ASN}\\s+.*\\s\\d+\\s*$
         END
-        ${count}=    Get Lines Matching Regexp    ${sum}    ^172\\.28\\.
+        ${count}=    Get Lines Matching Regexp    ${sum}    ^\\*?172\\.28\\.    partial_match=True
         ${n}=    Get Line Count    ${count}
         Should Be Equal As Integers    ${n}    3    msg=${s} must peer with the three hubs only
     END
