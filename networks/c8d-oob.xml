@@ -1,0 +1,5 @@
+<network>
+  <name>c8d-oob</name>
+  <bridge name='virbr-c8doob' stp='off' delay='0'/>
+  <ip address='10.5.0.1' netmask='255.255.255.0'/>
+</network>

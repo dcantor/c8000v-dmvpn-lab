@@ -1,0 +1,48 @@
+---
+# What every DMVPN router shares. Per-router facts (addresses, filters, BGP, Tunnel0) are GENERATED into
+# devices.nac.yaml by tools/render.py; the Tunnel0 and hub listen-range CLI templates are there too.
+iosxe:
+  device_groups:
+    - name: DMVPN
+      configuration:
+        system:
+          ip_domain_name: lab.local
+        crypto:
+          ikev2:
+            proposals:
+              - name: DMVPN-PROP
+                encryption: [aes_cbc_256]
+                integrity: [sha256]
+                group: ["14"]
+            policies:
+              - name: DMVPN-POL
+                proposals: [DMVPN-PROP]
+            keyrings:
+              - name: DMVPN-KEYRING
+                peers:
+                  - name: ANY
+                    ipv4_address: 0.0.0.0
+                    ipv4_mask: 0.0.0.0
+                    pre_shared_key: ${dmvpn_psk}     # per-device variable, from lab.conf DMVPN_PSK
+            profiles:
+              - name: DMVPN-IKEV2
+                match_identity_remote_ipv4_addresses:
+                  - address: 0.0.0.0
+                    mask: 0.0.0.0
+                authentication_local_pre_share: true
+                authentication_remote_pre_share: true
+                keyring_local: DMVPN-KEYRING
+                dpd_interval: 30
+                dpd_retry: 5
+                dpd_query: on-demand
+          # tunnel mode: the nac-iosxe 0.1.0 transform-set model has no `mode transport`
+          ipsec_transform_sets:
+            - name: DMVPN-TS
+              esp: esp-256-aes
+              esp_hmac: esp-sha256-hmac
+          ipsec_profiles:
+            - name: DMVPN-IPSEC
+              set_transform_set: [DMVPN-TS]
+              set_ikev2_profile: DMVPN-IKEV2
+    - name: DMVPN_HUB          # hub-east, hub-central, hub-west: NHRP servers, route reflectors (bgp_hub_* template)
+    - name: DMVPN_CUSTOMER     # cust1-3: register with every hub, peer iBGP with every hub

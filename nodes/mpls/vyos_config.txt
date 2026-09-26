@@ -1,0 +1,68 @@
+# mpls: the MPLS provider — day-0 pushed over the serial console by lab.sh bootstrap; rendered by tools/render.py
+set system host-name mpls
+set system login user vyos authentication plaintext-password vyos
+set system time-zone UTC
+set service ssh
+set service lldp interface all
+set interfaces ethernet eth0 address 10.5.0.31/24
+set interfaces ethernet eth0 description 'OOB management'
+set interfaces ethernet eth0 hw-id 52:54:00:c9:15:00
+set service https api rest
+set service https api keys id lab key c8000v-dmvpn-lab
+set service https allow-client address 10.5.0.1
+#
+# access links: one /30 per site, the provider is .1
+set interfaces ethernet eth1 hw-id 52:54:00:c9:15:01
+set interfaces ethernet eth1 address 100.70.1.1/30
+set interfaces ethernet eth1 description 'hub: hub-east GigabitEthernet2'
+set interfaces ethernet eth2 hw-id 52:54:00:c9:15:02
+set interfaces ethernet eth2 address 100.70.2.1/30
+set interfaces ethernet eth2 description 'hub: hub-central GigabitEthernet2'
+set interfaces ethernet eth3 hw-id 52:54:00:c9:15:03
+set interfaces ethernet eth3 address 100.70.3.1/30
+set interfaces ethernet eth3 description 'hub: hub-west GigabitEthernet2'
+set interfaces ethernet eth4 hw-id 52:54:00:c9:15:04
+set interfaces ethernet eth4 address 100.70.11.1/30
+set interfaces ethernet eth4 description 'spoke: cust1 GigabitEthernet2'
+set interfaces ethernet eth5 hw-id 52:54:00:c9:15:05
+set interfaces ethernet eth5 address 100.70.12.1/30
+set interfaces ethernet eth5 description 'spoke: cust2 GigabitEthernet2'
+set interfaces ethernet eth6 hw-id 52:54:00:c9:15:06
+set interfaces ethernet eth6 address 100.70.13.1/30
+set interfaces ethernet eth6 description 'spoke: cust3 GigabitEthernet2'
+set interfaces ethernet eth7 hw-id 52:54:00:c9:15:07
+set interfaces ethernet eth7 description 'unwired'
+set interfaces ethernet eth7 disable
+set interfaces ethernet eth8 hw-id 52:54:00:c9:15:08
+set interfaces ethernet eth8 description 'unwired'
+set interfaces ethernet eth8 disable
+set interfaces ethernet eth9 hw-id 52:54:00:c9:15:09
+set interfaces ethernet eth9 description 'unwired'
+set interfaces ethernet eth9 disable
+set interfaces ethernet eth10 hw-id 52:54:00:c9:15:0a
+set interfaces ethernet eth10 description 'unwired'
+set interfaces ethernet eth10 disable
+set interfaces ethernet eth11 hw-id 52:54:00:c9:15:0b
+set interfaces ethernet eth11 description 'unwired'
+set interfaces ethernet eth11 disable
+set interfaces ethernet eth12 hw-id 52:54:00:c9:15:0c
+set interfaces ethernet eth12 description 'unwired'
+set interfaces ethernet eth12 disable
+#
+# mpls: its own AS, eBGP with every site through a listen range; it carries the sites' WAN addresses and nothing else
+set policy prefix-list WAN-ADDRESSES description 'the access links, and nothing else'
+set policy prefix-list WAN-ADDRESSES rule 10 action permit
+set policy prefix-list WAN-ADDRESSES rule 10 prefix 100.70.0.0/16
+set policy prefix-list WAN-ADDRESSES rule 10 le 32
+set protocols bgp system-as 65000
+set protocols bgp parameters router-id 10.255.5.254
+set protocols bgp parameters log-neighbor-changes
+set protocols bgp timers keepalive 3
+set protocols bgp timers holdtime 9
+set protocols bgp peer-group CE remote-as 65100
+set protocols bgp peer-group CE description 'the customer sites (AS 65100)'
+set protocols bgp peer-group CE address-family ipv4-unicast as-override
+set protocols bgp peer-group CE address-family ipv4-unicast prefix-list export WAN-ADDRESSES
+set protocols bgp peer-group CE address-family ipv4-unicast prefix-list import WAN-ADDRESSES
+set protocols bgp listen limit 64
+set protocols bgp listen range 100.70.0.0/16 peer-group CE
