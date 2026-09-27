@@ -7,6 +7,9 @@ end, .2 for the second). The renderer, the tests, Nautobot's seed and the portal
 import ipaddress
 import json
 import sys
+from pathlib import Path
+
+CUSTOMERS = Path(__file__).resolve().parents[1] / "customers.json"
 
 scalar, maps, lists, ports = {}, {}, {}, {}
 for line in sys.stdin:
@@ -21,6 +24,7 @@ for line in sys.stdin:
         ports.setdefault(f[1], []).append((int(f[2]), f[3], f[4].split()))
 
 role = maps["ROLE"]
+companies = {k: v for k, v in json.loads(CUSTOMERS.read_text()).items() if not k.startswith("_")} if CUSTOMERS.exists() else {}
 
 
 def port_name(node, num):
@@ -58,6 +62,8 @@ for name in lists["ALL_NODES"]:
                      "host": maps["HOST_OF"].get(name)})
         lan_port = next((p for p in plist if p["num"] == int(scalar["LAN_PORT"]) and p["ip"]), None)
         node["lan_port"] = lan_port
+        if role[name] == "spoke":
+            node["customer"] = companies.get(name)   # who the site belongs to (customers.json); None if not recorded
     elif role[name] == "provider":
         node["router_id"] = f"{scalar['ROUTER_ID_NET']}.254"
     elif role[name] == "host":

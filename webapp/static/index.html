@@ -67,6 +67,14 @@ pre.out { background:#0c2129; color:#d7e3e8; padding:12px 14px; border-radius:8p
 #map .e:hover { stroke-width:5 } #map g.hide { display:none }
 .legend { display:flex; gap:16px; flex-wrap:wrap; font-size:12.5px; color:var(--muted); margin-top:6px }
 .legend svg { vertical-align:middle; margin-right:5px }
+#mapinfo .company { margin:0 0 10px; padding:9px 11px; border:1px solid var(--line); border-radius:8px; background:var(--bg) }
+#mapinfo .company h3 { margin:0 0 2px; font-size:15px } #mapinfo .company .ind { color:var(--muted); font-size:12.5px; margin-bottom:6px }
+#mapinfo .company dl { grid-template-columns:auto 1fr } #mapinfo .company dd { font-family:inherit; font-size:13px }
+#mapinfo .company a { color:var(--teal) } :root[data-theme=dark] #mapinfo .company a { color:#67e8f9 }
+.mapfocus[hidden], #mapcmd[hidden] { display:none }
+body.print #mapinfo .company dl { grid-template-columns:repeat(3, auto 1fr); column-gap:14px; row-gap:1px }
+body.print #mapinfo .company { padding:6px 10px; margin-bottom:6px } body.print #mapinfo .company h3 { font-size:14px }
+body.print #mapinfo { font-size:12px } body.print .legend { font-size:11.5px }
 #mapinfo dl { display:grid; grid-template-columns:auto 1fr; gap:3px 10px; margin:0; font-size:13px } #mapinfo dt { color:var(--muted) }
 #mapinfo dd { margin:0; font-family:"DejaVu Sans Mono",Consolas,monospace; font-size:12.5px; word-break:break-word }
 #mapinfo .cmds { display:flex; gap:6px; flex-wrap:wrap; margin:10px 0 6px } #mapinfo .cmds button { font-size:12px; padding:3px 8px }
@@ -79,7 +87,7 @@ body.print .mapwrap { grid-template-columns:1fr; gap:4px } body.print #map { min
 body.print .printhead { display:block; margin:0 0 6px } body.print .printhead h1 { font-size:20px; margin:0 } body.print .printhead p { margin:2px 0; color:var(--muted); font-size:12.5px }
 body.print #mapinfo dl { grid-template-columns:repeat(3, auto 1fr); column-gap:16px; row-gap:2px } body.print #mapinfo h2 { display:none }
 body.print, body.print .card { background:#fff } body.print #v-map > .mapwrap > .card:first-child > h2 { display:none }
-body.print #map { width:auto; max-width:100%; height:112mm; margin:0 auto }   /* heading + map + legend + details on one A4 landscape page */
+body.print #map { width:auto; max-width:100%; height:100mm; margin:0 auto }   /* heading + map + legend + details on one A4 landscape page */
 body.print .legend { margin:2px 0 6px } body.print #mapinfo { padding-top:6px; border-top:1px solid var(--line) }
 @page { size:A4 landscape; margin:10mm }
 #mapcmd pre.out { max-height:560px; margin:0; font-size:12.5px; white-space:pre; overflow:auto }
@@ -155,6 +163,11 @@ body.print .legend { margin:2px 0 6px } body.print #mapinfo { padding-top:6px; b
     <div><label>Provider port</label><input id="w-pport"></div>
     <div><label>LAN host</label><input id="w-host"></div>
     <div><label>Host management</label><input id="w-hmgmt"></div></div>
+  <h3 style="font-size:14px;margin:14px 0 6px">The customer company <small class="hint">(fictional, pre-filled — edit freely)</small></h3>
+  <div class="row"><div><label>Company</label><input id="w-co"></div><div><label>Industry</label><input id="w-ind"></div>
+    <div><label>Contact</label><input id="w-contact"></div></div>
+  <div class="row" style="margin-top:9px"><div style="flex:2"><label>Address</label><input id="w-addr"></div>
+    <div><label>Phone</label><input id="w-phone"></div><div><label>Email</label><input id="w-email"></div></div>
   <table style="margin-top:12px"><tbody id="w-plan"></tbody></table>
   <p class="hint" id="w-note"></p>
   <label style="margin-top:10px"><input type="checkbox" id="w-test" checked style="width:auto"> run the suites at the end</label>
@@ -209,7 +222,7 @@ async function load(refresh) {
     const wantOv = hub ? H.length - 1 + CU.length : H.length;
     const nhrp = hub ? pill((s.registered || []).length >= CU.length, `${(s.registered || []).length} registered`)
                      : pill((s.nhs_up || []).length >= H.length, `${(s.nhs_up || []).length} / ${H.length} hubs`);
-    return `<tr><td><b>${esc(n)}</b> <span class="hint">${esc(m.region || '')}</span></td>
+    return `<tr><td><b>${esc(n)}</b> <span class="hint">${esc(m.region || '')}</span>${m.customer ? `<div class="hint">${esc(m.customer.company)}</div>` : ''}</td>
       <td><span class="pill ${hub ? 'teal' : ''}">${hub ? 'hub' : 'customer'}</span></td>
       <td class="mono">${esc(m.tunnel_ip)}</td><td class="mono">${esc(m.nbma)}</td><td>${nhrp}</td>
       <td>${pill((s.sa || 0) >= wantOv, s.sa ?? '?', true)}</td>
@@ -239,14 +252,16 @@ function specFromForm() {
   const wan = `100.70.${t}.0/30`;
   return { ...base, name: $('w-name').value.trim(), region: $('w-region').value.trim(), mgmt_ip: $('w-mgmt').value.trim(),
     lan: $('w-lan').value.trim(), t_idx: t, tunnel_ip: `172.28.0.${t}`, nbma: `100.70.${t}.2`, router_id: `10.255.5.${t}`,
-    wan_prefix: wan, provider_port: $('w-pport').value.trim(), host: $('w-host').value.trim(), host_mgmt: $('w-hmgmt').value.trim() };
+    wan_prefix: wan, provider_port: $('w-pport').value.trim(), host: $('w-host').value.trim(), host_mgmt: $('w-hmgmt').value.trim(),
+    customer: { ...(base.customer || {}), company: $('w-co').value.trim(), industry: $('w-ind').value.trim(), address: $('w-addr').value.trim(),
+                phone: $('w-phone').value.trim(), contact: $('w-contact').value.trim(), email: $('w-email').value.trim() } };
 }
 async function check() {
   const spec = specFromForm();
   const v = await (await fetch('/api/customers/validate', { ...J, body: JSON.stringify(spec) })).json();
   if (v.detail) { $('w-msg').textContent = JSON.stringify(v.detail); return null; }
   const p = v.plan;
-  $('w-plan').innerHTML = [['VM', p.vm], ['Cloud', p.cloud], ['WAN', p.wan], ['LAN', p.lan], ['Changes', 'the new router, ' + p.changed.join(', ') + ', Nautobot']]
+  $('w-plan').innerHTML = [['Company', p.company], ['VM', p.vm], ['Cloud', p.cloud], ['WAN', p.wan], ['LAN', p.lan], ['Changes', 'the new router, ' + p.changed.join(', ') + ', Nautobot']]
     .map(([k, x]) => `<tr><th>${esc(k)}</th><td>${esc(x)}</td></tr>`).join('');
   $('w-note').textContent = p.untouched;
   $('w-msg').textContent = (v.problems || []).join('\n');
@@ -256,6 +271,9 @@ async function openWizard() {
   const r = await fetch('/api/customers/suggest'); SPEC = await r.json();
   if (!r.ok) { alert(SPEC.detail); return; }
   $('w-name').value = SPEC.name; $('w-region').value = SPEC.region; $('w-mgmt').value = SPEC.mgmt_ip; $('w-lan').value = SPEC.lan;
+  const cu = SPEC.customer || {};
+  $('w-co').value = cu.company || ''; $('w-ind').value = cu.industry || ''; $('w-addr').value = cu.address || '';
+  $('w-phone').value = cu.phone || ''; $('w-contact').value = cu.contact || ''; $('w-email').value = cu.email || '';
   $('w-tidx').value = SPEC.t_idx; $('w-pport').value = SPEC.provider_port; $('w-host').value = SPEC.host; $('w-hmgmt').value = SPEC.host_mgmt;
   $('w-msg').textContent = ''; await check(); wiz.showModal();
 }
@@ -271,7 +289,7 @@ async function pickCustomer() {
   const p = await r.json();
   $('rm-title').textContent = `Remove ${p.name}`;
   $('rm-body').innerHTML = `<p>This deletes the C8000v and its LAN host, and takes the customer out of lab.conf, Terraform's state and Nautobot.</p>
-    <table><tr><th>VMs</th><td>${esc(p.name)} (${esc(p.mgmt_ip)}) and ${esc(p.host)} (${esc(p.host_mgmt)})</td></tr>
+    <table>${p.customer ? `<tr><th>Customer</th><td>${esc(p.customer.company)} — ${esc(p.customer.industry)}</td></tr>` : ''}<tr><th>VMs</th><td>${esc(p.name)} (${esc(p.mgmt_ip)}) and ${esc(p.host)} (${esc(p.host_mgmt)})</td></tr>
     <tr><th>Cloud</th><td class="mono">Tunnel0 ${esc(p.tunnel_ip)}, NBMA ${esc(p.nbma)}</td></tr>
     <tr><th>Site LAN</th><td class="mono">${esc(p.lan)}</td></tr>
     <tr><th>Provider port released</th><td class="mono">${esc(p.provider)} ${esc(p.provider_port)} (${esc(p.wan_prefix)})</td></tr></table>
@@ -411,7 +429,9 @@ function drawMap() {
         `<text class="${cls}" x="${p.x}" y="${p.y + dy}">${esc(txt)}</text>`).join('')}<title>${esc(n)}: ${st}</title></g>`; };
   const nodes = [];
   H.forEach(h => nodes.push(box(h, nw, nh, [['hub · ' + (ST.nodes[h].region || ''), 'role', -12], [h, '', 5], [ST.nodes[h].tunnel_ip, 'sub', 20]])));
-  CU.forEach(c => nodes.push(box(c, nw, nh, [['customer · ' + (ST.nodes[c].region || ''), 'role', -12], [c, '', 5], [ST.nodes[c].tunnel_ip, 'sub', 20]])));
+  const short = (t, k) => t.length > k ? t.slice(0, k - 1) + '…' : t;
+  CU.forEach(c => { const co = (ST.nodes[c].customer || {}).company;
+    nodes.push(box(c, co ? 196 : nw, nh, [[co ? short(co, 30) : 'customer · ' + (ST.nodes[c].region || ''), 'role', -12], [c, '', 5], [ST.nodes[c].tunnel_ip, 'sub', 20]])); });
   nodes.push(box(P, 190, nh, [['provider · VyOS', 'role', -12], [P, '', 5], [`AS ${ST.provider.as}`, 'sub', 20]]));
   const hn = [];
   CU.forEach(c => { const host = ST.nodes[c].host; if (host) hn.push(box(host, 150, 44, [[host, '', -2], [(ST.nodes[c].lan_port || {}).peer_ip || '', 'sub', 14]])); });
@@ -433,7 +453,9 @@ function setFocus(c) { MAPFOCUS = c; if (c) MAPSEL = c; drawMap(); }
 function printReady() {
   const m = ST.nodes[PRINT];
   if (!m || m.role !== 'spoke') { document.body.innerHTML = `<p>${esc(PRINT)} is not a customer of this lab</p>`; window.__mapReady = true; return; }
-  $('printhead').innerHTML = `<h1>${esc(PRINT)} — network view</h1>
+  const cu = m.customer || {};
+  $('printhead').innerHTML = `<h1>${esc(cu.company ? cu.company + ' — ' : '')}${esc(PRINT)} network view</h1>
+
     <p>c8000v-dmvpn-lab · ${esc(m.region || '')} · Tunnel0 ${esc(m.tunnel_ip)} · LAN ${esc(m.lan)} · generated ${esc(new Date().toLocaleString())} from the routers' live state (${esc(new Date(ST.generated * 1000).toLocaleTimeString())})</p>`;
   window.__mapReady = true;
 }
@@ -481,7 +503,14 @@ function renderInfo(n, fresh) {
       <button data-pdf title="${esc(n)}'s view of the network, with its details, as a PDF">Download PDF</button></div>` : '';
   const pings = m.role === 'host' ? Object.keys(ST.nodes).filter(x => ST.nodes[x].role === 'host' && x !== n).sort() : [];
   const cmds = (m.role === 'hub' || m.role === 'spoke') ? ['show dmvpn', 'show crypto session brief', 'show ip bgp summary', 'show ip route bgp', 'show ip nhrp'] : [];
-  $('mapinfo').innerHTML = `<h2>${esc(n)}</h2><dl>${rows.join('')}</dl>${view}
+  const owner = m.role === 'spoke' ? n : (m.role === 'host' ? m.router : null), cu = owner ? (ST.nodes[owner] || {}).customer : null;
+  const company = cu ? `<div class="company"><h3>${esc(cu.company)}</h3><div class="ind">${esc(cu.industry)}${m.role === 'host' ? ` · LAN host at ${esc(owner)}` : ''}</div><dl>
+      <dt>Address</dt><dd>${esc(cu.address)}</dd>
+      <dt>Phone</dt><dd><a href="tel:${esc(cu.phone.replace(/[^+0-9]/g, ''))}">${esc(cu.phone)}</a></dd>
+      <dt>Contact</dt><dd>${esc(cu.contact)}</dd>
+      <dt>Email</dt><dd><a href="mailto:${esc(cu.email)}">${esc(cu.email)}</a></dd>
+      <dt>Account</dt><dd>${esc(cu.account)}</dd></dl></div>` : '';
+  $('mapinfo').innerHTML = `<h2>${esc(n)}</h2>${company}<dl>${rows.join('')}</dl>${view}
     ${cmds.length ? `<div class="cmds">${cmds.map(x => `<button data-cmd="${esc(x)}">${esc(x)}</button>`).join('')}</div>` : ''}
     ${pings.length ? `<div class="cmds">${pings.map(x => `<button data-ping="${esc(x)}" title="ping ${esc(ST.nodes[x].lan_ip.split('/')[0])} from ${esc(n)}">ping ${esc(x)}</button>`).join('')}</div>` : ''}`;
   $('mapinfo').querySelectorAll('[data-cmd]').forEach(b => b.onclick = () => runMapCommand(n, b.dataset.cmd));

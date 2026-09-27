@@ -57,6 +57,27 @@ pings every other one across the overlay. Built and configured as code: libvirt 
 | `webapp/` | the portal: `app.py` (the runs), `customers.py` (allocate, validate, plan), `labconf.py` (edit `lab.conf`), `state.py` (what the routers are doing), `static/index.html` |
 | `results/` | one folder per test run: `configs/pre-run`, `configs/post-run`, the diff, Robot report / log |
 
+## The customers
+
+Each customer site belongs to a (fictional) company, recorded in **`customers.json`**: company, industry, address,
+phone, contact, email and account. The phone numbers are 555-01xx, which is reserved for fiction, and the email
+domains are `.example`. `lab.sh inventory` carries it as each customer's `customer`.
+
+| Node | Company | Industry |
+|---|---|---|
+| cust1 (East) | Harborview Dental Group | Healthcare — dental clinics |
+| cust2 (Central) | Prairie Grain Logistics | Transportation & logistics |
+| cust3 (West) | Cascade Outdoor Supply | Retail — outdoor equipment |
+
+- **Nautobot:** a tenant per company in the tenant group `c8000v-dmvpn-lab customers`, with custom fields
+  `customer_industry`, `customer_address`, `customer_phone`, `customer_contact`, `customer_email` and
+  `customer_account`. The tenant is assigned to the customer's router and LAN host. The lab has its own tenant group,
+  so no other lab's customer clean-up can touch these tenants.
+- **Portal:** the company is on the customer's box in the Network map and in its details (also shown for its host).
+  It's in the cloud table and the PDF, where the company name is the title.
+- **Adding a customer:** the portal proposes a new fictional company, which you can edit, and writes it to
+  `customers.json`. Removing the customer removes it.
+
 ## Nautobot is the source of truth
 
 `./lab.sh nautobot seed` writes the lab into the shared Nautobot (the `nms` VM of the cat9000v lab,

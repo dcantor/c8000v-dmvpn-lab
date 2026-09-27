@@ -462,6 +462,45 @@ for s in hubs + spokes:
     ensure_peering(s, "customer", provider, "provider", "underlay", ip_obj(w["ip"]),
                    ip_obj(f"{w['peer_ip']}/{w['prefix'].split('/')[1]}"), AS, PAS)
 
+# ---- customers: a tenant per company (customers.json), on the customer's router and its LAN host ------------------
+# The lab's own tenant group, so no other lab's clean-up of its customers can touch these, and these none of theirs.
+CUST_FIELDS = (("customer_industry", "Industry", "industry"), ("customer_address", "Address", "address"),
+               ("customer_phone", "Phone", "phone"), ("customer_contact", "Contact", "contact"),
+               ("customer_email", "Email", "email"), ("customer_account", "Account", "account"))
+cf = {c.key: c for c in nb.extras.custom_fields.all()}
+for key, label, _ in CUST_FIELDS:
+    if key not in cf:
+        cf[key] = nb.extras.custom_fields.create(key=key, label=label, type="text", content_types=["tenancy.tenant"],
+                                                 grouping="Customer", description=f"the customer company's {label.lower()}")
+        created.append(f"custom-field:{key}")
+        if not a.check:   # Nautobot's per-content-type field cache ignores a brand-new field until it is saved again
+            desc = cf[key].description
+            cf[key].update({"description": desc + " "}); cf[key].update({"description": desc})
+tg = get_or_create(nb.tenancy.tenant_groups, {"name": f"{SITE} customers"},
+                   description=f"the companies behind the customer sites of {SITE} (fictional)")
+tenant_of = {}
+for c in SVC["spokes"]:
+    cu = N[c].get("customer")
+    if not cu:
+        continue
+    t = get_or_create(nb.tenancy.tenants, {"name": cu["company"]}, tenant_group=tg.id)
+    ensure(t, tenant_group=tg.id, description=f"{cu['industry']} · customer site {c} ({N[c]['region']})")
+    want = {key: cu.get(field, "") for key, _, field in CUST_FIELDS}
+    have = {k: (getattr(t, "custom_fields", None) or {}).get(k) for k in want}
+    if have != want:
+        t.update({"custom_fields": want})
+        created.append(f"tenant {cu['company']}: customer fields")
+    tenant_of[c] = t
+    if N[c].get("host"):
+        tenant_of[N[c]["host"]] = t
+for name, d in devs.items():
+    t = tenant_of.get(name)
+    ensure(d, tenant=t.id if t else None)
+for t in nb.tenancy.tenants.filter(tenant_group=tg.id):          # a company whose site is gone
+    if t.id not in {x.id for x in tenant_of.values()}:
+        t.delete()
+        created.append(f"removed tenant {t.name} (no customer site)")
+
 # ---- config context ----------------------------------------------------------------------------------------------
 CTX = {"lab": SITE, "domain_name": "lab.local", "mac_oui": MAC_OUI, "oob": OOB,
        "domain_prefix": inv["nodes"][0]["domain"][: -len(inv["nodes"][0]["name"])],

@@ -84,3 +84,15 @@ Each customer's view of the Network map downloads as a one-page PDF
         Should Be Equal As Integers    ${pages}    1    msg=${c}'s map PDF runs to ${pages} pages
     END
     GET On Session    portal    /api/customers/${HUBS}[0]/map.pdf    expected_status=404
+
+The portal shows each customer's company, and proposes a complete one for the next customer
+    ${r}=    GET On Session    portal    /api/state
+    FOR    ${c}    IN    @{SPOKES}
+        Dictionaries Should Be Equal    ${r.json()}[nodes][${c}][customer]    ${COMPANIES}[${c}]
+    END
+    ${s}=    GET On Session    portal    /api/customers/suggest
+    FOR    ${field}    IN    company    industry    address    phone    contact    email    account
+        Should Not Be Empty    ${s.json()}[customer][${field}]
+    END
+    Should Match Regexp    ${s.json()}[customer][phone]    555-01\\d\\d$    msg=fictional numbers only
+    Should End With    ${s.json()}[customer][email]    .example

@@ -1,0 +1,30 @@
+{
+ "_comment": "Who each customer site belongs to. Entirely fictional: 555-01xx numbers are reserved for fiction, .example domains for documentation. Read by lab.sh inventory (node.customer), seeded into Nautobot as a tenant per company, shown on the portal's Network map and in the customer's PDF. The portal adds and removes entries with the customer.",
+ "cust1": {
+  "company": "Harborview Dental Group",
+  "industry": "Healthcare — dental clinics",
+  "address": "1250 Atlantic Avenue, Suite 400, Boston, MA 02110",
+  "phone": "+1 (617) 555-0142",
+  "contact": "Maria Chen, IT Manager",
+  "email": "it@harborview-dental.example",
+  "account": "C8D-10421"
+ },
+ "cust2": {
+  "company": "Prairie Grain Logistics",
+  "industry": "Transportation & logistics",
+  "address": "800 West Fulton Market, Floor 3, Chicago, IL 60607",
+  "phone": "+1 (312) 555-0178",
+  "contact": "Derek Olsen, Network Lead",
+  "email": "noc@prairiegrain.example",
+  "account": "C8D-10587"
+ },
+ "cust3": {
+  "company": "Cascade Outdoor Supply",
+  "industry": "Retail — outdoor equipment",
+  "address": "2201 Western Avenue, Seattle, WA 98121",
+  "phone": "+1 (206) 555-0123",
+  "contact": "Priya Natarajan, Director of IT",
+  "email": "it-ops@cascadeoutdoor.example",
+  "account": "C8D-10633"
+ }
+}

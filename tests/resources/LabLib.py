@@ -160,6 +160,20 @@ class LabLib:
         return int(next(l.split()[1] for l in out.splitlines() if l.startswith("Pages:")))
 
     @keyword
+    def nautobot_customer_tenants(self, group):
+        """{tenant name: {"fields": custom field data, "devices": [device names]}} for a tenant group (GraphQL)."""
+        import requests as rq
+        token = subprocess.run([str(LAB_DIR / "lab.sh"), "nautobot", "token"], capture_output=True, text=True).stdout.strip()
+        url = os.environ.get("NAUTOBOT_URL", "http://10.0.0.10:8080")
+        q = '{ tenants(tenant_group: ["%s"]) { name _custom_field_data devices { name } } }' % group
+        r = rq.post(f"{url}/api/graphql/", json={"query": q}, headers={"Authorization": f"Token {token}"}, timeout=60)
+        r.raise_for_status()
+        out = {t["name"]: {"fields": t["_custom_field_data"], "devices": sorted(d["name"] for d in t["devices"])}
+               for t in r.json()["data"]["tenants"]}
+        logger.info(out)
+        return out
+
+    @keyword
     def read_lab_file(self, rel):
         return (LAB_DIR / rel).read_text()
 

@@ -89,6 +89,7 @@ class CustomerSpec(BaseModel):
     console: int
     host_idx: int
     host_console: int
+    customer: dict = Field(default_factory=dict, description="the company: company, industry, address, phone, contact, email, account")
 
 
 class RunRequest(BaseModel):
@@ -132,14 +133,15 @@ class Run(RunBase):
         problems = C.validate(self.spec)
         if problems:
             raise RuntimeError("; ".join(problems))
-        s["summary"] = (f"{self.spec['name']}: {self.spec['lan']} behind {self.spec['host']}, "
+        s["summary"] = (f"{self.spec['name']} for {self.spec['customer']['company']}: {self.spec['lan']} behind {self.spec['host']}, "
                         f"{self.spec['wan_prefix']} on {self.spec['provider']} {self.spec['provider_port']}")
 
     def do_labconf(self, s):
         C.apply_to_labconf(self.spec)
         self.say(f"lab.conf: {self.spec['name']} ({self.spec['mgmt_ip']}, index {self.spec['t_idx']}) and {self.spec['host']}")
         self.sh(["python3", LAB / "tools" / "gen_configs.py"])
-        s["summary"] = f"{self.spec['name']} and {self.spec['host']} registered; day-0, provider and NAC model re-rendered"
+        s["summary"] = (f"{self.spec['name']} ({self.spec['customer']['company']}) and {self.spec['host']} registered; "
+                        "day-0, provider and NAC model re-rendered")
 
     def do_vm(self, s):
         self.say("the provider keeps its definition: every one of its ports already exists in the VM, wired or not")

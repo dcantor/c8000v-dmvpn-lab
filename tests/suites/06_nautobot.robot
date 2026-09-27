@@ -21,3 +21,19 @@ The model is in sync with lab.conf
 Rendering from Nautobot equals rendering from lab.conf, byte for byte
     ${rc}=    Lab Sh Exit Code    nautobot    render    --check
     Should Be Equal As Integers    ${rc}    0    msg=Nautobot's rendering differs from the committed configuration
+
+Every customer company is a tenant with its details, on the customer's router and LAN host
+    ${tenants}=    Nautobot Customer Tenants    c8000v-dmvpn-lab customers
+    ${n}=    Get Length    ${tenants}
+    ${want}=    Get Length    ${SPOKES}
+    Should Be Equal As Integers    ${n}    ${want}    msg=one tenant per customer, no strays
+    FOR    ${c}    IN    @{SPOKES}
+        ${cu}=    Set Variable    ${COMPANIES}[${c}]
+        Should Not Be Equal    ${cu}    ${None}    msg=${c} has no entry in customers.json
+        Dictionary Should Contain Key    ${tenants}    ${cu}[company]
+        ${t}=    Set Variable    ${tenants}[${cu}[company]]
+        FOR    ${field}    IN    industry    address    phone    contact    email    account
+            Should Be Equal    ${t}[fields][customer_${field}]    ${cu}[${field}]
+        END
+        Lists Should Be Equal    ${t}[devices]    ${{sorted([$DOMAIN_PREFIX + $c, $DOMAIN_PREFIX + $ROUTERS[$c]["host_vm"]])}}
+    END

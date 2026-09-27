@@ -13,6 +13,31 @@ from pathlib import Path
 import labconf
 
 LAB = Path(__file__).resolve().parents[1]
+CUSTOMERS = LAB / "customers.json"
+COMPANY_FIELDS = ("company", "industry", "address", "phone", "contact", "email", "account")
+
+# fictional companies for new customers: 555-01xx numbers are reserved for fiction, .example domains for documentation
+_FAKE = [
+    ("Northwind Veterinary Partners", "Healthcare — veterinary clinics", "410 Main Street, Burlington, VT 05401", "802", "Alex Rivera, Practice IT Lead"),
+    ("Blue Mesa Credit Union", "Financial services — credit union", "5100 Montgomery Blvd NE, Albuquerque, NM 87109", "505", "Jordan Blake, Infrastructure Manager"),
+    ("Lakeshore Precision Machining", "Manufacturing — CNC components", "7700 Lake Road, Erie, PA 16511", "814", "Sam Okafor, Plant Systems Engineer"),
+    ("Redwood Coast Brewing Co.", "Food & beverage — brewery", "300 Harbor Way, Eureka, CA 95501", "707", "Casey Lindqvist, Operations IT"),
+    ("Summit Ridge Property Management", "Real estate — property management", "1600 Broadway, Suite 900, Denver, CO 80202", "303", "Morgan Patel, IT Coordinator"),
+    ("Gulfstream Marine Services", "Marine — boat maintenance", "2450 SE 17th Street, Fort Lauderdale, FL 33316", "954", "Taylor Nguyen, Systems Administrator"),
+    ("Piedmont Family Pharmacy", "Healthcare — retail pharmacy", "215 North Tryon Street, Charlotte, NC 28202", "704", "Riley Johnson, Pharmacy Systems Lead"),
+    ("Granite State Architects", "Professional services — architecture", "95 Elm Street, Manchester, NH 03101", "603", "Jamie Wexler, Office IT Manager"),
+]
+
+
+def companies():
+    return {k: v for k, v in json.loads(CUSTOMERS.read_text()).items() if not k.startswith("_")} if CUSTOMERS.exists() else {}
+
+
+def fake_company(n):
+    company, industry, address, area, contact = _FAKE[(n - 1) % len(_FAKE)]
+    slug = re.sub(r"[^a-z0-9]+", "", company.lower().split()[0] + company.lower().split()[1])
+    return {"company": company, "industry": industry, "address": address, "phone": f"+1 ({area}) 555-01{(n * 17) % 100:02d}",
+            "contact": contact, "email": f"it@{slug}.example", "account": f"C8D-{10400 + n * 73}"}
 
 
 def inventory():
@@ -62,7 +87,8 @@ def suggest(f=None, region=None):
             "tunnel_ip": str(overlay.network_address + t), "nbma": str(ipaddress.ip_network(wan).network_address + 2),
             "router_id": f"{rid_net}.{t}", "lan": f"192.168.{60 + n}.0/24", "lan_port": "GigabitEthernet3",
             "provider": prov, "provider_port": pport, "wan_prefix": wan,
-            "idx": 10 + n, "console": 5510 + n, "host_idx": 30 + n, "host_console": 5530 + n}
+            "idx": 10 + n, "console": 5510 + n, "host_idx": 30 + n, "host_console": 5530 + n,
+            "customer": fake_company(n)}
 
 
 def validate(spec, f=None):
@@ -113,6 +139,12 @@ def validate(spec, f=None):
                      "range would not accept the customer")
     except (ValueError, TypeError):
         pass
+    cu = spec.get("customer") or {}
+    for field in COMPANY_FIELDS:
+        if not str(cu.get(field) or "").strip():
+            p.append(f"customer {field} is missing")
+    if cu.get("company") and any(v.get("company", "").lower() == cu["company"].strip().lower() for v in companies().values()):
+        p.append(f"{cu['company']} is already a customer of this lab")
     return p
 
 
@@ -126,6 +158,7 @@ def plan(spec, f=None):
     f = f or facts()
     return {"customer": spec["name"], "host": spec["host"], "region": spec["region"],
             "vm": f"a new Catalyst 8000v ({spec['mgmt_ip']}, console {spec['console']}) and an Alpine host ({spec['host_mgmt']})",
+            "company": f"{spec['customer']['company']} ({spec['customer']['industry']})" if spec.get("customer") else "",
             "cloud": f"Tunnel0 {spec['tunnel_ip']} sourced from {spec['nbma']}, registered with " + ", ".join(f["hubs"]),
             "wan": f"GigabitEthernet2 into {spec['provider']} {spec['provider_port']} on {spec['wan_prefix']}",
             "lan": f"{spec['lan']} on {spec['lan_port']}, with {spec['host']} behind it",
@@ -143,7 +176,7 @@ def removal_plan(name, f=None):
         return ["this is the last customer — removing it would leave the cloud with none"], None
     n = f["nodes"][name]
     h = f["nodes"].get(n.get("host") or "")
-    return [], {"name": name, "host": n["host"], "region": n.get("region"), "mgmt_ip": n["mgmt_ip"],
+    return [], {"name": name, "host": n["host"], "region": n.get("region"), "mgmt_ip": n["mgmt_ip"], "customer": n.get("customer"),
                 "host_mgmt": h["mgmt_ip"] if h else None, "t_idx": n["t_idx"], "tunnel_ip": n["tunnel_ip"],
                 "nbma": n["nbma"], "router_id": n["router_id"], "lan": n["lan"],
                 "provider": n["wan"]["peer"], "provider_port": n["wan"]["peer_port"], "wan_prefix": n["wan"]["prefix"],
@@ -151,9 +184,18 @@ def removal_plan(name, f=None):
                 "host_idx": h["idx"] if h else None, "host_console": h["console"] if h else None}
 
 
+def _write_companies(update):
+    doc = json.loads(CUSTOMERS.read_text()) if CUSTOMERS.exists() else {}
+    update(doc)
+    CUSTOMERS.write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n")
+
+
 def apply_to_labconf(spec):
     labconf.write(labconf.add_customer(labconf.read(), spec))
+    cu = {f: str(spec["customer"][f]).strip() for f in COMPANY_FIELDS}
+    _write_companies(lambda d: d.__setitem__(spec["name"], cu))
 
 
 def remove_from_labconf(spec):
     labconf.write(labconf.remove_customer(labconf.read(), spec))
+    _write_companies(lambda d: d.pop(spec["name"], None))
