@@ -189,8 +189,8 @@ on drift. The pre-shared key and NHRP secret are deliberately not in Nautobot; t
 | Resilience | **simulate a failure** — a hub fails, a hub loses its first provider, a provider fails, a customer's circuit is cut, a customer's tunnel goes down — see it on the map (⚡, a red banner with Restore) and put it back; **measure failover**: a run that pings every host and hub LAN from every host five times a second, puts the fault in, holds it, takes it out, and reports every flow's outage (unaffected / failed over / cut off / hit on restore) with a timeline (`/api/faults`, `/api/failover`) |
 | SLA | per customer, over the last 24 h / 7 d / 30 d or this month: availability (registered with at least one hub), registration with every hub, latency to each hub (average, 95th percentile, worst) and loss, against the lab's targets, with charts (`GET /api/customers/{name}/sla?window=`) |
 | Provision | add a customer, **modify** one, remove one, deploy the model, dry run (terraform plan + Nautobot check), **check for drift**, **fix drift**, **back up the lab**, **restore from a backup**, run the tests |
-| Runs (change requests) | **Change requests** above the runs: what change control is holding — approve (four eyes), reject, emergency-approve outside the window, withdraw — and the **change policy** editor |
-| Runs | every run with a progress bar (steps finished out of all steps, the current one counting half; striped while running, green on success, red on failure), how long it has taken and — from the median of each step in earlier runs of the same kind and router type (`GET /api/runs/estimates`) — about how long is left and when it should be done; its steps, log and test report; a failed run resumes from the step that failed |
+| Jobs (change requests) | **Change requests** above the runs: what change control is holding — approve (four eyes), reject, emergency-approve outside the window, withdraw — and the **change policy** editor |
+| Jobs | every job (a run of a pipeline) with a progress bar (steps finished out of all steps, the current one counting half; striped while running, green on success, red on failure), how long it has taken and — from the median of each step in earlier runs of the same kind and router type (`GET /api/runs/estimates`) — about how long is left and when it should be done; its steps, log and test report; a failed run resumes from the step that failed |
 | The cloud (drift) | a **Configuration drift** card: the latest check, per router, with Check now and Fix drift |
 | Lab Tools | every tool of the lab with its link and login (portal, API, lab hub, GitHub, Nautobot with deep links, Grafana, Prometheus, VictoriaMetrics, VictoriaLogs), how to reach the management network, and a searchable table of every node: VM, management IP, SSH command, credentials, serial console, addresses, RESTCONF / NETCONF / VyOS API / exporters (`GET /api/lab-tools`) |
 
@@ -245,7 +245,7 @@ tunnel to the preferred hub, and **trace path** shows the traffic crossing it. W
 
 ### Configuration drift
 
-A **drift** run (Provision → Check for drift, the drift card, or on its own every `DRIFT_INTERVAL_H` = 6 hours while
+A **drift** job (Provision → Check for drift, the drift card, or on its own every `DRIFT_INTERVAL_H` = 6 hours while
 the lab runs and nothing else does) compares every router with the model and changes nothing:
 
 - **the model**: `lab.sh nautobot render --check`, Nautobot's rendering against lab.conf's;

@@ -11,6 +11,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 While the version is 0.x, the lab's interfaces are still settling. The current version is in [`VERSION`](VERSION), in
 the portal's header, and in git as a `v<version>` tag.
 
+## [0.19.1] — 2026-09-27
+
+### Changed
+- **The portal calls runs "Jobs".** This covers the navigation tab, the page heading, the job details, the change
+  requests' links and messages, and the Provision and Resilience hints. The API is unchanged: jobs are still
+  `/api/runs`, with a `mode` per kind.
+
 ## [0.19.0] — 2026-09-27
 
 ### Added
@@ -376,6 +383,7 @@ the portal's header, and in git as a `v<version>` tag.
   - `nac/`, Network-as-Code for the C8000vs.
   - Robot suites, the README, and the first Nautobot seed.
 
+[0.19.1]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.19.0...v0.19.1
 [0.19.0]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.16.0...v0.17.0

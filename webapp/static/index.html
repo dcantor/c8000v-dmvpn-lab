@@ -180,7 +180,7 @@ body.cview .maptools, body.cview .export, body.cview #mapfocus, body.cview .mapa
   <div><h1>C8000v DMVPN Portal</h1>
     <div class="sub">three hubs &middot; Catalyst 8000v and VyOS customers &middot; two VyOS providers &middot; Network-as-Code &middot; Nautobot</div></div>
   <nav><a href="#cloud" data-view="cloud" class="on">The cloud</a><a href="#map" data-view="map">Network map</a><a href="#sla" data-view="sla">SLA</a><a href="#resilience" data-view="resilience">Resilience</a><a href="#provision" data-view="provision">Provision</a>
-       <a href="#runs" data-view="runs">Runs</a><a href="#tools" data-view="tools">Lab Tools</a><a href="/docs" target="_blank">API</a></nav>
+       <a href="#runs" data-view="runs">Jobs</a><a href="#tools" data-view="tools">Lab Tools</a><a href="/docs" target="_blank">API</a></nav>
   <div class="right"><span class="me" title="your name on change requests and approvals (the lab portal has no logins)">you: <input id="me" placeholder="your name" size="10"></span> &middot; <a href="#runs" id="chg-hdr" hidden></a> <a id="ver" href="https://github.com/dcantor/c8000v-dmvpn-lab/blob/main/CHANGELOG.md" target="_blank" rel="noopener" title="what changed (CHANGELOG.md)"></a> &middot; <span id="hdr"></span> &middot; <a href="#" id="theme">&#9790; dark</a></div>
 </header>
 <main>
@@ -257,7 +257,7 @@ body.cview .maptools, body.cview .export, body.cview #mapfocus, body.cview .mapa
       <div style="max-width:160px"><label>Hold (failover test)</label><input id="f-hold" type="number" value="60" min="20" max="600"></div></div>
     <p class="hint" id="f-what"></p><p class="hint" id="f-expect"></p>
     <div class="actions"><button class="danger-fill" id="f-apply">Fail it now</button>
-      <button class="primary" id="f-measure" title="a run: every host pings every other host and hub; the fault goes in, is held, comes out; every flow's outage is measured">Measure failover</button>
+      <button class="primary" id="f-measure" title="a job: every host pings every other host and hub; the fault goes in, is held, comes out; every flow's outage is measured">Measure failover</button>
       <span class="hint" id="f-msg"></span></div></div>
   <div class="card"><h2>In now <small id="f-max"></small> <span style="float:right"><button id="f-restore-all">Restore all</button></span></h2><div id="f-active"></div></div>
   <div class="card"><h2>Failover measurements <small>every LAN host pings every other host and every hub's LAN five times a second while the fault is in</small></h2>
@@ -280,7 +280,7 @@ body.cview .maptools, body.cview .export, body.cview #mapfocus, body.cview .mapa
 </section>
 
 <section id="v-provision" class="view">
-  <div class="card"><h2>What do you want to do? <small>every change is a run: pick one, review what it will do, then watch it</small></h2>
+  <div class="card"><h2>What do you want to do? <small>every change is a job: pick one, review what it will do, then watch it</small></h2>
     <div class="tasks" id="tasks"></div></div>
 </section>
 
@@ -290,9 +290,9 @@ body.cview .maptools, body.cview .export, body.cview #mapfocus, body.cview .mapa
     <p class="hint" id="cr-msg" style="margin:0 0 6px"></p>
     <div id="pol" hidden></div>
     <table id="cr-t"><thead><tr><th>Change</th><th>What</th><th>Asked by</th><th>Status</th><th></th></tr></thead><tbody></tbody></table></div>
-  <div class="card"><h2>Runs <small>one at a time; a failed run resumes from the step that failed</small></h2>
+  <div class="card"><h2>Jobs <small>one at a time; a failed job resumes from the step that failed</small></h2>
     <table id="runs"><thead><tr><th>Started</th><th>Mode</th><th>Customer</th><th>Status</th><th>Progress</th><th>Tests</th></tr></thead><tbody></tbody></table></div>
-  <div class="card"><h2 id="run-title">Run</h2><div id="run-body" class="hint">select a run</div></div>
+  <div class="card"><h2 id="run-title">Job</h2><div id="run-body" class="hint">select a job</div></div>
 </section>
 </main>
 
@@ -399,7 +399,7 @@ $('me').onchange = () => { try { localStorage.setItem('c8d-user', $('me').value.
 function who() { let n = $('me').value.trim();
   if (!n) { n = (prompt('Your name, for the change request (the approver must be someone else):') || '').trim(); $('me').value = n; $('me').onchange(); }
   return n; }
-const changeFiled = cr => `<b>${esc(cr.id)}</b> filed — change control covers this: it waits for someone other than ${esc(cr.requested_by)} to approve it (Runs → Change requests).`;
+const changeFiled = cr => `<b>${esc(cr.id)}</b> filed — change control covers this: it waits for someone other than ${esc(cr.requested_by)} to approve it (Jobs → Change requests).`;
 let ST = null, SPEC = null, watching = null;
 function applyTheme() { let t = null; try { t = localStorage.getItem('c8d-theme'); } catch (e) {}
   const dark = t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
@@ -440,7 +440,7 @@ function renderDrift() {
   $('drift-fix').disabled = d.ok;
   const rows = Object.entries(d.nodes).sort().map(([n, r]) => `<tr><td><b>${esc(n)}</b> <span class="hint">${esc(r.platform === 'vyos' ? 'VyOS' : 'C8000v')} ${esc(r.role === 'spoke' ? 'customer' : r.role)}</span></td>
     <td>${r.status === 'ok' ? pill(true, 'matches the model') : r.status === 'error' ? pill(false, 'not checked') : pill(false, `${r.items.length} difference${r.items.length === 1 ? '' : 's'}`, true)}</td>
-    <td class="mono" style="font-size:12px">${r.error ? esc(r.error) : r.items.slice(0, 6).map(i => `<div><span class="dk ${esc(i.kind)}">${esc(i.kind)}</span> ${esc(i.line)}</div>`).join('')}${r.items.length > 6 ? `<div class="hint">… ${r.items.length - 6} more (see the drift run's log)</div>` : ''}</td></tr>`).join('');
+    <td class="mono" style="font-size:12px">${r.error ? esc(r.error) : r.items.slice(0, 6).map(i => `<div><span class="dk ${esc(i.kind)}">${esc(i.kind)}</span> ${esc(i.line)}</div>`).join('')}${r.items.length > 6 ? `<div class="hint">… ${r.items.length - 6} more (see the drift job's log)</div>` : ''}</td></tr>`).join('');
   const model = d.model.error ? pill(false, 'Nautobot not compared: ' + d.model.error) : d.model.differs.length
     ? pill(false, `Nautobot renders ${d.model.differs.length} file(s) differently from lab.conf: ${d.model.differs.join(', ')}`) : pill(true, 'Nautobot == lab.conf');
   el.innerHTML = `<p style="margin:0 0 8px">${d.ok ? pill(true, 'no drift: every router runs what the model says') : pill(false, d.drifted.length ? 'drift on ' + d.drifted.join(', ') : 'the check had problems', !d.drifted.length)} &nbsp;${model}</p>
@@ -579,7 +579,7 @@ async function checkModify() {
   if (!r.ok) { $('mod-msg').textContent = typeof v.detail === 'string' ? v.detail : JSON.stringify(v.detail); return; }
   const p = v.plan, probs = (v.problems || []).filter(x => x !== 'nothing to change');
   $('m-plan').innerHTML = p.changes.length ? p.changes.map(c => `<tr><th>${esc(c.what)}</th><td><s class="hint">${esc(c.old)}</s> → <b>${esc(c.new)}</b></td></tr>`).join('')
-      + `<tr><th>The run</th><td><ul style="margin:0;padding-left:18px">${p.what.map(w => `<li>${esc(w)}</li>`).join('')}</ul></td></tr>`
+      + `<tr><th>The job</th><td><ul style="margin:0;padding-left:18px">${p.what.map(w => `<li>${esc(w)}</li>`).join('')}</ul></td></tr>`
     : '<tr><td class="hint">nothing changed yet — edit a field</td></tr>';
   $('m-note').textContent = p.rebuild ? `Rebuilding the router takes the site offline until the new ${p.new.platform === 'c8000v' ? 'C8000v' : 'VyOS'} is up and registered.`
     : p.rewire ? 'Re-wiring port 4 restarts the router: the site is offline for a few minutes.'
@@ -723,7 +723,7 @@ async function loadRuns() {
     <td class="hint">${new Date(r.started * 1000).toLocaleString()}</td><td>${esc(r.mode)}</td><td>${esc(r.customer || '')}${((r.spec || {}).platform || (r.removal || {}).platform || ((r.modification || {}).new || {}).platform) ? ` <span class="hint">${esc({ c8000v: 'C8000v', vyos: 'VyOS' }[(r.spec || {}).platform || (r.removal || {}).platform || ((r.modification || {}).new || {}).platform] || '')}</span>` : ''}</td>
     <td><span class="pill ${stCls(r.status)}">${esc(r.status)}</span></td><td>${progress(r)}</td>
     <td>${r.tests ? `${r.tests.passed}/${r.tests.total}` : ''}</td></tr>`).join('')
-    || '<tr><td colspan="6" class="hint">nothing has run yet</td></tr>';
+    || '<tr><td colspan="6" class="hint">no jobs yet</td></tr>';
 }
 async function watch(id) {
   clearInterval(watching); watching = null; if (!EST) await loadEstimates();
@@ -754,7 +754,7 @@ let CHG = null;
 async function loadChanges() {
   CHG = await (await fetch('/api/changes')).json();
   const P = CHG.policy, rq = CHG.requests;
-  $('cr-policy').textContent = !P.approval.enabled ? 'approval is off: every run starts at once'
+  $('cr-policy').textContent = !P.approval.enabled ? 'approval is off: every job starts at once'
     : `approval for: ${P.approval.covers.join(', ')}${P.approval.four_eyes ? ' · four eyes' : ''} · windows ${P.windows.enabled ? (CHG.window_open ? 'on — one is open now' : 'on — next opens ' + (CHG.next_window ? fmtT(CHG.next_window) : 'never')) : 'off'}`;
   const me = $('me').value.trim().toLowerCase();
   $('cr-t').querySelector('tbody').innerHTML = rq.slice(0, 25).map(c => {
@@ -762,7 +762,7 @@ async function loadChanges() {
     const acts = open ? (mine && P.approval.four_eyes ? `<span class="hint">waiting for someone else</span> <button data-cancel="${esc(c.id)}">Withdraw</button>`
         : `<button class="primary" data-approve="${esc(c.id)}">Approve</button> <button data-reject="${esc(c.id)}">Reject</button>${P.emergency ? ` <button class="danger" data-emerg="${esc(c.id)}" title="approve and start now, outside the change window">Emergency</button>` : ''}`)
       : c.status === 'scheduled' ? `<span class="hint">starts ${c.scheduled_for ? esc(fmtT(c.scheduled_for)) : 'in the next window'}</span> <button data-cancel="${esc(c.id)}">Cancel</button>`
-      : c.run_id ? `<a href="#runs" data-run="${esc(c.run_id)}">run</a>` : '';
+      : c.run_id ? `<a href="#runs" data-run="${esc(c.run_id)}">job</a>` : '';
     return `<tr><td class="mono"><b>${esc(c.id)}</b><div class="hint">${esc(fmtT(c.requested_at))}</div></td><td><b>${esc(c.title)}</b><div>${esc(c.summary)}</div>${c.reason ? `<div class="hint">why: ${esc(c.reason)}</div>` : ''}</td>
       <td>${esc(c.requested_by)}${c.decided_by ? `<div class="hint">${esc(c.status === 'rejected' ? 'rejected' : 'approved')} by ${esc(c.decided_by)}${c.emergency ? ' (emergency)' : ''}${c.comment ? ': ' + esc(c.comment) : ''}</div>` : ''}</td>
       <td><span class="st ${esc(c.status)}">${esc(c.status)}</span>${c.error ? `<div class="msg">${esc(c.error)}</div>` : ''}</td><td style="white-space:nowrap">${acts}</td></tr>`; }).join('')
@@ -780,7 +780,7 @@ async function decide(id, what, emergency) {
   const comment = what === 'cancel' ? '' : (prompt(emergency ? `Emergency: why must ${id} run now, outside the window?` : `${what === 'approve' ? 'Approve' : 'Reject'} ${id} — comment (optional):`) ?? null);
   if (comment === null) return;
   const r = await fetch(`/api/changes/${encodeURIComponent(id)}/${what}`, { ...J, body: JSON.stringify({ by, comment, emergency: !!emergency }) }), j = await r.json();
-  $('cr-msg').innerHTML = r.ok ? `<b>${esc(j.id)}</b> is ${esc(j.status)}${j.run_id ? ` — run ${esc(j.run_id)} started` : ''}${j.error ? ': ' + esc(j.error) : ''}` : `<span class="msg">${esc(j.detail)}</span>`;
+  $('cr-msg').innerHTML = r.ok ? `<b>${esc(j.id)}</b> is ${esc(j.status)}${j.run_id ? ` — job ${esc(j.run_id)} started` : ''}${j.error ? ': ' + esc(j.error) : ''}` : `<span class="msg">${esc(j.detail)}</span>`;
   await loadChanges(); loadRuns(); load(); if (j.run_id) watch(j.run_id);
 }
 function renderPolicy() {
