@@ -60,3 +60,15 @@ The Network map page is served, with everything it draws present in the live sta
         Dictionary Should Contain Key    ${s}[cloud][${c}]    shortcuts
     END
     Dictionary Should Contain Key    ${s}[provider_state][${PROVIDER}]    sessions
+
+Every LAN host pings every other one from the Network map, and only hosts can be pinged
+    FOR    ${h}    IN    @{HOSTS}
+        FOR    ${o}    IN    @{HOSTS}
+            Continue For Loop If    '${h}' == '${o}'
+            ${r}=    GET On Session    portal    /api/hosts/${h}/ping    params=target=${o}
+            Should Be True    ${r.json()}[ok]    msg=${h} cannot reach ${o}: ${r.json()}[output]
+            Should Be Equal    ${r.json()}[address]    ${HOST_VMS}[${o}][lan_ip]
+        END
+    END
+    ${bad}=    GET On Session    portal    /api/hosts/${HOSTS}[0]/ping    params=target=${HUBS}[0]    expected_status=404
+    ${self}=    GET On Session    portal    /api/hosts/${HOSTS}[0]/ping    params=target=${HOSTS}[0]    expected_status=400

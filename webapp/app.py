@@ -21,14 +21,14 @@ import threading
 import time
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from labportal import RunBase, RunRegistry, exposition, install_runs_api, metric_line, metrics_generated, run_metrics
 from pydantic import BaseModel, Field
 
 import customers as C
-from state import State, ios
+from state import HOST_PASS, HOST_USER, State, _ssh, ios
 
 LAB = Path(__file__).resolve().parents[1]
 HERE = Path(__file__).resolve().parent
@@ -295,6 +295,27 @@ def api_query(node: str, command: str):
     if not command.startswith("show ") or any(ch in command for ch in "\n\r"):
         raise HTTPException(400, "only a single `show ...` command is allowed")
     return {"node": node, "command": command, "output": ios(nodes[node]["mgmt_ip"], command)[command]}
+
+
+@app.get("/api/hosts/{host}/ping", tags=["state"], summary="Ping one LAN host from another, over the overlay")
+def api_host_ping(host: str, target: str, count: int = Query(4, ge=1, le=10)):
+    """Both ends must be LAN hosts of this lab; the target's LAN address comes from the inventory, so nothing
+    free-form reaches a host's shell. The ping runs on `host` over SSH (lab / lab) and crosses the DMVPN."""
+    nodes = C.facts()["nodes"]
+    for name in (host, target):
+        if name not in nodes or nodes[name]["role"] != "host":
+            raise HTTPException(404, f"{name} is not a LAN host of this lab")
+    if host == target:
+        raise HTTPException(400, "pick another host to ping")
+    addr = nodes[target]["lan_ip"].split("/")[0]
+    cmd = f"ping -c {count} -W 2 {addr}"
+    try:
+        out = _ssh(nodes[host]["mgmt_ip"], f"{cmd}; echo __rc=$?", HOST_USER, HOST_PASS, timeout=15 + 3 * count)
+    except Exception as e:                                        # noqa: BLE001
+        raise HTTPException(502, f"{host}: {e.__class__.__name__}: {e}")
+    rc = int(out.rsplit("__rc=", 1)[1].strip()) if "__rc=" in out else -1
+    return {"host": host, "target": target, "address": addr, "command": cmd, "ok": rc == 0,
+            "output": out.rsplit("__rc=", 1)[0].rstrip() + "\n"}
 
 
 @app.post("/api/runs", tags=["runs"], summary="Start a run")

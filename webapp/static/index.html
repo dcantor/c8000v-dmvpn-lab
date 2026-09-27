@@ -421,24 +421,35 @@ function renderInfo(n, fresh) {
   } else if (m.role === 'host') {
     add('LAN address', esc(m.lan_ip)); add('Gateway', esc(`${m.gateway} (${m.router})`)); add('Login', 'lab / lab');
   }
+  const pings = m.role === 'host' ? Object.keys(ST.nodes).filter(x => ST.nodes[x].role === 'host' && x !== n).sort() : [];
   const cmds = (m.role === 'hub' || m.role === 'spoke') ? ['show dmvpn', 'show crypto session brief', 'show ip bgp summary', 'show ip route bgp', 'show ip nhrp'] : [];
   $('mapinfo').innerHTML = `<h2>${esc(n)}</h2><dl>${rows.join('')}</dl>
-    ${cmds.length ? `<div class="cmds">${cmds.map(x => `<button data-cmd="${esc(x)}">${esc(x)}</button>`).join('')}</div>` : ''}`;
+    ${cmds.length ? `<div class="cmds">${cmds.map(x => `<button data-cmd="${esc(x)}">${esc(x)}</button>`).join('')}</div>` : ''}
+    ${pings.length ? `<div class="cmds">${pings.map(x => `<button data-ping="${esc(x)}" title="ping ${esc(ST.nodes[x].lan_ip.split('/')[0])} from ${esc(n)}">ping ${esc(x)}</button>`).join('')}</div>` : ''}`;
   $('mapinfo').querySelectorAll('[data-cmd]').forEach(b => b.onclick = () => runMapCommand(n, b.dataset.cmd));
+  $('mapinfo').querySelectorAll('[data-ping]').forEach(b => b.onclick = () => runMapPing(n, b.dataset.ping));
 }
 
 // a show command's output: its own full-width card under the map, so wide IOS tables read without wrapping
 let MAPCMD_SEQ = 0;
-async function runMapCommand(n, cmd) {
+async function runMapOutput(title, url, format) {
   const seq = ++MAPCMD_SEQ, card = $('mapcmd'), out = $('mapout');
-  card.hidden = false; $('mapcmd-title').textContent = `${n}# ${cmd}`; $('mapcmd-when').textContent = 'running…'; out.textContent = '…';
+  card.hidden = false; $('mapcmd-title').textContent = title; $('mapcmd-when').textContent = 'running…'; out.textContent = '…';
   card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  let text;
-  try { const r = await fetch(`/api/query/${encodeURIComponent(n)}?command=${encodeURIComponent(cmd)}`); const j = await r.json();
-    text = r.ok ? j.output : (j.detail || 'failed'); }
+  let text, verdict = '';
+  try { const r = await fetch(url); const j = await r.json();
+    if (r.ok) { [text, verdict] = format(j); } else { text = typeof j.detail === 'string' ? j.detail : JSON.stringify(j.detail); } }
   catch (e) { text = String(e); }
   if (seq !== MAPCMD_SEQ) return;                     // a later command was started meanwhile: its output wins
-  out.textContent = text; $('mapcmd-when').textContent = new Date().toLocaleTimeString();
+  out.textContent = text; $('mapcmd-when').innerHTML = esc(new Date().toLocaleTimeString()) + (verdict ? ' ' + verdict : '');
+}
+function runMapCommand(n, cmd) {
+  return runMapOutput(`${n}# ${cmd}`, `/api/query/${encodeURIComponent(n)}?command=${encodeURIComponent(cmd)}`, j => [j.output, '']);
+}
+function runMapPing(host, target) {
+  const addr = ST.nodes[target].lan_ip.split('/')[0];
+  return runMapOutput(`${host}$ ping -c 4 ${addr}   (${target})`, `/api/hosts/${encodeURIComponent(host)}/ping?target=${encodeURIComponent(target)}`,
+    j => [j.output, pill(j.ok, j.ok ? 'reachable' : 'unreachable')]);
 }
 $('mapcmd-close').onclick = () => { MAPCMD_SEQ++; $('mapcmd').hidden = true; };
 $('mapcmd-copy').onclick = async () => { try { await navigator.clipboard.writeText(`${$('mapcmd-title').textContent}\n${$('mapout').textContent}`);
