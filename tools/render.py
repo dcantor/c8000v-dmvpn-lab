@@ -240,6 +240,22 @@ class Renderer:
         for h in self.hubs:
             out += [f"set protocols bgp neighbor {h['tunnel_ip']} peer-group HUBS",
                     f"set protocols bgp neighbor {h['tunnel_ip']} description 'DMVPN hub {h['name']}'"]
+        pref = n.get("prefer_hub")
+        if pref:
+            ph = self.nodes[pref]
+            out += ["#", f"# the preferred hub, {pref}: its routes rank first (local-preference 200); the hubs' own prefixes are not ranked",
+                    "set policy prefix-list HUB-PREFIXES description 'the hubs own LANs and router-ids'"]
+            for sq in self.hub_prefix_seqs():
+                out += [f"set policy prefix-list HUB-PREFIXES rule {sq['seq']} action permit",
+                        f"set policy prefix-list HUB-PREFIXES rule {sq['seq']} prefix {sq['prefix']}"]
+            out += ["set policy route-map OVERLAY-IN-PREFERRED rule 10 action permit",
+                    "set policy route-map OVERLAY-IN-PREFERRED rule 10 match ip address prefix-list HUB-PREFIXES",
+                    "set policy route-map OVERLAY-IN-PREFERRED rule 10 set ip-next-hop peer-address",
+                    "set policy route-map OVERLAY-IN-PREFERRED rule 20 action permit",
+                    "set policy route-map OVERLAY-IN-PREFERRED rule 20 match ip address prefix-list OVERLAY-ROUTES",
+                    "set policy route-map OVERLAY-IN-PREFERRED rule 20 set ip-next-hop peer-address",
+                    "set policy route-map OVERLAY-IN-PREFERRED rule 20 set local-preference 200",
+                    f"set protocols bgp neighbor {ph['tunnel_ip']} address-family ipv4-unicast route-map import OVERLAY-IN-PREFERRED"]
         out += ["#", "# the overlay through the hubs, below any shortcut: lets nhrpd answer resolution requests"]
         out += [f"set protocols static route {self.svc['overlay']} next-hop {h['tunnel_ip']} distance 250" for h in self.hubs]
         out += ["#", "# the DMVPN tunnel: mGRE (no remote), a /32 as NHRP on VyOS requires, the hubs' GRE key",
@@ -359,8 +375,10 @@ class Renderer:
                                         "timers_holdtime": h} for x in overlay_peers]
         af_neighbors = [{"ip": wan["peer_ip"], "activate": True,
                          "route_maps": [{"direction": "in", "name": "WAN-IN"}, {"direction": "out", "name": "WAN-OUT"}]}]
+        pref = n.get("prefer_hub") if not hub else None
+        rm_in = (lambda x: f"OVERLAY-{x['name'].upper()}") if pref else (lambda x: "OVERLAY")
         af_neighbors += [{"ip": x["tunnel_ip"], "activate": True,
-                          "route_maps": [{"direction": "in", "name": "OVERLAY"}, {"direction": "out", "name": "OVERLAY"}]}
+                          "route_maps": [{"direction": "in", "name": rm_in(x)}, {"direction": "out", "name": "OVERLAY"}]}
                          for x in overlay_peers]
         networks = [{"network": n["router_id"], "mask": "255.255.255.255"},
                     {"network": str(lan.network_address)} if classful(n["lan"]) else
@@ -387,12 +405,13 @@ class Renderer:
                      "seqs": [{"seq": 10, "action": "permit", "prefix": "192.168.0.0/16", "greater_equal": 24, "less_equal": 24},
                               {"seq": 20, "action": "permit", "prefix": f"{n['router_id'].rsplit('.', 1)[0]}.0/24",
                                "greater_equal": 32}]},   # IOS stores `ge 32 le 32` as `ge 32`
-                ],
+                ] + ([{"name": "HUB-PREFIXES", "description": "the hubs' own LANs and router-ids: reached at the hub itself",
+                       "seqs": self.hub_prefix_seqs()}] if pref else []),
                 "route_maps": [
                     {"name": "WAN-OUT", "entries": [{"seq": 10, "operation": "permit", "match": {"ipv4_address_prefix_lists": ["WAN-OUT"]}}]},
                     {"name": "WAN-IN", "entries": [{"seq": 10, "operation": "permit", "match": {"ipv4_address_prefix_lists": ["WAN-IN"]}}]},
                     {"name": "OVERLAY", "entries": [{"seq": 10, "operation": "permit", "match": {"ipv4_address_prefix_lists": ["OVERLAY-ROUTES"]}}]},
-                ],
+                ] + self.prefer_route_maps(n, pref),
                 "routing": {"bgp": {
                     "as_number": self.svc["as"], "router_id": n["router_id"], "log_neighbor_changes": True,
                     "neighbors": neighbors,
@@ -400,6 +419,29 @@ class Renderer:
                 }},
             },
         }
+
+    # ---- a customer's preferred hub -------------------------------------------------------------------------------
+    def hub_prefix_seqs(self):
+        seqs = []
+        for i, h in enumerate(self.hubs):
+            seqs.append({"seq": 10 + 10 * i, "action": "permit", "prefix": h["lan"]})
+            seqs.append({"seq": 15 + 10 * i, "action": "permit", "prefix": f"{h['router_id']}/32"})
+        return seqs
+
+    def prefer_route_maps(self, n, pref):
+        """A customer that prefers a hub takes the other customers' routes with that hub as next hop — so the first packets
+        enter the cloud there, until the hub's NHRP redirect builds the shortcut — and ranks the preferred hub's copy
+        first (local-preference 200 against 100). The hubs' own prefixes keep their next hop: a hub's LAN is reached at
+        that hub, whichever hub reflected the route. One route-map per hub, bound inbound on that hub's session."""
+        if not pref:
+            return []
+        out = []
+        for h in self.hubs:
+            out.append({"name": f"OVERLAY-{h['name'].upper()}", "entries": [
+                {"seq": 10, "operation": "permit", "match": {"ipv4_address_prefix_lists": ["HUB-PREFIXES"]}},
+                {"seq": 20, "operation": "permit", "match": {"ipv4_address_prefix_lists": ["OVERLAY-ROUTES"]},
+                 "set": {"ipv4_next_hop_addresses": [h["tunnel_ip"]], "local_preference": 200 if h["name"] == pref else 100}}]})
+        return out
 
     def nac_devices(self):
         c8k = [n for n in self.hubs + self.spokes if n.get("platform", "c8000v") == "c8000v"]

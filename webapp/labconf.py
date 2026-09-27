@@ -39,6 +39,14 @@ def add_assoc(text, name, key, value):
     return text[:e].rstrip() + f"{sep}[{key}]={value} " + text[e:]
 
 
+def set_assoc(text, name, key, value):
+    """Set `[key]=value` in an associative array: replace the value if the key is there, add it if not."""
+    s, e = _block(text, name); body = text[s:e]
+    if re.search(rf"\[{re.escape(key)}\]=\S+", body):
+        return text[:s] + re.sub(rf"\[{re.escape(key)}\]=\S+", f"[{key}]={value}", body, count=1) + text[e:]
+    return add_assoc(text, name, key, value)
+
+
 def remove_assoc(text, name, key):
     s, e = _block(text, name)
     return text[:s] + re.sub(rf"\s*\[{re.escape(key)}\]=\S+", "", text[s:e]) + text[e:]
@@ -76,6 +84,8 @@ def add_customer(text, spec):
                      ("CONSOLE_PORT", spec["console"]), ("NODE_IDX", spec["idx"]),
                      ("PLATFORM", spec.get("platform", "c8000v"))):
         text = add_assoc(text, arr, c, val)
+    if spec.get("prefer_hub"):
+        text = add_assoc(text, "PREFER_HUB", c, spec["prefer_hub"])
     for arr, val in (("ROLE", "host"), ("MGMT_IP", spec["host_mgmt"]),
                      ("CONSOLE_PORT", spec["host_console"]), ("NODE_IDX", spec["host_idx"])):
         text = add_assoc(text, arr, h, val)
@@ -90,8 +100,9 @@ def add_customer(text, spec):
 
 def remove_customer(text, spec):
     c, h = spec["name"], spec["host"]
-    for arr in ("ROLE", "REGION", "MGMT_IP", "T_IDX", "LAN", "HOST_OF", "CONSOLE_PORT", "NODE_IDX", "PLATFORM"):
-        text = remove_assoc(text, arr, c)
+    for arr in ("ROLE", "REGION", "MGMT_IP", "T_IDX", "LAN", "HOST_OF", "CONSOLE_PORT", "NODE_IDX", "PLATFORM", "PREFER_HUB"):
+        if re.search(rf"^(?:declare -A )?{arr}=\(", text, re.M):
+            text = remove_assoc(text, arr, c)
     for arr in ("ROLE", "MGMT_IP", "CONSOLE_PORT", "NODE_IDX"):
         text = remove_assoc(text, arr, h)
     s, e = _block(text, "LINKS")
@@ -100,3 +111,22 @@ def remove_customer(text, spec):
     text = text[:s] + body + text[e:]
     text = _word_array(text, "SPOKES", drop=c)
     return _word_array(text, "HOSTS", drop=h)
+
+
+def modify_customer(text, c, h, old, new):
+    """Change what can change about a customer in place: its region, its site LAN (and so its host's link), its router
+    platform and its preferred hub. Its identity — name, index, addresses, ports — stays."""
+    if new["region"] != old["region"]:
+        text = set_assoc(text, "REGION", c, new["region"])
+    if new["platform"] != old["platform"]:     # c8000v is the default: it is written only as the absence of an entry
+        text = set_assoc(text, "PLATFORM", c, new["platform"]) if new["platform"] != "c8000v" else remove_assoc(text, "PLATFORM", c)
+    if new.get("prefer_hub") != old.get("prefer_hub"):
+        if not re.search(r"^declare -A PREFER_HUB=\(", text, re.M):
+            text = text.replace("\n# ---- the wiring", "\ndeclare -A PREFER_HUB=( )\n\n# ---- the wiring", 1)
+        text = set_assoc(text, "PREFER_HUB", c, new["prefer_hub"]) if new.get("prefer_hub") else remove_assoc(text, "PREFER_HUB", c)
+    if new["lan"] != old["lan"]:
+        text = set_assoc(text, "LAN", c, new["lan"])
+        s, e = _block(text, "LINKS")
+        body = re.sub(rf'("{re.escape(c)}:\d+ {re.escape(h)}:\d+ ){re.escape(old["lan"])}"', rf'\g<1>{new["lan"]}"', text[s:e])
+        text = text[:s] + body + text[e:]
+    return text

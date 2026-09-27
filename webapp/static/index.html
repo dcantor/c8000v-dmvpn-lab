@@ -55,6 +55,7 @@ pre.out { background:#0c2129; color:#d7e3e8; padding:12px 14px; border-radius:8p
   background-size:16px 16px; animation:prog-stripes 1s linear infinite }
 @keyframes prog-stripes { to { background-position:16px 0 } }
 @media (prefers-reduced-motion: reduce) { .prog.live .fill { animation:none } }
+.prog .eta { font-size:11px; color:var(--muted) } .prog .t { line-height:1.25 }
 .run-prog { margin:0 0 12px } .run-prog .prog .bar { height:12px; border-radius:6px } .run-prog .prog .t { font-size:13px }
 .steps { padding-left:18px } .steps li { margin-bottom:5px } .steps .s { font-weight:600 } .steps .d { color:var(--muted); font-size:12.5px }
 
@@ -75,10 +76,15 @@ pre.out { background:#0c2129; color:#d7e3e8; padding:12px 14px; border-radius:8p
 #map .e { fill:none } #map .e.ok { stroke:var(--ok) } #map .e.bad { stroke:var(--bad) } #map .e.warn { stroke:var(--warn) }
 #map .ul { stroke-width:3 } #map .ul.ok { stroke:var(--ul) }
 #map .tun { stroke-width:1.8; stroke-dasharray:7 5 } #map .tun.ok { stroke:var(--tun) }
+#map .tun.pref { stroke-width:3.4; stroke-dasharray:none }
 #map .hh { stroke-width:1.5; stroke-dasharray:2 4 } #map .hh.ok { stroke:var(--tun) }
 #map .sc { stroke:var(--sc); stroke-width:3.5 }
 #map .lan { stroke-width:2 } #map .lan.ok { stroke:var(--ul) }
 #map .lbl { fill:var(--muted); font-size:10.5px; font-family:"DejaVu Sans Mono",Consolas,monospace; paint-order:stroke; stroke:var(--card); stroke-width:3px }
+#map .path { fill:none; stroke-width:6; stroke-linecap:round; pointer-events:stroke } #map .path.phub { stroke:var(--warn); stroke-dasharray:10 7 }
+#map .path.pdirect { stroke:var(--sc); stroke-width:7 } #map .path.old { stroke-opacity:.45; stroke-width:4 } #map .arrow.phub { fill:var(--warn) } #map .arrow.pdirect { fill:var(--sc) }
+#mapinfo .driftlist { font-size:11.5px; margin:4px 0; max-height:160px; overflow:auto } #mapinfo .driftfix { font-size:12px; padding:2px 8px; margin-top:4px }
+#mapinfo .pathctl { margin-top:10px; padding-top:8px; border-top:1px solid var(--line) } #mapinfo .pathctl select { font:inherit; font-size:12.5px; padding:3px 4px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--body) }
 #map .e:hover { stroke-width:5 } #map g.hide { display:none }
 .legend { display:flex; gap:16px; flex-wrap:wrap; font-size:12.5px; color:var(--muted); margin-top:6px }
 .legend svg { vertical-align:middle; margin-right:5px }
@@ -101,8 +107,8 @@ body.print #mapinfo .apps table { font-size:12px } body.print #mapinfo .apps td,
 #mapinfo .apps .wide { display:none } body.print #mapinfo .apps .wide { display:table } body.print #mapinfo .apps .narrow { display:none }
 #mapinfo .apps .app { padding:5px 0; border-bottom:1px solid var(--line); font-size:12.5px } #mapinfo .apps .app:last-child { border-bottom:0 }
 #mapinfo .apps .app .vip { color:var(--muted) }
-#w-apps { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:3px 12px; font-size:13px }
-#w-apps label { display:flex; gap:6px; align-items:center; font-size:13px; color:var(--body); margin:0 } #w-apps input { width:auto }
+#w-apps, #m-apps { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:3px 12px; font-size:13px }
+#w-apps label, #m-apps label { display:flex; gap:6px; align-items:center; font-size:13px; color:var(--body); margin:0 } #w-apps input, #m-apps input { width:auto }
 #mapinfo dl { display:grid; grid-template-columns:auto 1fr; gap:3px 10px; margin:0; font-size:13px } #mapinfo dt { color:var(--muted) }
 #mapinfo dd { margin:0; font-family:"DejaVu Sans Mono",Consolas,monospace; font-size:12.5px; word-break:break-word }
 #mapinfo .cmds { display:flex; gap:6px; flex-wrap:wrap; margin:10px 0 6px } #mapinfo .cmds button { font-size:12px; padding:3px 8px }
@@ -119,6 +125,23 @@ body.print #map { width:auto; max-width:100%; height:100mm; margin:0 auto }   /*
 body.print .legend { margin:2px 0 6px } body.print #mapinfo { padding-top:6px; border-top:1px solid var(--line) }
 @page { size:A4 landscape; margin:10mm }
 #mapcmd pre.out { max-height:560px; margin:0; font-size:12.5px; white-space:pre; overflow:auto }
+.export { margin-left:8px; font-size:12.5px; font-weight:400; color:var(--muted); white-space:nowrap }
+.export select { font:inherit; font-size:12.5px; padding:3px 4px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--body) }
+.export button { font-size:12.5px; padding:3px 9px } body.print .export { display:none !important }
+.dk { display:inline-block; min-width:58px; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--amber) } .dk.extra { color:var(--red) } .dk.changed { color:var(--teal) }
+#map .driftbadge circle { fill:var(--warn) } #map .driftbadge text { fill:#fff; font-size:13px; font-weight:700; text-anchor:middle }
+/* SLA */
+.slakpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin:4px 0 12px }
+.slakpi { border:1px solid var(--line); border-radius:9px; padding:8px 12px; background:var(--bg) } .slakpi .n { font-size:22px; font-weight:600 }
+.slakpi .l { color:var(--muted); font-size:12px } .slakpi .tg { font-size:11.5px; margin-top:2px }
+.chart { width:100%; height:auto; display:block; margin:4px 0 12px } .chart .ax { stroke:var(--line) } .chart .tk { fill:var(--muted); font-size:11px }
+.chart .tgt { stroke:var(--red); stroke-dasharray:5 4; stroke-width:1.2 } .chart .ln { fill:none; stroke-width:2 } .chart .area { stroke:none; fill-opacity:.18 }
+.chart .lg { font-size:12px; fill:var(--body) } .slah3 { font-size:14px; margin:12px 0 2px }
+.slaprint { display:none } body.print .slaprint { display:block; break-before:page; padding-top:2mm } body.print .slaprint h3 { font-size:17px; margin:0 0 6px }
+body.print .slakpi .n { font-size:18px } body.print .chart { margin:0 0 2px; width:auto; height:36mm; max-width:100% }   /* one A4 landscape page */
+body.print .chart.short { height:24mm } body.print .slanote { font-size:9.5px; margin:3px 0 0 }
+body.print .slakpis { grid-template-columns:repeat(6, 1fr); gap:6px; margin-bottom:6px } body.print .slakpi { padding:5px 8px }
+body.print .slah3 { margin-top:6px } body.print .slaprint table td, body.print .slaprint table th { padding:2px 6px }
 /* lab tools */
 .toolgrid { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:10px }
 .tool { border:1px solid var(--line); border-radius:9px; padding:10px 12px; background:var(--bg) }
@@ -134,7 +157,7 @@ body.print .legend { margin:2px 0 6px } body.print #mapinfo { padding-top:6px; b
 <header>
   <div><h1>C8000v DMVPN Portal</h1>
     <div class="sub">three hubs &middot; Catalyst 8000v customers &middot; a VyOS MPLS provider &middot; Network-as-Code &middot; Nautobot</div></div>
-  <nav><a href="#cloud" data-view="cloud" class="on">The cloud</a><a href="#map" data-view="map">Network map</a><a href="#provision" data-view="provision">Provision</a>
+  <nav><a href="#cloud" data-view="cloud" class="on">The cloud</a><a href="#map" data-view="map">Network map</a><a href="#sla" data-view="sla">SLA</a><a href="#provision" data-view="provision">Provision</a>
        <a href="#runs" data-view="runs">Runs</a><a href="#tools" data-view="tools">Lab Tools</a><a href="/docs" target="_blank">API</a></nav>
   <div class="right"><a id="ver" href="https://github.com/dcantor/c8000v-dmvpn-lab/blob/main/CHANGELOG.md" target="_blank" rel="noopener" title="what changed (CHANGELOG.md)"></a> &middot; <span id="hdr"></span> &middot; <a href="#" id="theme">&#9790; dark</a></div>
 </header>
@@ -150,12 +173,18 @@ body.print .legend { margin:2px 0 6px } body.print #mapinfo { padding-top:6px; b
   <div class="card"><h2>The provider <small>a VyOS router standing in for the MPLS network: it carries the sites' WAN addresses and nothing else</small></h2>
     <table id="prov"><thead><tr><th>Router</th><th>AS</th><th>Accepts</th><th>Interfaces up</th><th>eBGP customers</th><th>Attached</th></tr></thead><tbody></tbody></table></div>
   <div class="card"><h2>Health</h2><div id="health"></div></div>
+  <div class="card" id="drift-card"><h2>Configuration drift <small id="drift-when"></small>
+    <span style="float:right"><button onclick="start({ mode: 'drift' })">Check now</button> <button id="drift-fix" onclick="start({ mode: 'fixdrift', options: { test: false } })">Fix drift</button></span></h2>
+    <div id="drift"></div></div>
 </section>
 
 <section id="v-map" class="view">
   <div class="mapwrap">
     <div class="card"><h2>Network map <small>drawn from the routers' live state &mdash; click a node for details</small>
-      <span style="float:right"><span class="hint" id="map-when"></span> <button onclick="load(true)">Refresh</button></span></h2>
+      <span style="float:right" class="mapactions"><span class="hint" id="map-when"></span> <button onclick="load(true)">Refresh</button>
+        <span class="export" title="download the map as drawn now: the layers you have on, the customer view if one is focused">Export
+          <select id="exp-theme" aria-label="export theme"><option value="light">light</option><option value="dark">dark</option></select>
+          <button id="exp-svg">SVG</button><button id="exp-png">PNG</button></span></span></h2>
       <div class="printhead" id="printhead"></div>
       <div class="mapfocus" id="mapfocus" hidden></div>
       <div class="maptools">
@@ -169,15 +198,29 @@ body.print .legend { margin:2px 0 6px } body.print #mapinfo { padding-top:6px; b
       <div class="legend">
         <span><svg width="34" height="10"><line x1="0" y1="5" x2="34" y2="5" stroke="#64748b" stroke-width="3"/></svg>access link, eBGP to the provider</span>
         <span><svg width="34" height="10"><line x1="0" y1="5" x2="34" y2="5" stroke="#0e7490" stroke-width="2" stroke-dasharray="7 5"/></svg>DMVPN tunnel (NHRP + IPsec)</span>
+        <span><svg width="34" height="10"><line x1="0" y1="5" x2="34" y2="5" stroke="#0e7490" stroke-width="3.4"/></svg>tunnel to the customer's preferred hub</span>
         <span><svg width="34" height="10"><line x1="0" y1="5" x2="34" y2="5" stroke="#7c3aed" stroke-width="3.5"/></svg>live customer-to-customer shortcut</span>
         <span><svg width="34" height="10"><line x1="0" y1="5" x2="34" y2="5" stroke="#b91c1c" stroke-width="3"/></svg>down</span>
+        <span><svg width="34" height="10"><line x1="0" y1="5" x2="34" y2="5" stroke="#b45309" stroke-width="5" stroke-dasharray="8 5"/></svg>traced path through a hub</span>
+        <span><svg width="16" height="16"><circle cx="8" cy="8" r="7" fill="#b45309"/><text x="8" y="12" fill="#fff" font-size="11" font-weight="700" text-anchor="middle">≠</text></svg> configuration drift</span>
+        <span><svg width="34" height="10"><line x1="0" y1="5" x2="34" y2="5" stroke="#7c3aed" stroke-width="6"/></svg>traced path over the shortcut</span>
         <span>outline: <b style="color:#15803d">healthy</b> &middot; <b style="color:#b45309">partial</b> &middot; <b style="color:#b91c1c">down / unreachable</b></span>
       </div></div>
     <div class="card" id="mapinfo"><h2>Details</h2><p class="hint">Select a router, the provider or a host on the map.</p></div>
   </div>
+  <div class="slaprint" id="slaprint"></div>
   <div class="card" id="mapcmd" hidden><h2><span class="mono" id="mapcmd-title"></span> <small id="mapcmd-when"></small>
     <span style="float:right"><button id="mapcmd-copy">Copy</button> <button id="mapcmd-dl">Download</button> <button id="mapcmd-close">Close</button></span></h2>
     <pre class="out" id="mapout"></pre></div>
+</section>
+
+<section id="v-sla" class="view">
+  <div class="card"><h2>Service levels <small>latency, loss and tunnel uptime per customer, from VictoriaMetrics</small>
+    <span style="float:right" class="slactl"><select id="sla-cust" style="padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--body);font:inherit;font-size:13.5px" aria-label="customer"></select>
+      <select id="sla-win" style="padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--body);font:inherit;font-size:13.5px" aria-label="window"><option value="24h">last 24 hours</option><option value="7d">last 7 days</option>
+        <option value="30d" selected>last 30 days</option><option value="month">this month</option></select>
+      <button id="sla-pdf" title="the customer's map PDF: its third page is this month's SLA report">Monthly report (PDF)</button></span></h2>
+    <div id="sla-body"><p class="hint">loading…</p></div></div>
 </section>
 
 <section id="v-tools" class="view">
@@ -208,7 +251,8 @@ body.print .legend { margin:2px 0 6px } body.print #mapinfo { padding-top:6px; b
 <dialog id="wiz"><h2>Add a customer</h2>
   <div class="row"><div><label>Router type</label><select id="w-plat" style="width:100%;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--body);font:inherit;font-size:13.5px">
       <option value="c8000v">Cisco Catalyst 8000v (IOS-XE, Network-as-Code)</option>
-      <option value="vyos">VyOS (FRR nhrpd + strongSwan)</option></select></div></div>
+      <option value="vyos">VyOS (FRR nhrpd + strongSwan)</option></select></div>
+    <div><label>Preferred hub</label><select id="w-pref" style="width:100%;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--body);font:inherit;font-size:13.5px"></select></div></div>
   <div class="row" style="margin-top:9px"><div><label>Name</label><input id="w-name"></div>
     <div><label>Region</label><input id="w-region"></div>
     <div><label>Management address</label><input id="w-mgmt"></div>
@@ -231,6 +275,43 @@ body.print .legend { margin:2px 0 6px } body.print #mapinfo { padding-top:6px; b
   <div class="msg" id="w-msg"></div>
   <div class="actions"><button class="primary" id="w-go">Provision the customer</button><button id="w-check">Re-check</button>
     <span style="flex:1"></span><button onclick="wiz.close()">Cancel</button></div></dialog>
+
+<dialog id="mod"><h2>Modify a customer</h2>
+  <div class="row"><div><label>Customer</label><select id="m-cust" style="width:100%;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--body);font:inherit;font-size:13.5px"></select></div></div>
+  <div class="row" style="margin-top:9px">
+    <div><label>Router type</label><select id="m-plat" style="width:100%;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--body);font:inherit;font-size:13.5px"><option value="c8000v">Cisco Catalyst 8000v (IOS-XE, Network-as-Code)</option><option value="vyos">VyOS (FRR nhrpd + strongSwan)</option></select></div>
+    <div><label>Preferred hub</label><select id="m-pref" style="width:100%;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--body);font:inherit;font-size:13.5px"></select></div>
+    <div><label>Region</label><input id="m-region"></div>
+    <div><label>Site LAN</label><input id="m-lan"></div></div>
+  <div class="row" style="margin-top:9px">
+    <div><label>Management address</label><input id="m-mgmt" disabled></div>
+    <div><label>Index (WAN /30, tunnel, router-id)</label><input id="m-tidx" disabled></div>
+    <div><label>Provider port</label><input id="m-pport" disabled></div>
+    <div><label>LAN host</label><input id="m-host" disabled></div>
+    <div><label>Host management</label><input id="m-hmgmt" disabled></div></div>
+  <h3 style="font-size:14px;margin:14px 0 6px">The customer company</h3>
+  <div class="row"><div><label>Company</label><input id="m-co"></div><div><label>Industry</label><input id="m-ind"></div>
+    <div><label>Contact</label><input id="m-contact"></div></div>
+  <div class="row" style="margin-top:9px"><div style="flex:2"><label>Address</label><input id="m-addr"></div>
+    <div><label>Phone</label><input id="m-phone"></div><div><label>Email</label><input id="m-email"></div></div>
+  <h3 style="font-size:14px;margin:14px 0 6px">Applications <small class="hint">(what the customer subscribes to)</small></h3>
+  <div id="m-apps" class="apps-grid"></div>
+  <table style="margin-top:12px"><tbody id="m-plan"></tbody></table>
+  <p class="hint" id="m-note"></p>
+  <label style="margin-top:10px"><input type="checkbox" id="m-test" checked style="width:auto"> run the suites at the end</label>
+  <div class="msg" id="mod-msg"></div>
+  <div class="actions"><button class="primary" id="mod-go" disabled>Apply the changes</button><button id="m-check">Re-check</button>
+    <span style="flex:1"></span><button onclick="mod.close()">Cancel</button></div></dialog>
+
+<dialog id="rs"><h2>Restore from a backup</h2>
+  <p class="hint" style="margin:0 0 10px">A backup made by <b>Back up the lab</b>. Nothing changes until you press Restore: first you see what it would do.</p>
+  <div class="row"><div><label>Backup file (.tar.gz)</label><input type="file" id="rs-file" accept=".gz,.tgz,application/gzip"></div></div>
+  <table style="margin-top:12px"><tbody id="rs-man"></tbody></table>
+  <table style="margin-top:8px"><tbody id="rs-plan"></tbody></table>
+  <label style="margin-top:10px"><input type="checkbox" id="rs-test" checked style="width:auto"> run the suites at the end</label>
+  <div class="msg" id="rs-msg"></div>
+  <div class="actions"><button class="danger-fill" id="rs-go" disabled>Restore the lab to this backup</button>
+    <span style="flex:1"></span><button onclick="rs.close()">Cancel</button></div></dialog>
 
 <dialog id="rm"><h2>Remove a customer</h2>
   <div class="row"><div><label>Customer</label><select id="r-cust" style="width:100%;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--body);font:inherit;font-size:13.5px"></select></div></div>
@@ -271,14 +352,19 @@ applyTheme(); $('theme').onclick = e => { e.preventDefault();
 document.querySelectorAll('nav a[data-view]').forEach(a => a.onclick = e => { e.preventDefault(); show(a.dataset.view); });
 function show(v) { document.querySelectorAll('.view').forEach(x => x.classList.toggle('on', x.id === 'v-' + v));
   document.querySelectorAll('nav a[data-view]').forEach(a => a.classList.toggle('on', a.dataset.view === v));
-  location.hash = v; if (v === 'runs') loadRuns(); if (v === 'tools') loadTools(); }
+  location.hash = v; if (v === 'runs') loadRuns(); if (v === 'tools') loadTools(); if (v === 'sla') openSla(); }
 const pill = (ok, text, warn) => `<span class="pill ${ok ? 'ok' : (warn ? 'warn' : 'bad')}">${esc(text)}</span>`;
 
 const TASKS = [
   { title: 'Add a customer', what: 'A new site: a C8000v and its LAN host, a link into the provider, Tunnel0 registered with all three hubs. No hub changes.', meta: 'about 15 minutes (C8000v first boot)', go: openWizard },
+  { title: 'Modify a customer', what: 'Change a customer: its company details and applications, its preferred hub, its site LAN, or its router type (C8000v or VyOS).', meta: 'data only: a minute · a new router: up to 15 minutes', go: openModify },
   { title: 'Remove a customer', what: 'Decommission a customer: Terraform forgets it, the VMs are deleted, out of lab.conf and Nautobot, its provider port released.', meta: 'about 3 minutes', go: pickCustomer },
   { title: 'Deploy the model', what: 'Re-render from lab.conf, terraform apply to every C8000v, push the provider, seed Nautobot and compare.', meta: 'nothing is created', go: () => start({ mode: 'deploy' }) },
   { title: 'Dry run', what: 'terraform plan against the routers, and Nautobot’s rendering compared with lab.conf’s. Changes nothing.', meta: 'read only', go: () => start({ mode: 'plan', options: { test: false } }) },
+  { title: 'Check for drift', what: 'Compare every router’s running configuration with the model: Nautobot vs lab.conf, terraform plan for the C8000vs, the rendered set lines for VyOS. Changes nothing.', meta: 'read only · a minute or two', go: () => start({ mode: 'drift' }) },
+  { title: 'Fix drift', what: 'Put every router back to the model: re-render, terraform apply, re-push the VyOS routers, re-seed Nautobot — then check again.', meta: 'a few minutes', go: () => start({ mode: 'fixdrift', options: { test: false } }) },
+  { title: 'Back up the lab', what: 'Download the whole lab state as one .tar.gz: lab.conf, customers and applications, every rendered file, this lab in Nautobot, the routers’ running configurations, the Terraform state.', meta: 'read only · half a minute', go: downloadBackup },
+  { title: 'Restore from a backup', what: 'Upload a backup, see what it would change — customers removed, added, changed — and rebuild the lab to it.', meta: 'depends on the changes', go: openRestore },
   { title: 'Run the tests', what: 'The Robot Framework suites against the live lab, with the evidence kept.', meta: 'about 10 minutes', go: () => start({ mode: 'test' }) },
 ];
 function renderTasks() {
@@ -287,7 +373,24 @@ function renderTasks() {
   $('tasks').querySelectorAll('button').forEach(b => b.onclick = () => TASKS[b.dataset.i].go());
 }
 
+let DRIFT = null;
+async function loadDrift() { try { const r = await fetch('/api/drift'), j = await r.json(); DRIFT = r.ok && j && j.nodes ? j : null; } catch (e) { DRIFT = null; } }
+function renderDrift() {
+  const d = DRIFT, el = $('drift');
+  if (!d) { el.innerHTML = '<p class="hint">No check has run yet. <b>Check now</b> compares every router with the model; the portal also checks on its own every few hours.</p>'; $('drift-fix').disabled = true; $('drift-when').textContent = ''; return; }
+  $('drift-when').textContent = `checked ${new Date(d.generated * 1000).toLocaleString()} · took ${Math.round(d.took)}s` + (d.interval_h ? ` · every ${d.interval_h} h while the lab runs` : '');
+  $('drift-fix').disabled = d.ok;
+  const rows = Object.entries(d.nodes).sort().map(([n, r]) => `<tr><td><b>${esc(n)}</b> <span class="hint">${esc(r.platform === 'vyos' ? 'VyOS' : 'C8000v')} ${esc(r.role === 'spoke' ? 'customer' : r.role)}</span></td>
+    <td>${r.status === 'ok' ? pill(true, 'matches the model') : r.status === 'error' ? pill(false, 'not checked') : pill(false, `${r.items.length} difference${r.items.length === 1 ? '' : 's'}`, true)}</td>
+    <td class="mono" style="font-size:12px">${r.error ? esc(r.error) : r.items.slice(0, 6).map(i => `<div><span class="dk ${esc(i.kind)}">${esc(i.kind)}</span> ${esc(i.line)}</div>`).join('')}${r.items.length > 6 ? `<div class="hint">… ${r.items.length - 6} more (see the drift run's log)</div>` : ''}</td></tr>`).join('');
+  const model = d.model.error ? pill(false, 'Nautobot not compared: ' + d.model.error) : d.model.differs.length
+    ? pill(false, `Nautobot renders ${d.model.differs.length} file(s) differently from lab.conf: ${d.model.differs.join(', ')}`) : pill(true, 'Nautobot == lab.conf');
+  el.innerHTML = `<p style="margin:0 0 8px">${d.ok ? pill(true, 'no drift: every router runs what the model says') : pill(false, d.drifted.length ? 'drift on ' + d.drifted.join(', ') : 'the check had problems', !d.drifted.length)} &nbsp;${model}</p>
+    ${(d.errors || []).map(e => `<p class="msg">${esc(e)}</p>`).join('')}
+    <table><thead><tr><th>Router</th><th>Verdict</th><th>Differences (missing: the model has it, the router does not · extra: the router has it, the model does not · changed: Terraform would update it)</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
 async function load(refresh) {
+  loadDrift().then(() => { renderDrift(); if (ST) drawMap(); });
   ST = await (await fetch('/api/state' + (refresh ? '?refresh=true' : ''))).json();
   const cloud = ST.cloud || {}, H = ST.hubs, CU = ST.customers, h = ST.health || {};
   const regs = CU.reduce((a, c) => a + ((cloud[c] || {}).nhs_up || []).length, 0);
@@ -330,7 +433,8 @@ function specFromForm() {
   const wan = `100.70.${t}.0/30`;
   return { ...base, name: $('w-name').value.trim(), region: $('w-region').value.trim(), mgmt_ip: $('w-mgmt').value.trim(),
     lan: $('w-lan').value.trim(), t_idx: t, tunnel_ip: `172.28.0.${t}`, nbma: `100.70.${t}.2`, router_id: `10.255.5.${t}`,
-    wan_prefix: wan, provider_port: $('w-pport').value.trim(), platform: $('w-plat').value, host: $('w-host').value.trim(), host_mgmt: $('w-hmgmt').value.trim(),
+    wan_prefix: wan, provider_port: $('w-pport').value.trim(), platform: $('w-plat').value, prefer_hub: $('w-pref').value || null,
+    host: $('w-host').value.trim(), host_mgmt: $('w-hmgmt').value.trim(),
     customer: { ...(base.customer || {}), company: $('w-co').value.trim(), industry: $('w-ind').value.trim(), address: $('w-addr').value.trim(),
                 phone: $('w-phone').value.trim(), contact: $('w-contact').value.trim(), email: $('w-email').value.trim(),
                 applications: [...document.querySelectorAll('#w-apps input:checked')].map(i => i.value) } };
@@ -340,7 +444,7 @@ async function check() {
   const v = await (await fetch('/api/customers/validate', { ...J, body: JSON.stringify(spec) })).json();
   if (v.detail) { $('w-msg').textContent = JSON.stringify(v.detail); return null; }
   const p = v.plan;
-  $('w-plan').innerHTML = [['Company', p.company], ['Router', p.vm], ['Cloud', p.cloud], ['WAN', p.wan], ['LAN', p.lan], ['Changes', 'the new router, ' + p.changed.join(', ') + ', Nautobot']]
+  $('w-plan').innerHTML = [['Company', p.company], ['Router', p.vm], ['Cloud', p.cloud], ['Hub', p.prefer], ['WAN', p.wan], ['LAN', p.lan], ['Changes', 'the new router, ' + p.changed.join(', ') + ', Nautobot']]
     .map(([k, x]) => `<tr><th>${esc(k)}</th><td>${esc(x)}</td></tr>`).join('');
   $('w-note').textContent = p.untouched;
   $('w-msg').textContent = (v.problems || []).join('\n');
@@ -351,6 +455,7 @@ async function openWizard() {
   if (!r.ok) { alert(SPEC.detail); return; }
   $('w-name').value = SPEC.name; $('w-region').value = SPEC.region; $('w-mgmt').value = SPEC.mgmt_ip; $('w-lan').value = SPEC.lan;
   $('w-plat').value = SPEC.platform || 'c8000v'; $('w-plat').onchange = check;
+  $('w-pref').innerHTML = hubOptions(SPEC.prefer_hub); $('w-pref').onchange = check;
   const cu = SPEC.customer || {};
   $('w-co').value = cu.company || ''; $('w-ind').value = cu.industry || ''; $('w-addr').value = cu.address || '';
   $('w-phone').value = cu.phone || ''; $('w-contact').value = cu.contact || ''; $('w-email').value = cu.email || '';
@@ -363,6 +468,93 @@ async function openWizard() {
 $('w-check').onclick = check;
 $('w-go').onclick = async () => { const spec = await check(); if (!spec) return;
   wiz.close(); start({ mode: 'customer', customer: spec, options: { test: $('w-test').checked } }); };
+
+const hubOptions = sel => `<option value="">none (any hub)</option>` + (ST ? ST.hubs : []).map(h =>
+  `<option value="${esc(h)}" ${h === sel ? 'selected' : ''}>${esc(h)} (${esc((ST.nodes[h] || {}).region || '')})</option>`).join('');
+
+// ---- modify a customer ------------------------------------------------------------------------------------------------
+let MODCUR = null;
+async function openModify() {
+  if (!ST) await load();
+  const PLAT = { c8000v: 'Catalyst 8000v', vyos: 'VyOS' };
+  $('m-cust').innerHTML = ST.customers.map(c => { const m = ST.nodes[c] || {}, cu = m.customer || {};
+    return `<option value="${esc(c)}">${esc(c)} — ${esc(cu.company || 'no company')} (${esc(PLAT[m.platform] || m.platform)}, ${esc(m.region || '')})</option>`; }).join('');
+  $('m-cust').onchange = loadModify; $('m-check').onclick = checkModify;
+  ['m-plat', 'm-pref'].forEach(id => $(id).onchange = checkModify);
+  ['m-region', 'm-lan', 'm-co', 'm-ind', 'm-contact', 'm-addr', 'm-phone', 'm-email'].forEach(id => $(id).oninput = debounceCheck);
+  await loadModify(); mod.showModal();
+}
+let MODT = null; const debounceCheck = () => { clearTimeout(MODT); MODT = setTimeout(checkModify, 500); };
+async function loadModify() {
+  const r = await fetch(`/api/customers/${encodeURIComponent($('m-cust').value)}`); MODCUR = await r.json();
+  if (!r.ok) { $('mod-msg').textContent = MODCUR.detail; return; }
+  const c = MODCUR, cu = c.customer || {}, set = (id, v) => $(id).value = v ?? '';
+  set('m-plat', c.platform); $('m-pref').innerHTML = hubOptions(c.prefer_hub); set('m-region', c.region); set('m-lan', c.lan);
+  set('m-mgmt', c.mgmt_ip); set('m-tidx', c.t_idx); set('m-pport', `${c.provider} ${c.provider_port}`); set('m-host', c.host); set('m-hmgmt', c.host_mgmt);
+  set('m-co', cu.company); set('m-ind', cu.industry); set('m-contact', cu.contact); set('m-addr', cu.address); set('m-phone', cu.phone); set('m-email', cu.email);
+  const on = new Set(cu.applications || []);
+  $('m-apps').innerHTML = (ST.applications || []).map(a => `<label title="${esc(a.description)} — ${esc(a.hubs.join(', '))}">
+    <input type="checkbox" value="${esc(a.id)}" ${on.has(a.id) ? 'checked' : ''}> <span><b>${esc(a.id)}</b> ${esc(a.name)}</span></label>`).join('');
+  $('m-apps').querySelectorAll('input').forEach(i => i.onchange = checkModify);
+  await checkModify();
+}
+function modifyFromForm() {
+  return { region: $('m-region').value.trim(), lan: $('m-lan').value.trim(), platform: $('m-plat').value, prefer_hub: $('m-pref').value,
+    customer: { company: $('m-co').value.trim(), industry: $('m-ind').value.trim(), contact: $('m-contact').value.trim(), address: $('m-addr').value.trim(),
+                phone: $('m-phone').value.trim(), email: $('m-email').value.trim(), applications: [...document.querySelectorAll('#m-apps input:checked')].map(i => i.value) } };
+}
+async function checkModify() {
+  const name = $('m-cust').value, go = $('mod-go'), body = modifyFromForm();
+  go.disabled = true;
+  const r = await fetch(`/api/customers/${encodeURIComponent(name)}/modify/validate`, { ...J, body: JSON.stringify(body) }), v = await r.json();
+  if (!r.ok) { $('mod-msg').textContent = typeof v.detail === 'string' ? v.detail : JSON.stringify(v.detail); return; }
+  const p = v.plan, probs = (v.problems || []).filter(x => x !== 'nothing to change');
+  $('m-plan').innerHTML = p.changes.length ? p.changes.map(c => `<tr><th>${esc(c.what)}</th><td><s class="hint">${esc(c.old)}</s> → <b>${esc(c.new)}</b></td></tr>`).join('')
+      + `<tr><th>The run</th><td><ul style="margin:0;padding-left:18px">${p.what.map(w => `<li>${esc(w)}</li>`).join('')}</ul></td></tr>`
+    : '<tr><td class="hint">nothing changed yet — edit a field</td></tr>';
+  $('m-note').textContent = p.rebuild ? `Rebuilding the router takes the site offline until the new ${p.new.platform === 'c8000v' ? 'C8000v' : 'VyOS'} is up and registered.`
+    : p.relan ? 'The host is rebuilt on the new LAN; the other sites learn it over BGP.' : (p.routers ? '' : 'A data-only change: no router is touched.');
+  $('mod-msg').textContent = probs.join('\n');
+  go.disabled = !!probs.length || !p.changes.length;
+  go.onclick = () => { mod.close(); start({ mode: 'modify', name, changes: body, options: { test: $('m-test').checked } }); };
+}
+
+// ---- backup / restore -----------------------------------------------------------------------------------------------
+async function downloadBackup() {
+  const b = [...document.querySelectorAll('#tasks .task')].find(x => x.textContent.includes('Back up')), t = b && b.querySelector('.m'), was = t && t.textContent;
+  if (t) t.textContent = 'building the backup…';
+  try { const r = await fetch('/api/backup'); if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.status);
+    saveBlob(await r.blob(), (r.headers.get('content-disposition') || '').match(/filename="?([^";]+)/)?.[1] || 'c8000v-dmvpn-lab-backup.tar.gz');
+    if (t) t.textContent = `downloaded (${r.headers.get('x-backup-files') || '?'} files)`; }
+  catch (e) { if (t) t.textContent = 'backup failed: ' + e.message; }
+  if (t) setTimeout(() => t.textContent = was, 6000);
+}
+function openRestore() {
+  $('rs-file').value = ''; $('rs-man').innerHTML = ''; $('rs-plan').innerHTML = ''; $('rs-msg').textContent = ''; $('rs-go').disabled = true;
+  $('rs-file').onchange = uploadBackup; rs.showModal();
+}
+async function uploadBackup() {
+  const f = $('rs-file').files[0], go = $('rs-go'); go.disabled = true; if (!f) return;
+  $('rs-msg').textContent = ''; $('rs-plan').innerHTML = '<tr><td class="hint">reading the backup…</td></tr>';
+  const r = await fetch('/api/backups', { method: 'POST', headers: { 'content-type': 'application/gzip' }, body: f }), j = await r.json();
+  if (!r.ok) { $('rs-plan').innerHTML = ''; $('rs-msg').textContent = j.detail || 'not a usable backup'; return; }
+  const m = j.manifest, P = j.plan, PLAT = { c8000v: 'C8000v', vyos: 'VyOS' };
+  $('rs-man').innerHTML = [['Backup', `${m.lab} v${m.version} · ${new Date(m.created * 1000).toLocaleString()} · from ${m.host} · ${j.files} files, every checksum verified`],
+    ['Its customers', Object.entries(m.customers).map(([c, x]) => `${c} (${x.company || '—'}, ${PLAT[x.platform] || x.platform}, ${x.lan}${x.prefer_hub ? ', prefers ' + x.prefer_hub : ''})`).join(' · ')]]
+    .concat((m.notes || []).map(n => ['Note', n])).map(([k, x]) => `<tr><th>${esc(k)}</th><td>${esc(x)}</td></tr>`).join('');
+  const rows = [];
+  if (P.removed.length) rows.push(['Removed', P.removed.join(', ') + ' — deleted, as Remove a customer does']);
+  if (P.added.length) rows.push(['Built', P.added.join(', ') + ' — created and bootstrapped, as Add a customer does']);
+  P.changed.forEach(c => rows.push([`Changed ${c.name}`, Object.entries(c.diff).map(([k, [a, b]]) => a || b ? `${k}: ${a} → ${b}` : k).join('; ')
+    + (c.rebuild ? ' — the router is rebuilt' : '') + (c.relan && !c.rebuild ? ' — the host is rebuilt' : '')]));
+  P.other.forEach(o => rows.push(['Also', o]));
+  if (!rows.length) rows.push(['Changes', P.same_intent ? 'none: the lab already is this backup — restoring re-applies it (like Deploy)' : 'no customer changes; the intent files differ in details and are re-applied']);
+  rows.push(['Then', 'Network-as-Code applied, the provider and VyOS routers pushed, Nautobot seeded from the restored intent, the lab verified']);
+  $('rs-plan').innerHTML = rows.map(([k, x]) => `<tr><th>${esc(k)}</th><td>${esc(x)}</td></tr>`).join('');
+  $('rs-msg').textContent = (j.problems || []).join('\n');
+  go.disabled = !!(j.problems || []).length;
+  go.onclick = () => { rs.close(); start({ mode: 'restore', name: j.id, options: { test: $('rs-test').checked } }); };
+}
 
 async function pickCustomer() {
   if (!ST) await load();
@@ -407,7 +599,35 @@ async function start(body) {
 }
 // running blinks (the step being processed, the run in progress); pending / queued / skipped stay grey
 const stCls = s => s === 'success' ? 'ok' : (s === 'failed' || s === 'interrupted') ? 'bad' : s === 'running' ? 'warn live' : '';
-// a run's progress: finished steps out of all its steps, the step in progress counting half; the bar takes the run's colour
+// a run's progress: finished steps out of all its steps, the step in progress counting half; the bar takes the run's colour.
+// With the step medians of past runs (GET /api/runs/estimates) it also says how long the run has taken and what is left.
+let EST = null;
+async function loadEstimates() { try { EST = (await (await fetch('/api/runs/estimates')).json()).steps; } catch (e) { EST = null; } }
+const runPlat = r => (r.spec || {}).platform || (r.removal || {}).platform || ((r.modification || {}).new || {}).platform || '*';
+const estStep = (r, name) => !EST ? null : EST[`${r.mode}/${runPlat(r)}/${name}`] ?? EST[`${r.mode}/*/${name}`] ?? EST[`*/*/${name}`] ?? null;
+function dur(s) { s = Math.max(0, Math.round(s)); if (s < 60) return s + 's'; const m = Math.floor(s / 60);
+  return m < 60 ? `${m}m ${String(s % 60).padStart(2, '0')}s` : `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`; }
+// seconds left, or null when a step has never run before (then there is no honest estimate)
+function remaining(r) {
+  const now = Date.now() / 1000; let left = 0;
+  for (const st of r.steps || []) {
+    if (st.status === 'success' || st.status === 'skipped' || st.status === 'failed') continue;
+    const e = estStep(r, st.name); if (e == null) return null;
+    left += st.status === 'running' ? Math.max(e - (now - st.started), 5) : e;
+  }
+  return left;
+}
+function timing(r, wide) {
+  const now = Date.now() / 1000;
+  if (r.status === 'running') {
+    const left = remaining(r), el = `${dur(now - r.started)} elapsed`;
+    if (left == null) return `${el} · ETA unknown`;
+    const eta = new Date((now + left) * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return wide ? `${el} · about ${dur(left)} left (done ≈ ${eta})` : `${el} · ~${dur(left)} left`;
+  }
+  if (r.status === 'queued') { const left = remaining(r); return left == null ? 'queued' : `queued · takes ~${dur(left)}`; }
+  return r.finished ? `took ${dur(r.finished - r.started)}` : '';
+}
 function progress(r, wide) {
   const st = r.steps || [], n = st.length || 1, done = st.filter(x => x.status === 'success').length;
   const cur = st.find(x => x.status === 'running'), pct = Math.round(100 * (r.status === 'success' ? n : done + (cur ? 0.5 : 0)) / n);
@@ -415,24 +635,26 @@ function progress(r, wide) {
   const i = cur ? st.indexOf(cur) + 1 : done;
   const label = r.status === 'running' && cur ? `step ${i} of ${st.length}${wide ? ' — ' + (cur.title || cur.name) : ''}`
               : `${done} / ${st.length} steps`;
-  return `<div class="prog ${cls}" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" title="${esc(label)}">
-    <div class="bar"><div class="fill" style="width:${pct}%"></div></div><span class="t">${pct}% · ${esc(label)}</span></div>`;
+  const tm = timing(r, wide);
+  return `<div class="prog ${cls}" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" title="${esc(label + (tm ? ' · ' + tm : ''))}">
+    <div class="bar"><div class="fill" style="width:${pct}%"></div></div><span class="t">${pct}% · ${esc(label)}${tm ? `<br><span class="eta">${esc(tm)}</span>` : ''}</span></div>`;
 }
 async function loadRuns() {
+  if (!EST) await loadEstimates();
   const runs = await (await fetch('/api/runs')).json();
   $('runs').querySelector('tbody').innerHTML = runs.map(r => `<tr style="cursor:pointer" onclick="watch('${esc(r.id)}')">
-    <td class="hint">${new Date(r.started * 1000).toLocaleString()}</td><td>${esc(r.mode)}</td><td>${esc(r.customer || '')}${((r.spec || {}).platform || (r.removal || {}).platform) ? ` <span class="hint">${esc({ c8000v: 'C8000v', vyos: 'VyOS' }[(r.spec || {}).platform || (r.removal || {}).platform] || '')}</span>` : ''}</td>
+    <td class="hint">${new Date(r.started * 1000).toLocaleString()}</td><td>${esc(r.mode)}</td><td>${esc(r.customer || '')}${((r.spec || {}).platform || (r.removal || {}).platform || ((r.modification || {}).new || {}).platform) ? ` <span class="hint">${esc({ c8000v: 'C8000v', vyos: 'VyOS' }[(r.spec || {}).platform || (r.removal || {}).platform || ((r.modification || {}).new || {}).platform] || '')}</span>` : ''}</td>
     <td><span class="pill ${stCls(r.status)}">${esc(r.status)}</span></td><td>${progress(r)}</td>
     <td>${r.tests ? `${r.tests.passed}/${r.tests.total}` : ''}</td></tr>`).join('')
     || '<tr><td colspan="6" class="hint">nothing has run yet</td></tr>';
 }
 async function watch(id) {
-  clearInterval(watching); watching = null;
+  clearInterval(watching); watching = null; if (!EST) await loadEstimates();
   let done = false;
   const tick = async () => {
     const r = await (await fetch(`/api/runs/${encodeURIComponent(id)}`)).json();
     const log = (r.log || []).map(x => typeof x === 'string' ? x : x.line).join('\n');
-    const plat = (r.spec || {}).platform || (r.removal || {}).platform, PLATN = { c8000v: 'Catalyst 8000v', vyos: 'VyOS' };
+    const plat = (r.spec || {}).platform || (r.removal || {}).platform || ((r.modification || {}).new || {}).platform, PLATN = { c8000v: 'Catalyst 8000v', vyos: 'VyOS' };
     $('run-title').innerHTML = `${esc(r.mode)} ${esc(r.customer || '')}${plat ? ` <span class="pill teal">${esc(PLATN[plat] || plat)}</span>` : ''} <span class="pill ${stCls(r.status)}">${esc(r.status)}</span>
       ${['failed', 'interrupted'].includes(r.status) ? `<button onclick="resume('${esc(r.id)}')">Resume</button>` : ''}`;
     $('run-body').innerHTML = `<div class="run-prog">${progress(r, true)}</div><ol class="steps">${(r.steps || []).map(s => `<li class="${s.status === 'running' ? 'cur' : ''}"><span class="pill ${stCls(s.status)}">${esc(s.status)}</span>
@@ -441,16 +663,17 @@ async function watch(id) {
       <pre class="out">${esc(log.slice(-8000))}</pre>`;
     const pre = $('run-body').querySelector('pre'); if (pre) pre.scrollTop = pre.scrollHeight;
     if (location.hash === '#runs') loadRuns();          // the list's bars move with the run being watched
-    if (['success', 'failed', 'cancelled', 'interrupted'].includes(r.status)) { done = true; clearInterval(watching); watching = null; loadRuns(); load(true); }
+    if (['success', 'failed', 'cancelled', 'interrupted'].includes(r.status)) { done = true; clearInterval(watching); watching = null; EST = null; loadRuns(); load(true); }
   };
   await tick(); if (!done) watching = setInterval(tick, 3000);
 }
+setInterval(() => { if (location.hash === '#runs' && !watching && document.querySelector('#runs .prog.live, #runs .prog.idle')) loadRuns(); }, 5000);
 async function resume(id) { const r = await fetch(`/api/runs/${encodeURIComponent(id)}/resume`, { method: 'POST' });
   const run = await r.json(); if (!r.ok) { alert(run.detail); return; } watch(run.id); }
 
 
 // ---- network map --------------------------------------------------------------------------------------------------
-let MAPSEL = null, MAPFOCUS = null;
+let MAPSEL = null, MAPFOCUS = null, PATHS = [];   // PATHS: traced paths drawn on the map, oldest first
 const PRINT = new URLSearchParams(location.search).get('print');   // ?print=<customer>: the PDF view
 const MAPLAYERS = { underlay: true, overlay: true, shortcuts: true, hosts: true, labels: true };
 try { Object.assign(MAPLAYERS, JSON.parse(localStorage.getItem('c8d-map-layers') || '{}')); } catch (e) {}
@@ -458,7 +681,7 @@ document.querySelectorAll('[data-layer]').forEach(cb => { cb.checked = MAPLAYERS
   cb.onchange = () => { MAPLAYERS[cb.dataset.layer] = cb.checked;
     try { localStorage.setItem('c8d-map-layers', JSON.stringify(MAPLAYERS)); } catch (e) {}
     applyLayers(); }; });
-function applyLayers() { document.querySelectorAll('#map [data-g]').forEach(g => g.classList.toggle('hide', !MAPLAYERS[g.dataset.g])); }
+function applyLayers() { document.querySelectorAll('#map [data-g]').forEach(g => g.classList.toggle('hide', g.dataset.g !== 'path' && !MAPLAYERS[g.dataset.g])); }
 
 function nodeStatus(n) {
   const m = ST.nodes[n] || {}, c = (ST.cloud || {})[n], H = ST.hubs, CU = ST.customers;
@@ -513,8 +736,9 @@ function drawMap() {
   CU.forEach(c => { const up = new Set((cloud[c] || {}).nhs_up || []);
     H.forEach(h => { const ok = up.has(h), a = pos[c], b = pos[h];
       const bow = Math.abs(a.x - b.x) < 40 ? 90 : 0;   // a vertical tunnel would lie on the access links: bow it aside
-      ov.push(edge(`tun ${ok ? 'ok' : 'bad'}`, `M${a.x},${top(c)} C${a.x + bow},${a.y - 250} ${b.x + bow},${b.y + 250} ${b.x},${bot(h)}`,
-        `${c} ${ST.nodes[c].tunnel_ip} → ${h} ${ST.nodes[h].tunnel_ip}: ${ok ? 'registered (NHRP), IPsec up' : 'NOT registered'}`)); }); });
+      const pref = ST.nodes[c].prefer_hub === h;
+      ov.push(edge(`tun ${ok ? 'ok' : 'bad'} ${pref ? 'pref' : ''}`, `M${a.x},${top(c)} C${a.x + bow},${a.y - 250} ${b.x + bow},${b.y + 250} ${b.x},${bot(h)}`,
+        `${c} ${ST.nodes[c].tunnel_ip} → ${h} ${ST.nodes[h].tunnel_ip}: ${ok ? 'registered (NHRP), IPsec up' : 'NOT registered'}${pref ? ` — ${c}'s preferred hub (local-preference 200)` : ''}`)); }); });
   H.forEach((h, i) => H.slice(i + 1).forEach(o => { const ok = ((cloud[h] || {}).sa_peers || []).includes(ST.nodes[o].nbma), a = pos[h], b = pos[o];
     ov.push(edge(`hh ${ok ? 'ok' : 'bad'}`, `M${a.x},${top(h)} Q${(a.x + b.x) / 2},${a.y - 95 - Math.abs(b.x - a.x) * 0.08} ${b.x},${top(o)}`,
       `${h} ⇄ ${o}: static NHRP map, iBGP between hubs — IPsec ${ok ? 'up' : 'DOWN'}`)); }));
@@ -537,11 +761,29 @@ function drawMap() {
     hl.push(t(pos[c].x + 8, bot(c) + 34, ST.nodes[c].lan)); });
   svg.push(`<g data-g="hosts">${hs.join('')}<g data-g="labels">${hl.join('')}</g></g>`);
 
+  // the traced path(s): through a hub (amber, dashed) and then the direct shortcut (violet), with arrows
+  const pp = [];
+  const seg = (a, b) => { const A = pos[a], B = pos[b], ra = ST.nodes[a].role, rb = ST.nodes[b].role;
+    if (ra === 'host' || rb === 'host') return `M${A.x},${A.y + (ra === 'host' ? -22 : nh / 2)} L${B.x},${B.y + (rb === 'host' ? -22 : nh / 2)}`;
+    if (ra === 'spoke' && rb === 'spoke') return `M${A.x},${top(a)} Q${(A.x + B.x) / 2},${A.y - 110} ${B.x},${top(b)}`;
+    if (ra === 'spoke' && rb === 'hub') { const bow = Math.abs(A.x - B.x) < 40 ? 90 : 0; return `M${A.x},${top(a)} C${A.x + bow},${A.y - 250} ${B.x + bow},${B.y + 250} ${B.x},${bot(b)}`; }
+    if (ra === 'hub' && rb === 'spoke') { const bow = Math.abs(A.x - B.x) < 40 ? 90 : 0; return `M${A.x},${bot(a)} C${A.x + bow},${A.y + 250} ${B.x + bow},${B.y - 250} ${B.x},${top(b)}`; }
+    return `M${A.x},${A.y} L${B.x},${B.y}`; };
+  PATHS.forEach((P_, k) => { const ns = P_.path.filter(x => pos[x]);
+    if (ns.length !== P_.path.length) return;                 // a focused view hides one end: nothing to draw
+    const cls = P_.kind === 'direct' ? 'pdirect' : 'phub', last = k === PATHS.length - 1;
+    for (let i = 0; i + 1 < ns.length; i++)
+      pp.push(`<path class="path ${cls} ${last ? '' : 'old'}" d="${seg(ns[i], ns[i + 1])}" marker-end="url(#arr-${cls})"><title>${esc(P_.label)}</title></path>`); });
+  svg.push(`<defs><marker id="arr-pdirect" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="arrow pdirect"/></marker>
+    <marker id="arr-phub" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="arrow phub"/></marker></defs>`,
+    `<g data-g="path">${pp.join('')}</g>`);
+
   // nodes
-  const box = (n, w, h, lines, extraCls = '') => { const p = pos[n], st = nodeStatus(n);
+  const drifted = n => DRIFT && DRIFT.nodes && DRIFT.nodes[n] && DRIFT.nodes[n].status === 'drift';
+  const box = (n, w, h, lines, extraCls = '') => { const p = pos[n], st = nodeStatus(n), dr = drifted(n);
     return `<g class="node ${st} ${MAPSEL === n ? 'sel' : ''} ${extraCls}" data-node="${esc(n)}" tabindex="0">
       <rect x="${p.x - w / 2}" y="${p.y - h / 2}" width="${w}" height="${h}" rx="10"/>${lines.map(([txt, cls, dy]) =>
-        `<text class="${cls}" x="${p.x}" y="${p.y + dy}">${esc(txt)}</text>`).join('')}<title>${esc(n)}: ${st}</title></g>`; };
+        `<text class="${cls}" x="${p.x}" y="${p.y + dy}">${esc(txt)}</text>`).join('')}${dr ? `<g class="driftbadge"><circle cx="${p.x + w / 2 - 4}" cy="${p.y - h / 2 + 4}" r="10"/><text x="${p.x + w / 2 - 4}" y="${p.y - h / 2 + 8.5}">≠</text></g>` : ''}<title>${esc(n)}: ${st}${dr ? ' · configuration drift: ' + DRIFT.nodes[n].items.length + ' difference(s) from the model' : ''}</title></g>`; };
   const nodes = [];
   H.forEach(h => nodes.push(box(h, nw, nh, [['hub · ' + (ST.nodes[h].region || ''), 'role', -12], [h, '', 5], [ST.nodes[h].tunnel_ip, 'sub', 20]])));
   const hosted = h => (ST.applications || []).filter(a => a.hubs.includes(h));
@@ -570,6 +812,65 @@ function drawMap() {
   if (PRINT) printReady();
 }
 
+// ---- export: the map as drawn now, as a standalone SVG or PNG, in the light or the dark theme -----------------------
+// The page draws the map with CSS (classes and theme variables), which a file on its own would not have: every element's
+// computed style is copied onto a clone while the chosen theme is applied, hidden layers are left out, and a title, the
+// time and a legend are added around it.
+const EXPORT_PROPS = ['fill', 'fill-opacity', 'stroke', 'stroke-width', 'stroke-dasharray', 'stroke-opacity', 'opacity', 'font-size',
+  'font-family', 'font-weight', 'text-anchor', 'paint-order', 'letter-spacing', 'text-transform', 'stroke-linecap', 'stroke-linejoin'];
+function mapExportSvg(theme) {
+  const root = document.documentElement, prev = root.dataset.theme, src = $('map');
+  root.dataset.theme = theme;
+  let out;
+  try {
+    const clone = src.cloneNode(true), orig = [...src.querySelectorAll('*')], copy = [...clone.querySelectorAll('*')], drop = [];
+    orig.forEach((el, i) => { const cs = getComputedStyle(el);
+      if (cs.display === 'none') { drop.push(copy[i]); return; }
+      copy[i].setAttribute('style', EXPORT_PROPS.map(p => `${p}:${cs.getPropertyValue(p)}`).join(';'));
+      copy[i].removeAttribute('class'); copy[i].removeAttribute('tabindex'); });
+    drop.forEach(el => el.remove());
+    const cs = getComputedStyle(document.body), mcs = getComputedStyle(src);
+    const bg = cs.getPropertyValue('--card').trim(), ink = cs.getPropertyValue('--body').trim(), muted = cs.getPropertyValue('--muted').trim();
+    const col = v => mcs.getPropertyValue(v).trim();
+    const focus = MAPFOCUS ? `${MAPFOCUS}'s view${(ST.nodes[MAPFOCUS].customer || {}).company ? ' — ' + ST.nodes[MAPFOCUS].customer.company : ''}` : 'all customers';
+    const when = new Date((ST.generated || Date.now() / 1000) * 1000).toLocaleString();
+    const font = 'font-family:system-ui,-apple-system,Segoe UI,sans-serif';
+    const leg = [[col('--ul'), '', 3, 'access link, eBGP to the provider'], [col('--tun'), '7 5', 2, 'DMVPN tunnel (NHRP + IPsec)'],
+                 [col('--sc'), '', 3.5, 'live shortcut (phase 3)'], [col('--bad'), '', 3, 'down']];
+    const legend = leg.map(([c, dash, w, txt], i) => { const x = 40 + i * 290;
+      return `<line x1="${x}" y1="822" x2="${x + 34}" y2="822" stroke="${c}" stroke-width="${w}" ${dash ? `stroke-dasharray="${dash}"` : ''}/>
+        <text x="${x + 42}" y="826" style="${font};font-size:13px;fill:${muted}">${esc(txt)}</text>`; }).join('');
+    out = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -70 1200 920" width="1200" height="920">
+<title>c8000v-dmvpn-lab network map (${esc(focus)})</title>
+<rect x="0" y="-70" width="1200" height="920" fill="${bg}"/>
+<text x="40" y="-34" style="${font};font-size:22px;font-weight:600;fill:${ink}">c8000v-dmvpn-lab — network map</text>
+<text x="40" y="-10" style="${font};font-size:13px;fill:${muted}">${esc(focus)} · drawn from the routers' live state at ${esc(when)}</text>
+${clone.innerHTML}
+${legend}
+</svg>`;
+  } finally { root.dataset.theme = prev; }
+  return out;
+}
+function mapExportName(theme, ext) {
+  const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
+  return `c8000v-dmvpn-lab-network-map-${MAPFOCUS || 'all'}-${theme}-${stamp}.${ext}`;
+}
+function saveBlob(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); }
+async function mapExport(fmt) {
+  if (!ST) return;
+  const theme = $('exp-theme').value, svg = mapExportSvg(theme);
+  if (fmt === 'svg') { saveBlob(new Blob([svg], { type: 'image/svg+xml' }), mapExportName(theme, 'svg')); return; }
+  const img = new Image(), url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+  await new Promise((ok, bad) => { img.onload = ok; img.onerror = bad; img.src = url; });
+  const scale = 2, c = document.createElement('canvas'); c.width = 1200 * scale; c.height = 920 * scale;
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+  c.toBlob(b => saveBlob(b, mapExportName(theme, 'png')), 'image/png');
+}
+$('exp-theme').value = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
+$('exp-svg').onclick = () => mapExport('svg'); $('exp-png').onclick = () => mapExport('png');
+
 function setFocus(c) { MAPFOCUS = c; if (c) MAPSEL = c; drawMap(); }
 
 // print mode (?print=<customer>): what the portal's headless Chrome renders into the customer's PDF
@@ -580,7 +881,11 @@ function printReady() {
   $('printhead').innerHTML = `<h1>${esc(cu.company ? cu.company + ' — ' : '')}${esc(PRINT)} network view</h1>
 
     <p>c8000v-dmvpn-lab · ${esc(m.region || '')} · Tunnel0 ${esc(m.tunnel_ip)} · LAN ${esc(m.lan)} · generated ${esc(new Date().toLocaleString())} from the routers' live state (${esc(new Date(ST.generated * 1000).toLocaleTimeString())})</p>`;
-  window.__mapReady = true;
+  if (window.__slaStarted) return; window.__slaStarted = true;
+  fetchSla(PRINT, 'month').then(r => {
+    $('slaprint').innerHTML = `<h3>${esc(cu.company || PRINT)} — monthly service report, ${esc(r.label)}</h3>` + slaHtml(r);
+  }).catch(e => { $('slaprint').innerHTML = `<h3>Monthly service report</h3><p class="msg">not available: ${esc(e.message)}</p>`; })
+    .finally(() => { window.__mapReady = true; });
 }
 
 async function downloadCustomerPdf(c, btn) {
@@ -606,6 +911,11 @@ function renderInfo(n, fresh) {
   add('Platform', esc(PLAT[m.platform] || m.platform));
   add('Status', pill(st === 'ok', st === 'ok' ? 'healthy' : st === 'warn' ? 'partial' : 'down', st === 'warn'));
   add('VM', esc(m.domain)); add('Management', esc(m.mgmt_ip));
+  const dn = DRIFT && DRIFT.nodes ? DRIFT.nodes[n] : null;
+  if (dn) add('Config', dn.status === 'ok' ? pill(true, 'matches the model') : dn.status === 'error' ? pill(false, 'drift not checked')
+    : pill(false, `drift: ${dn.items.length} difference(s)`, true) + `<div class="driftlist">${dn.items.slice(0, 8).map(i => `<div><span class="dk ${esc(i.kind)}">${esc(i.kind)}</span> ${esc(i.line)}</div>`).join('')}</div>
+      <button class="driftfix" onclick="start({ mode: 'fixdrift', options: { test: false } })">Fix drift</button>`);
+  if (m.role === 'spoke') add('Preferred hub', m.prefer_hub ? esc(m.prefer_hub) : '<span class="hint">none</span>');
   if (m.role === 'hub' || m.role === 'spoke') {
     add('Tunnel0', esc(m.tunnel_ip)); add('NBMA (Gi2)', esc(m.nbma)); add('Router-id', esc(m.router_id)); add('LAN', esc(m.lan));
     add('Provider link', esc(`${m.wan.peer} ${m.wan.peer_port} · ${m.wan.prefix}`));
@@ -625,7 +935,8 @@ function renderInfo(n, fresh) {
   }
   const view = m.role === 'spoke' ? `<div class="cmds">
       <button data-focus>${MAPFOCUS === n ? 'Show all customers' : `Show only ${esc(n)}'s view`}</button>
-      <button data-pdf title="${esc(n)}'s view of the network, with its details, as a PDF">Download PDF</button></div>` : '';
+      <button data-pdf title="${esc(n)}'s view of the network, with its details and this month's SLA report, as a PDF">Download PDF</button>
+      <button data-sla>Service levels</button></div>` : '';
   const pings = m.role === 'host' ? Object.keys(ST.nodes).filter(x => ST.nodes[x].role === 'host' && x !== n).sort() : [];
   const cmds = (m.role === 'hub' || m.role === 'spoke')
     ? (m.platform === 'vyos' ? ['show ip nhrp nhs', 'show ip nhrp cache', 'show ip nhrp shortcut', 'show vpn ipsec sa', 'show ip bgp summary', 'show ip route bgp']
@@ -657,12 +968,20 @@ function renderInfo(n, fresh) {
   }
   $('mapinfo').innerHTML = `<h2>${esc(n)}</h2>${company}${apps}<dl>${rows.join('')}</dl>${view}
     <div class="cmds">${cmds.map(x => `<button data-cmd="${esc(x)}">${esc(x)}</button>`).join('')}<button data-config title="read the configuration live from ${esc(n)}">show configuration</button></div>
-    ${pings.length ? `<div class="cmds"><button data-pingall title="ping ${esc(pings.join(', '))} from ${esc(n)}">ping all hosts (${pings.length})</button></div>` : ''}`;
+    ${pings.length ? `<div class="cmds"><button data-pingall title="ping ${esc(pings.join(', '))} from ${esc(n)}">ping all hosts (${pings.length})</button></div>
+    <div class="pathctl"><label for="trace-to">Path to another host <span class="hint">(traceroute, drawn on the map)</span></label>
+      <div class="cmds" style="margin-top:4px"><select id="trace-to">${pings.map(x => `<option value="${esc(x)}" ${x === (PATHS[0] || {}).target ? 'selected' : ''}>${esc(x)}${ST.nodes[x].router ? ' (' + esc(ST.nodes[x].router) + ')' : ''}</option>`).join('')}</select>
+        <button data-trace>trace path</button><button data-watch title="clear the two routers' shortcut, then trace until phase 3 builds it again">watch the shortcut form</button>
+        ${PATHS.length ? '<button data-clearpath>clear path</button>' : ''}</div></div>` : ''}`;
   $('mapinfo').querySelectorAll('[data-cmd]').forEach(b => b.onclick = () => runMapCommand(n, b.dataset.cmd));
   $('mapinfo').querySelectorAll('[data-config]').forEach(b => b.onclick = () => runMapConfig(n));
   $('mapinfo').querySelectorAll('[data-focus]').forEach(b => b.onclick = () => setFocus(MAPFOCUS === n ? null : n));
   $('mapinfo').querySelectorAll('[data-pdf]').forEach(b => b.onclick = () => downloadCustomerPdf(n, b));
+  $('mapinfo').querySelectorAll('[data-sla]').forEach(b => b.onclick = () => { show('sla'); $('sla-cust').value = n; renderSla(); });
   $('mapinfo').querySelectorAll('[data-pingall]').forEach(b => b.onclick = () => runMapPingAll(n, pings));
+  $('mapinfo').querySelectorAll('[data-trace]').forEach(b => b.onclick = () => tracePath(n, $('trace-to').value, false));
+  $('mapinfo').querySelectorAll('[data-watch]').forEach(b => b.onclick = () => tracePath(n, $('trace-to').value, true));
+  $('mapinfo').querySelectorAll('[data-clearpath]').forEach(b => b.onclick = () => { PATHS = []; drawMap(); });
 }
 
 // a show command's output: its own full-width card under the map, so wide IOS tables read without wrapping
@@ -705,6 +1024,47 @@ async function runMapPingAll(host, targets) {
   const up = targets.filter(t => res[t].ok).length;
   $('mapcmd-when').innerHTML = esc(new Date().toLocaleTimeString()) + ' ' + pill(up === targets.length, `${up} / ${targets.length} reachable`);
 }
+// trace the path between two hosts and draw it; `watch` first clears the two routers' shortcut, then traces until
+// phase 3 has built it again — the first trace crosses a hub, a later one goes direct
+async function tracePath(host, target, watchIt) {
+  const seq = ++MAPCMD_SEQ, card = $('mapcmd'), out = $('mapout'), lines = [];
+  card.hidden = false; card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  $('mapcmd-title').textContent = `${host} → ${target}: ${watchIt ? 'watching the shortcut form' : 'path'}`;
+  $('mapcmd-when').textContent = 'tracing…'; PATHS = []; drawMap();
+  const say = t => { lines.push(t); out.textContent = lines.join('\n'); out.scrollTop = out.scrollHeight; };
+  const fetchJ = async (url, opt) => { const r = await fetch(url, opt), j = await r.json(); if (!r.ok) throw new Error(typeof j.detail === 'string' ? j.detail : JSON.stringify(j.detail)); return j; };
+  try {
+    if (watchIt) { say(`# clearing the shortcut between ${ST.nodes[host].router} and ${ST.nodes[target].router}…`);
+      const r = await fetchJ(`/api/hosts/${encodeURIComponent(host)}/path/reset?target=${encodeURIComponent(target)}`, { method: 'POST' });
+      r.done.forEach(d => say('#   ' + d)); say(''); }
+    const t0 = Date.now();
+    for (let i = 1; i <= (watchIt ? 8 : 1); i++) {
+      if (seq !== MAPCMD_SEQ) return;
+      // the first trace goes cold, to catch the path before any shortcut; later ones send traffic first, as an application
+      // would, so the hub redirects and NHRP resolves the shortcut
+      if (i > 1) say(`# sending traffic (10 pings) — the hub answers it with an NHRP redirect`);
+      const j = await fetchJ(`/api/hosts/${encodeURIComponent(host)}/traceroute?target=${encodeURIComponent(target)}${i > 1 ? '&warm=true' : ''}`);
+      if (seq !== MAPCMD_SEQ) return;
+      const verdict = j.kind === 'direct' ? `DIRECT over the phase 3 shortcut ${j.path[1]} ⇄ ${j.path[2]}`
+        : j.kind === 'hub' ? `through ${j.via || 'a hub (it did not answer)'} — no shortcut yet` : (j.reached ? 'path not recognised' : 'target NOT reached');
+      say(`=== trace ${i} · +${((Date.now() - t0) / 1000).toFixed(1)}s · ${verdict}`);
+      say(j.hops.map(h => `${String(h.hop).padStart(2)}  ${(h.ip || '*').padEnd(15)} ${h.rtt_ms != null ? (h.rtt_ms.toFixed(2) + ' ms').padStart(10) : ''.padStart(10)}  ${h.node ? h.node + ' ' + h.what : ''}`).join('\n'));
+      say('');
+      if (j.kind === 'hub' || j.kind === 'direct') {
+        PATHS.push({ path: j.path, kind: j.kind, target, label: `trace ${i}: ${j.path.join(' → ')} (${verdict})` });
+        if (PATHS.length > 2) PATHS.splice(0, PATHS.length - 2);   // the hub path and the latest one
+        if (PATHS.length === 2 && PATHS[0].kind === PATHS[1].kind) PATHS.shift();
+        drawMap();
+      }
+      if (j.kind === 'direct' || !watchIt) {
+        $('mapcmd-when').innerHTML = esc(new Date().toLocaleTimeString()) + ' ' + pill(j.reached, j.kind === 'direct' ? 'direct (shortcut)' : j.kind === 'hub' ? 'via ' + (j.via || 'a hub') : 'not reached', j.kind === 'hub');
+        return;
+      }
+      await new Promise(r => setTimeout(r, 2000));
+    }
+    $('mapcmd-when').innerHTML = esc(new Date().toLocaleTimeString()) + ' ' + pill(false, 'no shortcut formed yet', true);
+  } catch (e) { say('!! ' + e.message); $('mapcmd-when').innerHTML = pill(false, 'failed'); }
+}
 $('mapcmd-dl').onclick = () => {
   const title = $('mapcmd-title').textContent, stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
   const name = title.replace(/[^A-Za-z0-9_.-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 80) + '-' + stamp + '.txt';
@@ -716,6 +1076,80 @@ $('mapcmd-close').onclick = () => { MAPCMD_SEQ++; $('mapcmd').hidden = true; };
 $('mapcmd-copy').onclick = async () => { try { await navigator.clipboard.writeText(`${$('mapcmd-title').textContent}\n${$('mapout').textContent}`);
   $('mapcmd-copy').textContent = 'Copied'; setTimeout(() => $('mapcmd-copy').textContent = 'Copy', 1500); } catch (e) {} };
 
+
+// ---- SLA -----------------------------------------------------------------------------------------------------------
+const HUBCOL = ['#0e7490', '#7c3aed', '#c2410c', '#15803d', '#be185d'];
+// a line chart: series [{name, color, pts:[[t,v]..]}], optional target line; x is time
+function lineChart(series, { h = 180, unit = '', target = null, ymin = 0, ymax = null, step = false, fmt = v => v.toFixed(1), cls = '' } = {}) {
+  const W = 900, H = h, L = 48, R = 12, T = 12, B = 26, all = series.flatMap(s => s.pts);
+  if (!all.length) return `<p class="hint">no data in this window yet</p>`;
+  let t0 = Math.min(...all.map(p => p[0])), t1 = Math.max(...all.map(p => p[0]));
+  if (t1 - t0 < 600) { t0 -= 300; t1 += 300; }
+  let hi = ymax ?? Math.max(...all.map(p => p[1]), target ?? 0) * 1.15; if (!(hi > ymin)) hi = ymin + 1;
+  const X = t => L + (W - L - R) * (t - t0) / Math.max(t1 - t0, 1), Y = v => T + (H - T - B) * (1 - (v - ymin) / (hi - ymin));
+  const ticks = [0, .25, .5, .75, 1].map(f => ymin + (hi - ymin) * f);
+  const span = t1 - t0, tfmt = t => { const d = new Date(t * 1000); return span > 3 * 86400 ? d.toLocaleDateString([], { month: 'short', day: 'numeric' }) : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); };
+  const xt = [0, .2, .4, .6, .8, 1].map(f => t0 + span * f);
+  const path = s => { let d = '', prev = null; s.pts.forEach(([t, v]) => { const gap = prev && t - prev[0] > 5 * (s.stepS || 60);
+      d += (d === '' || gap ? 'M' : 'L') + X(t).toFixed(1) + ',' + Y(v).toFixed(1) + ' ';
+      if (step) d += ''; prev = [t, v]; }); return d; };
+  return `<svg class="chart ${cls}" viewBox="0 0 ${W} ${H + 18}" role="img">
+    ${ticks.map(v => `<line class="ax" x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}"/><text class="tk" x="${L - 6}" y="${Y(v) + 4}" text-anchor="end">${esc(fmt(v))}${esc(unit)}</text>`).join('')}
+    ${xt.map(t => `<text class="tk" x="${X(t)}" y="${H - 6}" text-anchor="middle">${esc(tfmt(t))}</text>`).join('')}
+    ${target != null && target <= hi ? `<line class="tgt" x1="${L}" x2="${W - R}" y1="${Y(target)}" y2="${Y(target)}"><title>target ${target}${unit}</title></line>` : ''}
+    ${series.map(s => `<path class="ln" d="${path(s)}" stroke="${s.color}" ${s.dash ? `stroke-dasharray="${s.dash}"` : ''}><title>${esc(s.name)}</title></path>`
+      + (s.pts.length <= 12 ? s.pts.map(([t, v]) => `<circle cx="${X(t).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="3.5" fill="${s.color}"><title>${esc(s.name)} ${esc(fmt(v))}${esc(unit)} · ${esc(new Date(t * 1000).toLocaleString())}</title></circle>`).join('') : '')).join('')}
+    ${series.map((s, i) => `<g><line x1="${L + i * 150}" x2="${L + i * 150 + 22}" y1="${H + 10}" y2="${H + 10}" stroke="${s.color}" stroke-width="3" ${s.dash ? `stroke-dasharray="${s.dash}"` : ''}/><text class="lg" x="${L + i * 150 + 28}" y="${H + 14}">${esc(s.name)}</text></g>`).join('')}
+  </svg>`;
+}
+const pct = (v, d = 3) => v == null ? '—' : (v * 100).toFixed(d).replace(/\.?0+$/, '') + '%';
+const msf = v => v == null ? '—' : v.toFixed(2) + ' ms';
+function slaHtml(r) {
+  const T = r.targets, met = (ok, txt) => ok == null ? '<span class="hint">no data yet</span>' : pill(ok, (ok ? 'met · ' : 'missed · ') + txt, false);
+  const kpi = (n, l, tg) => `<div class="slakpi"><div class="n">${n}</div><div class="l">${esc(l)}</div><div class="tg">${tg}</div></div>`;
+  const hubs = Object.keys(r.hubs);
+  const rtt = hubs.map((h, i) => ({ name: h, color: HUBCOL[i % HUBCOL.length], pts: r.series['rtt:' + h] || [], stepS: r.step }));
+  const loss = hubs.map((h, i) => ({ name: h, color: HUBCOL[i % HUBCOL.length], pts: (r.series['loss:' + h] || []).map(([t, v]) => [t, v * 100]), stepS: r.step }));
+  const reg = [{ name: 'hubs registered', color: '#15803d', pts: r.series.nhs_up || [], stepS: r.step },
+               { name: 'hubs expected', color: '#64748b', dash: '5 4', pts: r.series.nhs_expected || [], stepS: r.step }];
+  return `<div class="slakpis">
+      ${kpi(pct(r.availability), 'Availability (registered with ≥1 hub)', met(r.met.availability, `target ${T.availability}%`))}
+      ${kpi(pct(r.full_registration), 'Registered with every hub', '<span class="hint">redundancy</span>')}
+      ${kpi(msf(r.rtt_avg), 'Latency to the hubs (average)', '<span class="hint">round trip, LAN host → hub LAN</span>')}
+      ${kpi(msf(r.rtt_p95), 'Latency, 95th percentile', met(r.met.rtt_ms, `target ≤ ${T.rtt_ms} ms`))}
+      ${kpi(pct(r.loss, 2), 'Packet loss', met(r.met.loss_pct, `target ≤ ${T.loss_pct}%`))}
+      ${kpi(pct(r.coverage, 1), 'Monitored', `<span class="hint">of ${esc(r.label)}; probes ${pct(r.probe_coverage, 1)}</span>`)}
+    </div>
+    <div class="slah3"><b>Latency to each hub</b> <span class="hint">round trip from ${esc(r.customer)}'s LAN host to the hub's LAN, where the applications are served</span></div>
+    ${lineChart(rtt, { unit: ' ms', target: T.rtt_ms, fmt: v => v.toFixed(v < 10 ? 1 : 0) })}
+    <div class="slah3"><b>Tunnel registrations</b> <span class="hint">hubs ${esc(r.customer)} is registered with (NHRP)</span></div>
+    ${lineChart(reg, { h: 120, cls: 'short', fmt: v => v.toFixed(0), ymax: Math.max(3, ...(r.series.nhs_expected || [[0, 3]]).map(p => p[1])) + 0.5 })}
+    <div class="slah3"><b>Packet loss to each hub</b></div>
+    ${lineChart(loss, { h: 110, cls: 'short', unit: '%', target: T.loss_pct, ymax: Math.max(2, ...loss.flatMap(s => s.pts.map(p => p[1]))) , fmt: v => v.toFixed(v < 10 ? 1 : 0) })}
+    <table><thead><tr><th>Hub</th><th>Average</th><th>95th percentile</th><th>Worst</th><th>Loss</th><th>Now</th></tr></thead><tbody>
+      ${hubs.map(h => { const x = r.hubs[h], now = (r.now || {})[h];
+        return `<tr><td><b>${esc(h)}</b></td><td>${msf(x.rtt_avg)}</td><td>${msf(x.rtt_p95)}</td><td>${msf(x.rtt_max)}</td><td>${pct(x.loss, 2)}</td>
+          <td>${now ? (now.rtt_avg != null ? msf(now.rtt_avg) : pill(false, 'unreachable')) + (now.loss ? ' ' + pill(false, pct(now.loss, 0) + ' loss', true) : '') : '<span class="hint">—</span>'}</td></tr>`; }).join('')}
+    </tbody></table>
+    <p class="hint slanote">Measured by the portal every minute (five pings from the LAN host to every hub, in parallel) and scraped into VictoriaMetrics;
+      availability comes from the NHRP registrations the portal has recorded every 30 s. ${esc(r.label)}: ${esc(new Date(r.start * 1000).toLocaleString())} – ${esc(new Date(r.end * 1000).toLocaleString())}.</p>`;
+}
+async function fetchSla(c, win) { const r = await fetch(`/api/customers/${encodeURIComponent(c)}/sla?window=${encodeURIComponent(win)}`), j = await r.json();
+  if (!r.ok) throw new Error(j.detail || r.status); return j; }
+async function openSla() {
+  if (!ST) await load();
+  const sel = $('sla-cust'), keep = sel.value;
+  sel.innerHTML = ST.customers.map(c => `<option value="${esc(c)}">${esc(c)} — ${esc((ST.nodes[c].customer || {}).company || '')}</option>`).join('');
+  if (keep && ST.customers.includes(keep)) sel.value = keep; else if (MAPSEL && ST.customers.includes(MAPSEL)) sel.value = MAPSEL;
+  sel.onchange = $('sla-win').onchange = renderSla; $('sla-pdf').onclick = () => downloadCustomerPdf(sel.value, $('sla-pdf'));
+  renderSla();
+}
+async function renderSla() {
+  const c = $('sla-cust').value, w = $('sla-win').value; $('sla-body').innerHTML = '<p class="hint">asking VictoriaMetrics…</p>';
+  try { const r = await fetchSla(c, w); if ($('sla-cust').value !== c || $('sla-win').value !== w) return;
+    $('sla-body').innerHTML = `<h3 style="margin:0 0 4px;font-size:15px">${esc(r.company || c)} <span class="hint">${esc(c)} · ${esc(r.label)}</span></h3>` + slaHtml(r); }
+  catch (e) { $('sla-body').innerHTML = `<p class="msg">${esc(e.message)}</p>`; }
+}
 
 // ---- lab tools ------------------------------------------------------------------------------------------------------
 let TOOLS = null;

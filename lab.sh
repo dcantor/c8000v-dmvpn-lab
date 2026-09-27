@@ -4,6 +4,7 @@
 # See lab.conf.
 set -euo pipefail
 source "$(dirname "$(readlink -f "$0")")/lab.conf"
+declare -p PREFER_HUB &>/dev/null || declare -A PREFER_HUB=()   # a lab.conf from before 0.21.0 has no preferences
 
 # Re-exec under the libvirt group if this login session doesn't have it yet.
 if ! id -nG | tr ' ' '\n' | grep -qx libvirt && getent group libvirt | grep -qw "${USER:-$(id -un)}"; then
@@ -470,7 +471,7 @@ cmd_inventory() {  # the lab as JSON — the one contract the renderer, the test
       printf 'scalar\t%s\t%s\n' "$var" "${!var}"
     done
     for n in "${ALL_NODES[@]}"; do printf 'map\tPLATFORM\t%s\t%s\n' "$n" "$(platform "$n")"; done
-    for var in ROLE REGION MGMT_IP T_IDX LAN HOST_OF CONSOLE_PORT NODE_IDX; do
+    for var in ROLE REGION MGMT_IP T_IDX LAN HOST_OF CONSOLE_PORT NODE_IDX PREFER_HUB; do
       declare -n A="$var"
       for k in "${!A[@]}"; do printf 'map\t%s\t%s\t%s\n' "$var" "$k" "${A[$k]}"; done
       unset -n A

@@ -59,5 +59,18 @@
    "APP-1006",
    "APP-1008"
   ]
+ },
+ "cust6": {
+  "company": "Gulfstream Marine Services",
+  "industry": "Marine — boat maintenance",
+  "address": "2450 SE 17th Street, Fort Lauderdale, FL 33316",
+  "phone": "+1 (954) 555-0102",
+  "contact": "Taylor Nguyen, Systems Administrator",
+  "email": "it@gulfstreammarine.example",
+  "account": "C8D-10838",
+  "applications": [
+   "APP-1004",
+   "APP-1007"
+  ]
  }
 }

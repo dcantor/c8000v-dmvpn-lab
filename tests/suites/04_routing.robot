@@ -39,12 +39,15 @@ Every customer peers with all three hubs, and only with them in the overlay
     END
 
 Every router has every other LAN and router-id with the originating router as next hop
+    [Documentation]    A customer that prefers a hub has the other customers' prefixes through that hub instead (`%`: a
+    ...                live shortcut overrides the next hop); the hubs' own prefixes keep the originating hub.
     FOR    ${r}    IN    @{C8K}
         ${rt}=    Show    ${r}    show ip route bgp
         FOR    ${o}    IN    @{DMVPN}
             Continue For Loop If    '${r}' == '${o}'
-            Should Match Regexp    ${rt}    (?m)^B\\s+${ROUTERS}[${o}][lan] \\[200/0\\] via ${ROUTERS}[${o}][tunnel]
-            Should Match Regexp    ${rt}    (?m)^B\\s+${ROUTERS}[${o}][router_id](/32)? \\[200/0\\] via ${ROUTERS}[${o}][tunnel]
+            ${via}=    Evaluate    $ROUTERS[$PREFER[$r]]['tunnel'] if $r in $PREFER and $o in $SPOKES else $ROUTERS[$o]['tunnel']
+            Should Match Regexp    ${rt}    (?m)^B\\s+(%\\s+)?${ROUTERS}[${o}][lan] \\[200/0\\] via ${via}
+            Should Match Regexp    ${rt}    (?m)^B\\s+(%\\s+)?${ROUTERS}[${o}][router_id](/32)? \\[200/0\\] via ${via}
         END
     END
 
@@ -91,3 +94,27 @@ Host Path Is Direct
     ${res}=    On Host    ${h}    traceroute -n -q 1 -w 2 ${HOST_VMS}[${o}][lan_ip]
     ${far}=    Set Variable    ${HOST_VMS}[${o}][router]
     Should Match Regexp    ${res}[1]    (?m)^\\s*2\\s+${ROUTERS}[${far}][tunnel]\\s
+
+A customer that prefers a hub takes the other customers' routes through it, and only its own preference applies
+    [Documentation]    PREFER_HUB in lab.conf: the preferred hub's copy of every other customer's LAN is best with
+    ...                local-preference 200 and the hub as next hop; a customer without a preference has no such policy.
+    Skip If    not $PREFERRING    no customer prefers a hub right now
+    FOR    ${c}    IN    @{PREFERRING}
+        ${other}=    Evaluate    [s for s in $SPOKES if s != $c][0]
+        ${lan}=    Set Variable    ${ROUTERS}[${other}][lan]
+        ${hub}=    Set Variable    ${ROUTERS}[${PREFER}[${c}]][tunnel]
+        IF    '${PLATFORM}[${c}]' == 'vyos'
+            ${out}=    On VyOS    ${c}    sudo vtysh -c 'show ip bgp ${lan}'
+        ELSE
+            ${out}=    Show    ${c}    show ip bgp ${lan}
+        END
+        ${best}=    Evaluate    [b for b in __import__('re').split(r'\\n(?=\\s{2}Local)', $out) if 'best' in b.split('\\n')[2] or ', best' in b]
+        Should Not Be Empty    ${best}    msg=${c} has no best path to ${lan}
+        Should Contain    ${best}[0]    ${hub} from ${hub}    msg=${c}'s best path to ${lan} is not through ${PREFER}[${c}]
+        Should Contain    ${best}[0]    localpref 200
+    END
+    FOR    ${c}    IN    @{C8K_SPOKES}
+        Continue For Loop If    $c in $PREFER
+        ${rm}=    Show    ${c}    show running-config | include ^route-map OVERLAY-HUB
+        Should Be Empty    ${rm.strip()}    msg=${c} prefers no hub but has a per-hub policy
+    END

@@ -101,6 +101,8 @@ def inventory_from_nautobot():
             lan_port = next((p for p in ports if p["num"] == SECRETS["lan_port"] and p["ip"]), None)
             lan = (lan_port["prefix"] if lan_port else
                    str(ipaddress.ip_interface(addr1(ifaces["Loopback10"])).network))
+            if role == "spoke":
+                node["prefer_hub"] = ((ri or {}).get("extra_attributes") or {}).get("preferred_hub")
             node.update({"t_idx": int(ipaddress.ip_address(tun)) - int(overlay.network_address),
                          "router_id": ri["router_id"]["address"].split("/")[0], "tunnel_ip": tun,
                          "nbma": wan["ip"].split("/")[0], "wan": wan, "lan": lan,

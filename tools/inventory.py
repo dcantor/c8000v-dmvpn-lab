@@ -65,6 +65,7 @@ for name in lists["ALL_NODES"]:
         node["lan_port"] = lan_port
         if role[name] == "spoke":
             node["customer"] = companies.get(name)   # who the site belongs to (customers.json); None if not recorded
+            node["prefer_hub"] = maps.get("PREFER_HUB", {}).get(name)   # None: no preference
     elif role[name] == "provider":
         node["router_id"] = f"{scalar['ROUTER_ID_NET']}.254"
     elif role[name] == "host":

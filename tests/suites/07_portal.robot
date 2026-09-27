@@ -73,16 +73,17 @@ Every LAN host pings every other one from the Network map, and only hosts can be
     ${bad}=    GET On Session    portal    /api/hosts/${HOSTS}[0]/ping    params=target=${HUBS}[0]    expected_status=404
     ${self}=    GET On Session    portal    /api/hosts/${HOSTS}[0]/ping    params=target=${HOSTS}[0]    expected_status=400
 
-Each customer's view of the Network map downloads as a two-page PDF
+Each customer's view of the Network map downloads as a three-page PDF
     [Documentation]    The portal's headless Chrome renders the map in print mode, focused on the customer: page one the
-    ...                company and its view of the network, page two its applications and the technical details.
+    ...                company and its view of the network, page two its applications and the technical details, page
+    ...                three this month's service report.
     FOR    ${c}    IN    @{SPOKES}
         ${r}=    GET On Session    portal    /api/customers/${c}/map.pdf
         Should Be Equal    ${r.headers}[content-type]    application/pdf
         Should Contain    ${r.headers}[content-disposition]    ${c}-network-map-
         Should Start With    ${r.content}    ${{b"%PDF"}}
         ${pages}=    Pdf Page Count    ${r.content}
-        Should Be Equal As Integers    ${pages}    2    msg=${c}'s map PDF runs to ${pages} pages
+        Should Be Equal As Integers    ${pages}    3    msg=${c}'s map PDF runs to ${pages} pages
     END
     GET On Session    portal    /api/customers/${HUBS}[0]/map.pdf    expected_status=404
 
@@ -138,3 +139,95 @@ Show configuration returns each node's own configuration, read live
         Should Contain    ${r.json()}[output]    ${HOST_VMS}[${h}][lan_ip]
     END
     GET On Session    portal    /api/config/no-such-node    expected_status=404
+
+Runs know how long their steps take, for the progress bars' estimates
+    ${r}=    GET On Session    portal    /api/runs/estimates
+    ${e}=    Set Variable    ${r.json()}[steps]
+    FOR    ${step}    IN    validate    labconf    vm    bootstrap    nac    provider    nautobot    verify
+        Dictionary Should Contain Key    ${e}    */*/${step}    msg=no finished run has a ${step} step to estimate from
+        Should Be True    ${e}[*/*/${step}] >= 0
+    END
+
+A traceroute between two hosts names every hop and says whether it crossed a hub
+    Skip If    len($HOSTS) < 2    needs two hosts
+    ${r}=    GET On Session    portal    /api/hosts/${HOST_PAIR}[0]/traceroute    params=target=${HOST_PAIR}[1]
+    ${t}=    Set Variable    ${r.json()}
+    Should Be True    ${t}[reached]    msg=${t}[output]
+    Should Contain Any    ${t}[kind]    hub    direct
+    Should Be Equal    ${t}[path][0]    ${HOST_PAIR}[0]
+    Should Be Equal    ${t}[path][1]    ${HOST_VMS}[${HOST_PAIR}[0]][router]
+    Should Be Equal    ${t}[path][-1]    ${HOST_PAIR}[1]
+    Should Be Equal    ${t}[hops][0][node]    ${HOST_VMS}[${HOST_PAIR}[0]][router]
+    GET On Session    portal    /api/hosts/${HOST_PAIR}[0]/traceroute    params=target=${HUBS}[0]    expected_status=404
+
+Clearing a shortcut sends the next packets through a hub, and traffic builds the shortcut again
+    [Documentation]    What "watch the shortcut form" shows on the map. A pair of VyOS customers, or a customer that
+    ...                prefers a hub, routes through a hub until phase 3 resolves the shortcut; the first trace after
+    ...                the reset crosses a hub, and a trace after some traffic goes direct.
+    ${pair}=    Set Variable    ${HUB_FIRST_PAIR}
+    Skip If    not $pair    no customer routes through a hub before its shortcut forms (no VyOS customer, no preference)
+    ${r}=    POST On Session    portal    /api/hosts/${pair}[0]/path/reset    params=target=${pair}[1]
+    Length Should Be    ${r.json()}[routers]    2
+    ${cold}=    GET On Session    portal    /api/hosts/${pair}[0]/traceroute    params=target=${pair}[1]
+    Should Be Equal    ${cold.json()}[kind]    hub    msg=right after the reset: ${cold.json()}[output]
+    ${warm}=    GET On Session    portal    /api/hosts/${pair}[0]/traceroute    params=target=${pair}[1]&warm=true
+    Should Be Equal    ${warm.json()}[kind]    direct    msg=after traffic: ${warm.json()}[output]
+
+Every router runs what the model says: a drift check finds nothing
+    [Documentation]    A drift run: Nautobot vs lab.conf, terraform plan for the C8000vs and their CLI templates against
+    ...                the running configuration, the rendered set lines for VyOS. The report drives the map's badges.
+    ${d}=    POST On Session    portal    /api/drift/check    timeout=600
+    Should Be True    ${d.json()}[ok]    msg=drift on ${d.json()}[drifted]: ${d.json()}[nodes]
+    FOR    ${n}    IN    @{DMVPN}    ${PROVIDER}
+        Should Be Equal    ${d.json()}[nodes][${n}][status]    ok
+    END
+    ${m}=    GET On Session    portal    /metrics
+    Should Contain    ${m.text}    lab_config_drift{
+
+Every customer's service levels are measured and reported from VictoriaMetrics
+    ${m}=    GET On Session    portal    /metrics
+    FOR    ${c}    IN    @{SPOKES}
+        FOR    ${h}    IN    @{HUBS}
+            Should Contain    ${m.text}    lab_sla_loss_ratio{lab="c8000v-dmvpn-lab",customer="${c}",hub="${h}"}
+        END
+    END
+    ${r}=    GET On Session    portal    /api/customers/${SPOKES}[0]/sla    params=window=24h
+    ${s}=    Set Variable    ${r.json()}
+    Should Be Equal    ${s}[customer]    ${SPOKES}[0]
+    Lists Should Be Equal    ${{sorted($s['hubs'])}}    ${{sorted($HUBS)}}
+    Should Be True    ${s}[availability] is not None and 0 <= ${s}[availability] <= 1
+    Should Be True    ${s}[coverage] > 0    msg=nothing recorded for ${SPOKES}[0] in the last 24 hours
+    GET On Session    portal    /api/customers/${SPOKES}[0]/sla    params=window=never    expected_status=400
+    GET On Session    portal    /api/customers/${HUBS}[0]/sla    expected_status=404
+
+A change to a customer is planned before anything happens, and a bad one is refused
+    ${c}=    Set Variable    ${SPOKES}[0]
+    ${cur}=    GET On Session    portal    /api/customers/${c}
+    Should Be Equal    ${cur.json()}[lan]    ${ROUTERS}[${c}][lan]
+    ${other}=    Evaluate    [h for h in $HUBS if h != $cur.json().get('prefer_hub')][0]
+    ${v}=    POST On Session    portal    /api/customers/${c}/modify/validate    json=${{{"prefer_hub": $other}}}
+    Should Be Empty    ${v.json()}[problems]
+    Should Be Equal    ${v.json()}[plan][changes][0][field]    prefer_hub
+    Should Not Be True    ${v.json()}[plan][rebuild]
+    ${lan}=    Set Variable    ${ROUTERS}[${SPOKES}[-1]][lan]
+    ${bad}=    POST On Session    portal    /api/customers/${c}/modify/validate    json=${{{"lan": $lan, "platform": "junos"}}}
+    ${p}=    Catenate    SEPARATOR=\n    @{bad.json()}[problems]
+    Should Contain    ${p}    overlaps
+    Should Contain    ${p}    junos
+    ${none}=    POST On Session    portal    /api/customers/${c}/modify/validate    json=${{{}}}
+    Should Contain    ${none.json()}[problems]    nothing to change
+
+A backup holds the whole lab state, and uploading it back plans no change
+    ${r}=    GET On Session    portal    /api/backup    params=running=false
+    Should Be Equal    ${r.headers}[content-type]    application/gzip
+    ${names}=    Evaluate    [m.split('/', 1)[1] for m in __import__('tarfile').open(fileobj=__import__('io').BytesIO($r.content)).getnames()]
+    FOR    ${f}    IN    manifest.json    intent/lab.conf    intent/customers.json    intent/applications.json    renders/nac/data/devices.nac.yaml    nautobot/model.json
+        List Should Contain Value    ${names}    ${f}
+    END
+    ${u}=    POST On Session    portal    /api/backups    data=${r.content}    headers=${{{"content-type": "application/gzip"}}}
+    Should Be Empty    ${u.json()}[problems]
+    Should Be True    ${u.json()}[plan][same_intent]
+    Should Be Empty    ${u.json()}[plan][removed]
+    Should Be Empty    ${u.json()}[plan][added]
+    Should Be Empty    ${u.json()}[plan][changed]
+    ${bad}=    POST On Session    portal    /api/backups    data=not a backup    headers=${{{"content-type": "application/gzip"}}}    expected_status=400

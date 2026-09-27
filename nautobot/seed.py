@@ -406,6 +406,8 @@ for n in inv["nodes"]:
         extra.update({"as_override": True, "listen_range": PROV["wan_net"], "peer_group": "CE"})
     elif n["role"] == "hub":
         extra.update({"listen_range": SVC["overlay"], "peer_group": "CUSTOMERS"})
+    elif n.get("prefer_hub"):
+        extra["preferred_hub"] = n["prefer_hub"]            # local-preference 200 on that hub's routes (render.py)
     desc = {"hub": "hub: a route reflector for the customers, which arrive on a listen range; eBGP customer of the provider",
             "spoke": "customer: an iBGP client of all three hubs, and an eBGP customer of the provider",
             "provider": "the MPLS provider: eBGP with every site on a listen range, as-override"}[n["role"]]

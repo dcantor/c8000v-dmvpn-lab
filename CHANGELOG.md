@@ -11,6 +11,83 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 While the version is 0.x, the lab's interfaces are still settling. The current version is in [`VERSION`](VERSION), in
 the portal's header, and in git as a `v<version>` tag.
 
+## [0.18.0] — 2026-09-27
+
+### Added
+- **Path view (Network map, on a host).**
+  - **trace path** to another host runs a traceroute and draws the path on the map (`GET /api/hosts/{host}/traceroute`).
+  - **watch the shortcut form** first clears the two routers' shortcut (`POST /api/hosts/{host}/path/reset`), then
+    traces until phase 3 has built it again. The first, cold trace crosses a hub, drawn in amber. Later ones send
+    traffic first (`warm=true`), so the hub redirects, and the path goes direct, drawn in violet.
+- **Modify a customer (Provision).** A dialog in the Add dialog's style edits the company details, applications,
+  region, preferred hub, site LAN and router type, and shows each change and the run it takes before anything happens.
+  - Company details or applications: data only.
+  - A new preferred hub: policy re-applied.
+  - A new LAN: the router is re-addressed and the host rebuilt.
+  - A new router type: rebuilt with the same identity.
+  - Endpoints: `mode: modify` on `POST /api/runs`; `GET /api/customers/{name}`; `POST /api/customers/{name}/modify/validate`.
+- **A customer's preferred hub.**
+  - Set it with `PREFER_HUB[<customer>]` in `lab.conf`, or in the wizard and Modify.
+  - The customer takes the other customers' routes with the reflecting hub as next hop, and ranks the preferred
+    hub's copy first with BGP local-preference 200.
+  - C8000v: a route-map per hub through Network-as-Code, plus a `HUB-PREFIXES` exception so a hub's own LAN is still
+    reached at that hub. VyOS: `OVERLAY-IN-PREFERRED` on the preferred hub's session.
+  - Kept in Nautobot on the customer's BGP routing instance.
+  - The map draws the tunnel to the preferred hub solid and thicker.
+- **Configuration drift.** A `drift` run compares every router with the model:
+  - Nautobot vs lab.conf;
+  - `terraform plan`, plus the CLI templates against `show running-config`, for the C8000vs;
+  - the rendered `set` lines against `show configuration commands` for VyOS.
+  
+  It runs from Provision, from the drift card on The cloud, or on its own every 6 hours while the lab is idle
+  (`DRIFT_INTERVAL_H`). Drifted routers get a ≠ badge on the map, with the differences in their details.
+  - **Fix drift** (`fixdrift`): re-render; undo stray Tunnel0 lines and re-write drifted templates
+    (`terraform apply -replace`); apply NAC; re-push VyOS; seed Nautobot; check again.
+  - Endpoints and metrics: `GET /api/drift`, `POST /api/drift/check`, `lab_config_drift{router}`.
+- **Service levels.**
+  - Every minute each customer's LAN host pings every hub's LAN (`lab_sla_rtt_ms`, `lab_sla_loss_ratio`), stored in
+    VictoriaMetrics.
+  - A new **SLA** view shows, per customer, over 24 h, 7 d, 30 d or this month:
+    - availability and registration with every hub (from `lab_dmvpn_nhs_up`);
+    - latency average, 95th percentile and worst, per hub;
+    - loss and monitoring coverage;
+    - targets and charts.
+  - Endpoint: `GET /api/customers/{name}/sla`.
+  - The customer PDF gains a third page: this month's service report.
+- **Backup and restore.**
+  - **Back up the lab** (`GET /api/backup`) downloads one .tar.gz: the intent, every render, this lab's Nautobot model,
+    the routers' running configs and the Terraform state, with SHA-256s.
+  - **Restore from a backup** uploads one (`POST /api/backups`), verifies it and shows the plan (customers removed,
+    built, changed or rebuilt). A `restore` run rebuilds the lab to it and verifies.
+- **Run duration and ETA** on the progress bars. Each bar shows the time taken so far and the time left, estimated from
+  the median of each step in earlier runs of the same kind and router type (`GET /api/runs/estimates`).
+- **Map export as SVG or PNG**, in the light or the dark theme. It exports the map as drawn (layers, customer view),
+  with a title, the time and a legend.
+- **Tests:**
+  - `04_routing`: the preferred hub's routes are best (localpref 200); no policy without a preference.
+  - `07_portal`: estimates, traceroute, the shortcut forming after a reset, drift, SLA, modify planning, backup round
+    trip.
+
+### Changed
+- **VyOS push is declarative for the routing sections.** Policy, BGP, NHRP, static routes, IPsec, and the tunnel and
+  dummy interfaces are deleted and set again in one commit. An unchanged section changes nothing (shortcuts and BGP
+  sessions stay up), and a line the model dropped goes.
+- **The customer PDF has three pages.**
+
+### Fixed
+- **Adding a VyOS customer could fail at the provider step.** The failure was "Pattern not detected: 'vyos@cust6:~$
+  set terminal length 0'". `tools/vyos_push.py`, `tools/vyos_cmd.py` and the test library no longer drive VyOS
+  through netmiko's interactive login, which intermittently missed the prompt on a freshly booted VyOS. They use plain
+  SSH exec channels instead (`tools/vyos_ssh.py`): op mode through VyOS's wrapper, configuration through vbash's
+  script template.
+
+### Lab state
+- **cust6** (VyOS, Gulfstream Marine Services) was added through the portal.
+- **Preferred hubs:** cust1 prefers hub-west and cust5 prefers hub-east, set with Modify.
+- **cust6 round trip:** moved to 192.168.86.0/24, rebuilt as a Catalyst 8000v, then restored from a backup to VyOS on
+  192.168.66.0/24.
+- **Tests:** 59 of 59.
+
 ## [0.17.0] — 2026-09-27
 
 ### Added
@@ -226,6 +303,7 @@ the portal's header, and in git as a `v<version>` tag.
   - `nac/`, Network-as-Code for the C8000vs.
   - Robot suites, the README, and the first Nautobot seed.
 
+[0.18.0]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.15.1...v0.16.0
 [0.15.1]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.15.0...v0.15.1

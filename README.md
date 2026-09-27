@@ -53,10 +53,10 @@ Version and changes: [`VERSION`](VERSION) and [`CHANGELOG.md`](CHANGELOG.md), wh
 | `tools/gen_configs.py` | writes the renders; `--check` exits 1 if any is stale (a test asserts it) |
 | `nac/data/device_groups.nac.yaml` | what every DMVPN router shares: the IKEv2 / IPsec suite |
 | `nac/data/global.nac.yaml` | baseline: domain, SSH / AAA / VTY hardening, management ACL, banner |
-| `tools/console.py`, `vyos_console.py`, `vyos_push.py`, `ios_cmd.py`, `vyos_cmd.py`, `host_cmd.py` | serial-console day-0, day-N over SSH, op-mode reads, the host ping matrix |
-| `tests/suites/` | `01_management`, `02_underlay`, `03_dmvpn`, `04_routing`, `05_nac_compliance`, `06_nautobot` |
+| `tools/console.py`, `vyos_console.py`, `vyos_push.py`, `vyos_ssh.py`, `ios_cmd.py`, `vyos_cmd.py`, `host_cmd.py` | serial-console day-0, day-N over SSH, op-mode reads, the host ping matrix |
+| `tests/suites/` | `01_management`, `02_underlay`, `03_dmvpn`, `04_routing`, `05_nac_compliance`, `06_nautobot`, `07_portal`, `08_vyos_customers` |
 | `nautobot/` | `seed.py` (lab.conf → Nautobot), `render.py` (Nautobot → the same renderer, `--check`), `remove_customer.py`, the saved GraphQL query |
-| `webapp/` | the portal: `app.py` (the runs), `customers.py` (allocate, validate, plan), `labconf.py` (edit `lab.conf`), `state.py` (what the routers are doing), `static/index.html` |
+| `webapp/` | the portal: `app.py` (the runs), `customers.py` (allocate, validate, plan, modify), `labconf.py` (edit `lab.conf`), `state.py` (what the routers are doing), `drift.py` (configuration drift), `sla.py` (probes and SLA reports), `backup.py` (backup / restore), `static/index.html` |
 | `results/` | one folder per test run: `configs/pre-run`, `configs/post-run`, the diff, Robot report / log |
 
 ## Customer router type: Catalyst 8000v or VyOS
@@ -181,9 +181,11 @@ on drift. The pre-shared key and NHRP secret are deliberately not in Nautobot; t
 | View | What it does |
 |---|---|
 | The cloud | every C8000v with what it is *actually* doing: NHRP registrations (hub) or NHS (customer), IPsec sessions, overlay BGP, the provider session, live customer-to-customer shortcuts; the provider's eBGP customers; a health line |
-| Network map | the topology drawn from the routers' live state. Hubs across the top, the provider as the MPLS band, the customers and their hosts below. Toggle layers for provider links (coloured by eBGP), DMVPN tunnels (per customer per hub, coloured by NHRP registration), the hubs' static mesh, live phase 3 shortcuts, hosts and labels. Click a node for its addresses and live state, a **show configuration** button next to the show commands (a C8000v's `show running-config`, the provider's `show configuration commands`, a host's network set-up; `GET /api/config/{node}`, with Copy and Download), one-click `show dmvpn`, `show crypto session brief`, `show ip bgp summary`, … on a router, or, on a host, one **ping all hosts** button that pings every other LAN host at once and reports each result and an `n / n reachable` summary (`GET /api/hosts/{host}/ping?target=`, one call per target). The output opens in a full-width box under the map. On a customer: **Show only its view**, which drops the other customers and colours the hubs and provider by what that customer sees; its live shortcuts become labelled stubs. Also **Download PDF**: the portal's headless Chrome (Playwright, system `google-chrome`) prints that view with the customer's details as one A4 landscape page (`GET /api/customers/{name}/map.pdf`) |
-| Provision | add a customer, remove one, deploy the model, dry run (terraform plan + Nautobot check), run the tests |
-| Runs | every run with a progress bar (steps finished out of all steps, the current one counting half; striped while running, green on success, red on failure), its steps, log and test report; a failed run resumes from the step that failed |
+| Network map | the topology drawn from the routers' live state. Hubs across the top, the provider as the MPLS band, the customers and their hosts below. Toggle layers for provider links (coloured by eBGP), DMVPN tunnels (per customer per hub, coloured by NHRP registration), the hubs' static mesh, live phase 3 shortcuts, hosts and labels. Click a node for its addresses and live state, a **show configuration** button next to the show commands (a C8000v's `show running-config`, the provider's `show configuration commands`, a host's network set-up; `GET /api/config/{node}`, with Copy and Download), one-click `show dmvpn`, `show crypto session brief`, `show ip bgp summary`, … on a router, or, on a host, one **ping all hosts** button that pings every other LAN host at once and reports each result and an `n / n reachable` summary (`GET /api/hosts/{host}/ping?target=`, one call per target). Also on a host, **trace path** to another host draws the real path on the map (`GET /api/hosts/{host}/traceroute?target=`), and **watch the shortcut form** first clears the two routers' shortcut (`POST /api/hosts/{host}/path/reset`), then traces until phase 3 has rebuilt it: the path through a hub in amber, then the direct shortcut in violet. The output opens in a full-width box under the map. **Export** downloads the map as drawn (layers, customer view) as SVG or PNG, in the light or the dark theme. A router whose running configuration differs from the model carries a **≠** badge, with the differences in its details. On a customer: **Show only its view**, which drops the other customers and colours the hubs and provider by what that customer sees; its live shortcuts become labelled stubs. Also **Download PDF**: the portal's headless Chrome (Playwright, system `google-chrome`) prints that view with the customer's details (`GET /api/customers/{name}/map.pdf`): page one the map and the company, page two its applications, page three this month's service report |
+| SLA | per customer, over the last 24 h / 7 d / 30 d or this month: availability (registered with at least one hub), registration with every hub, latency to each hub (average, 95th percentile, worst) and loss, against the lab's targets, with charts (`GET /api/customers/{name}/sla?window=`) |
+| Provision | add a customer, **modify** one, remove one, deploy the model, dry run (terraform plan + Nautobot check), **check for drift**, **fix drift**, **back up the lab**, **restore from a backup**, run the tests |
+| Runs | every run with a progress bar (steps finished out of all steps, the current one counting half; striped while running, green on success, red on failure), how long it has taken and — from the median of each step in earlier runs of the same kind and router type (`GET /api/runs/estimates`) — about how long is left and when it should be done; its steps, log and test report; a failed run resumes from the step that failed |
+| The cloud (drift) | a **Configuration drift** card: the latest check, per router, with Check now and Fix drift |
 | Lab Tools | every tool of the lab with its link and login (portal, API, lab hub, GitHub, Nautobot with deep links, Grafana, Prometheus, VictoriaMetrics, VictoriaLogs), how to reach the management network, and a searchable table of every node: VM, management IP, SSH command, credentials, serial console, addresses, RESTCONF / NETCONF / VyOS API / exporters (`GET /api/lab-tools`) |
 
 **Adding a customer never touches a hub.** Its pipeline:
@@ -203,6 +205,78 @@ index `10+N` (which fixes `100.70.<idx>.0/30`, `172.28.0.<idx>` and `10.255.5.<i
    Terraform's local copy of the model, which would otherwise show up as drift.
 4. The provider's port is released: the push removes its address and disables it.
 5. The customer is removed from Nautobot.
+
+### Modifying a customer
+
+**Provision → Modify a customer** edits a customer in place, in the Add dialog's style: its company details and
+applications, its region, its preferred hub, its site LAN, or its router type. The dialog shows each change and the
+run it takes before anything happens:
+
+| What changes | What the run does |
+|---|---|
+| company details, applications | `customers.json`, then Nautobot (seed); no router is touched |
+| preferred hub, region | `lab.conf`, re-render, Network-as-Code apply (C8000v) or a VyOS push, Nautobot |
+| site LAN | the router is re-addressed; the host is rebuilt on the new LAN (its address comes from its cloud-init seed); Nautobot re-modelled |
+| router type | the router is rebuilt with the same identity — name, index, addresses, ports: Terraform forgets a C8000v, the old VM is deleted, the new one boots and gets its day-0, then NAC / the VyOS push, Nautobot re-modelled |
+
+Every modify run ends with the same verification as an add, and optionally the suites (`mode: modify` on
+`POST /api/runs`, with `changes`; `POST /api/customers/{name}/modify/validate` plans without changing anything).
+
+### A customer's preferred hub
+
+`PREFER_HUB[<customer>]=<hub>` in `lab.conf` (the wizard's and Modify's **Preferred hub**) makes the customer's
+traffic to the other customers enter the cloud at that hub until phase 3 builds the shortcut; the other hubs stay as
+fallback. The customer takes the other customers' routes with the reflecting hub as next hop, and ranks the preferred
+hub's copy first with BGP local-preference 200 (against 100):
+
+- C8000v: a route-map per hub, `OVERLAY-HUB-EAST` …, inbound on that hub's session (NAC: `set ip next-hop <hub>`,
+  `set local-preference`), and a prefix-list `HUB-PREFIXES`: the hubs' own LANs and router-ids keep their next hop,
+  so a hub's LAN is still reached at that hub.
+- VyOS: `OVERLAY-IN-PREFERRED` (next hop the peer, local-preference 200) on the preferred hub's session.
+
+Nautobot keeps it on the customer's BGP routing instance (`extra_attributes.preferred_hub`); the map marks the
+tunnel to the preferred hub, and **trace path** shows the traffic crossing it. Without an entry nothing changes.
+
+### Configuration drift
+
+A **drift** run (Provision → Check for drift, the drift card, or on its own every `DRIFT_INTERVAL_H` = 6 hours while
+the lab runs and nothing else does) compares every router with the model and changes nothing:
+
+- **the model**: `lab.sh nautobot render --check`, Nautobot's rendering against lab.conf's;
+- **C8000v**: `terraform plan` — every resource it would create, update or destroy is drift on its router — and the
+  CLI templates (Tunnel0, a hub's listen range), which Terraform only writes, against `show running-config`;
+- **VyOS**: the rendered `set` lines against `show configuration commands`: missing lines, and extra lines in the
+  sections the model owns (policy, BGP, NHRP, static routes, IPsec, the tunnel and dummy interfaces, data-port
+  addresses).
+
+The report (`GET /api/drift`) marks routers on the map, fills the drift card, and is exported as
+`lab_config_drift{router}`. **Fix drift** re-renders, applies NAC, re-pushes the VyOS routers (their routing sections
+are pushed declaratively: deleted and set again in one commit, so a line the model dropped goes), seeds Nautobot, and
+checks again.
+
+### Service levels
+
+Every minute the portal logs in to each customer's LAN host and pings every hub's LAN five times, in parallel, and
+exports the result (`lab_sla_rtt_ms`, `lab_sla_loss_ratio` per customer and hub). Prometheus on the NMS scrapes it into
+VictoriaMetrics (180 days), next to `lab_dmvpn_nhs_up`, which the portal has exported since 0.5.0. The **SLA** view
+and the third page of the customer PDF (this month so far) read them back: availability, registration with every
+hub, latency average / 95th percentile / worst per hub, loss, and how much of the window was monitored. Targets
+(`webapp/sla.py`): availability 99.9%, 95th-percentile latency 20 ms, loss 0.5%.
+
+### Backup and restore
+
+**Back up the lab** (`GET /api/backup`) downloads one `.tar.gz`: the intent (`lab.conf`, `customers.json`,
+`applications.json`), every rendered file and the NAC data, this lab's Nautobot model (the saved GraphQL query's
+answer, the customer tenants, the Virtual Servers, the subscriptions), every router's running configuration and the
+Terraform state, with a manifest of SHA-256s.
+
+**Restore from a backup** uploads it (`POST /api/backups`, the archive as the body), verifies every checksum, reads
+the backup's `lab.conf` with `lab.sh inventory` in a scratch copy, and shows the plan: customers removed, built,
+changed in place or rebuilt. The restore run takes away what the backup lacks, writes the intent back and re-renders
+(and says if a file renders differently from the backup's copy — the renderer may have changed since), builds and
+bootstraps what is new, applies NAC, pushes the provider and VyOS routers, seeds Nautobot from the restored intent, and
+verifies. Nautobot is not written from the export: the seed re-creates it, which `render --check` then proves. A
+backup with different hubs or provider is refused.
 
 ## Monitoring
 

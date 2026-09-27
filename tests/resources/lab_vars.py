@@ -33,6 +33,12 @@ for name in DMVPN:
                      "router_id": n["router_id"], "lan": lan, "lan_ip": lan_ip, "region": n["region"], "t_idx": n["t_idx"],
                      "wan_prefix": n["wan"]["prefix"], "wan_peer": n["wan"]["peer_ip"], "host_vm": n["host"] or ""}
 COMPANIES = {c: NODES[c].get("customer") for c in SPOKES}
+PREFER = {c: NODES[c]["prefer_hub"] for c in SPOKES if NODES[c].get("prefer_hub")}   # customer -> its preferred hub
+PREFERRING = sorted(PREFER)
+# two hosts whose traffic crosses a hub until the shortcut forms: the first behind a VyOS customer or one that prefers a hub
+HUB_FIRST_PAIR = next(([a, b] for a in HOSTS for b in HOSTS
+                       if NODES[a]["router"] != NODES[b]["router"]
+                       and (PLATFORM[NODES[a]["router"]] == "vyos" or NODES[a]["router"] in PREFER)), [])
 APPLICATIONS = INV.get("applications") or []
 HOST_PAIR = [HOSTS[0], HOSTS[-1]] if len(HOSTS) >= 2 else []                 # a host and the one furthest from it
 HOST_VMS = {h: {"host": NODES[h]["mgmt_ip"], "lan_ip": NODES[h]["lan_ip"].split("/")[0],

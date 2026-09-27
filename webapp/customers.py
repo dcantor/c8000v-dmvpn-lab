@@ -89,7 +89,7 @@ def suggest(f=None, region=None):
             "router_id": f"{rid_net}.{t}", "lan": f"192.168.{60 + n}.0/24", "lan_port": "GigabitEthernet3",
             "provider": prov, "provider_port": pport, "wan_prefix": wan,
             "idx": 10 + n, "console": 5510 + n, "host_idx": 30 + n, "host_console": 5530 + n,
-            "platform": "c8000v",
+            "platform": "c8000v", "prefer_hub": None,
             "customer": {**fake_company(n), "applications": ["APP-1002", "APP-1010"]}}   # email + SSO: what everyone takes
 
 
@@ -147,6 +147,8 @@ def validate(spec, f=None):
             p.append(f"customer {field} is missing")
     if spec.get("platform", "c8000v") not in PLATFORMS:
         p.append(f"router type {spec.get('platform')!r} is not one of {', '.join(PLATFORMS)}")
+    if spec.get("prefer_hub") and spec["prefer_hub"] not in f["hubs"]:
+        p.append(f"preferred hub {spec['prefer_hub']!r} is not a hub of this lab ({', '.join(f['hubs'])})")
     known = {a["id"] for a in f["inv"].get("applications") or []}
     for aid in cu.get("applications") or []:
         if aid not in known:
@@ -173,6 +175,9 @@ def plan(spec, f=None):
             "cloud": f"Tunnel0 {spec['tunnel_ip']} sourced from {spec['nbma']}, registered with " + ", ".join(f["hubs"]),
             "wan": f"GigabitEthernet2 into {spec['provider']} {spec['provider_port']} on {spec['wan_prefix']}",
             "lan": f"{spec['lan']} on {spec['lan_port']}, with {spec['host']} behind it",
+            "prefer": (f"prefers {spec['prefer_hub']}: its routes to the other customers go through {spec['prefer_hub']} "
+                       "(local-preference 200) until the shortcut forms" if spec.get("prefer_hub") else
+                       "no preferred hub: any of the hubs"),
             "untouched": "the hubs: a customer registers with NHRP and arrives on their BGP listen range, so no hub "
                          "configuration changes — Terraform adds resources on the new router only",
             "changed": [spec["provider"]]}
@@ -212,3 +217,104 @@ def apply_to_labconf(spec):
 def remove_from_labconf(spec):
     labconf.write(labconf.remove_customer(labconf.read(), spec))
     _write_companies(lambda d: d.pop(spec["name"], None))
+
+
+# ---- modify a customer -----------------------------------------------------------------------------------------
+MODIFIABLE = ("region", "lan", "platform", "prefer_hub")
+
+
+def current(name, f=None):
+    """A customer as it is now, in the shape the modify dialog edits."""
+    f = f or facts()
+    n = f["nodes"].get(name)
+    if not n or n["role"] != "spoke":
+        return None
+    h = f["nodes"].get(n.get("host") or "") or {}
+    cu = dict(n.get("customer") or {})
+    cu.setdefault("applications", [])
+    return {"name": name, "host": n.get("host"), "region": n.get("region"), "lan": n["lan"], "platform": n.get("platform", "c8000v"),
+            "prefer_hub": n.get("prefer_hub"), "mgmt_ip": n["mgmt_ip"], "host_mgmt": h.get("mgmt_ip"), "t_idx": n["t_idx"],
+            "tunnel_ip": n["tunnel_ip"], "nbma": n["nbma"], "wan_prefix": n["wan"]["prefix"], "provider": n["wan"]["peer"],
+            "provider_port": n["wan"]["peer_port"], "customer": cu}
+
+
+def modify_plan(name, want, f=None):
+    """What changing a customer takes. `want` holds the new values (anything left out stays as it is). Returns
+    (problems, plan); the plan lists every change and the steps the run will take for them — a data-only change touches
+    no router, a new preferred hub re-applies the router's policy, a new LAN re-addresses the router and rebuilds the
+    host, a new router type rebuilds the router."""
+    f = f or facts()
+    old = current(name, f)
+    if old is None:
+        return [f"{name} is not a customer of this lab"], None
+    new = {**old, **{k: want[k] for k in MODIFIABLE if k in want}}
+    new["prefer_hub"] = new.get("prefer_hub") or None
+    new["customer"] = {**old["customer"], **{k: v for k, v in (want.get("customer") or {}).items() if k in COMPANY_FIELDS + ("applications",)}}
+    new["customer"]["applications"] = sorted(set(new["customer"].get("applications") or []))
+    p = []
+    if new["platform"] not in PLATFORMS:
+        p.append(f"router type {new['platform']!r} is not one of {', '.join(PLATFORMS)}")
+    if new["prefer_hub"] and new["prefer_hub"] not in f["hubs"]:
+        p.append(f"preferred hub {new['prefer_hub']!r} is not a hub of this lab")
+    if not str(new["region"] or "").strip():
+        p.append("the region is missing")
+    if new["lan"] != old["lan"]:
+        try:
+            net = ipaddress.ip_network(new["lan"])
+            if net.prefixlen != 24:
+                p.append(f"{new['lan']} is not a /24")
+            if not net.subnet_of(ipaddress.ip_network("192.168.0.0/16")):
+                p.append(f"{new['lan']} is outside 192.168.0.0/16 — the overlay only carries site LANs from there")
+            for other in (f["used_prefix"] | f["used_lan"]) - {old["lan"]}:
+                if net.overlaps(ipaddress.ip_network(other)):
+                    p.append(f"{new['lan']} overlaps {other}")
+        except ValueError as e:
+            p.append(f"{new['lan']}: {e}")
+    for field in COMPANY_FIELDS:
+        if not str(new["customer"].get(field) or "").strip():
+            p.append(f"customer {field} is missing")
+    co = str(new["customer"].get("company") or "").strip().lower()
+    if co and any(k != name and v.get("company", "").lower() == co for k, v in companies().items()):
+        p.append(f"{new['customer']['company']} is already another customer of this lab")
+    known = {a["id"] for a in f["inv"].get("applications") or []}
+    p += [f"{aid} is not an application of this lab" for aid in new["customer"]["applications"] if aid not in known]
+
+    changes = []
+    for k, what in (("region", "region"), ("lan", "site LAN"), ("platform", "router type"), ("prefer_hub", "preferred hub")):
+        if new[k] != old[k]:
+            fmt = (lambda v: PLATFORMS.get(v, v)) if k == "platform" else (lambda v: v or "none")
+            changes.append({"field": k, "what": what, "old": fmt(old[k]), "new": fmt(new[k])})
+    for k in COMPANY_FIELDS:
+        if str(new["customer"].get(k) or "").strip() != str(old["customer"].get(k) or "").strip():
+            changes.append({"field": f"customer.{k}", "what": k, "old": old["customer"].get(k), "new": new["customer"].get(k)})
+    if new["customer"]["applications"] != sorted(set(old["customer"].get("applications") or [])):
+        changes.append({"field": "customer.applications", "what": "applications",
+                        "old": ", ".join(sorted(old["customer"].get("applications") or [])) or "none",
+                        "new": ", ".join(new["customer"]["applications"]) or "none"})
+    if not changes:
+        p.append("nothing to change")
+    rebuild = new["platform"] != old["platform"]
+    relan = new["lan"] != old["lan"]
+    routers = rebuild or relan or new["prefer_hub"] != old["prefer_hub"] or new["region"] != old["region"]
+    what = []
+    if rebuild:
+        what.append(f"{name} is rebuilt as a {PLATFORMS.get(new['platform'], new['platform'])} router with the same identity (addresses, index, "
+                    f"ports): the old VM is deleted, the new one boots ({'~10 min' if new['platform'] == 'c8000v' else '~2 min'}) and gets its day-0")
+    if relan:
+        what.append(f"{name}'s LAN becomes {new['lan']} (gateway .1); {old['host']} is rebuilt on it (.2) — its old address goes")
+    if new["prefer_hub"] != old["prefer_hub"] and not rebuild:
+        what.append(f"{name}'s BGP policy is re-applied: " + (f"routes through {new['prefer_hub']} rank first" if new["prefer_hub"] else "no hub preferred"))
+    if routers:
+        what.append("Network-as-Code applied (C8000v) and the VyOS routers re-pushed; the hubs do not change")
+    what.append("Nautobot " + ("re-modelled: the customer is taken out and seeded again" if rebuild or relan else "updated (seed)"))
+    return p, {"name": name, "old": old, "new": new, "changes": changes, "rebuild": rebuild, "relan": relan,
+               "routers": routers, "what": what}
+
+
+def apply_modify(plan):
+    """lab.conf and customers.json: the new values."""
+    o, n = plan["old"], plan["new"]
+    labconf.write(labconf.modify_customer(labconf.read(), o["name"], o["host"], o, n))
+    cu = {k: str(n["customer"].get(k) or "").strip() for k in COMPANY_FIELDS}
+    cu["applications"] = n["customer"]["applications"]
+    _write_companies(lambda d: d.__setitem__(o["name"], cu))

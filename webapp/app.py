@@ -22,14 +22,17 @@ import threading
 import time
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from labportal import RunBase, RunRegistry, exposition, install_runs_api, metric_line, metrics_generated, run_metrics
 from pydantic import BaseModel, Field
 
 import customers as C
-from state import HOST_PASS, HOST_USER, State, _ssh, ios, vyos_op, vyos_show
+import backup as B
+import drift as D
+import sla as SLA
+from state import HOST_PASS, HOST_USER, State, _ssh, ios, vtysh, vyos_op, vyos_show
 
 LAB = Path(__file__).resolve().parents[1]
 HERE = Path(__file__).resolve().parent
@@ -54,6 +57,19 @@ STEP_TITLES = {
     "rm_labconf": "Remove from lab.conf and re-render",
     "rm_provider": "Release the provider port (address removed, port disabled)",
     "rm_nautobot": "Remove the customer from Nautobot",
+    "mod_validate": "Validate the changes against the running lab",
+    "mod_labconf": "Record the changes in lab.conf and customers.json, and re-render",
+    "mod_forget": "Terraform forgets the old router (its resources leave the state; the hubs are not touched)",
+    "mod_router": "Rebuild the router: delete the old VM, boot the new one with the same identity, day-0",
+    "mod_host": "Rebuild the LAN host on the new LAN",
+    "mod_nautobot": "Nautobot source of truth: update the customer",
+    "drift": "Compare every router's running configuration with the model (Nautobot, Network-as-Code, the renders)",
+    "fixcli": "The CLI templates: undo lines the model does not have, and mark drifted templates to be written again",
+    "rs_validate": "Validate the backup and plan the restore against the running lab",
+    "rs_remove": "Take away what the backup does not have (customers, routers to rebuild, hosts to re-address)",
+    "rs_files": "Put the backup's intent back (lab.conf, customers.json, applications.json) and re-render",
+    "rs_build": "Build what the backup has and the lab does not: boot the VMs, day-0",
+    "rs_nautobot": "Nautobot source of truth: seed from the restored intent",
     "render": "Render the configuration from lab.conf",
     "plan": "terraform plan: what Network-as-Code would change",
     "check": "Compare Nautobot's rendering with lab.conf's",
@@ -61,7 +77,8 @@ STEP_TITLES = {
 TAGS = [{"name": "monitoring", "description": "Prometheus: /metrics and /api/sd, scraped by the NMS."},
         {"name": "state", "description": "The cloud, the model and the live state of every router."},
         {"name": "provisioning", "description": "Suggest, validate and plan a customer; plan a removal."},
-        {"name": "runs", "description": "Pipeline runs: add a customer, remove one, deploy, plan, test."}]
+        {"name": "runs", "description": "Pipeline runs: add, modify or remove a customer, deploy, plan, test, drift, restore."},
+        {"name": "backup", "description": "Back up the whole lab state as one download; upload one to restore it."}]
 app = FastAPI(title="c8000v-dmvpn-lab Provisioning Portal API", version="1.0", openapi_tags=TAGS,
               docs_url="/docs", redoc_url="/redoc",
               description="REST API behind the C8000v DMVPN lab's portal. Every change goes **lab.conf → rendered "
@@ -92,19 +109,31 @@ class CustomerSpec(BaseModel):
     host_console: int
     customer: dict = Field(default_factory=dict, description="the company: company, industry, address, phone, contact, email, account")
     platform: str = Field("c8000v", description="the customer router: c8000v (Catalyst 8000v) or vyos")
+    prefer_hub: str | None = Field(None, description="the hub its traffic prefers (BGP local-preference 200), or none")
+
+
+class CustomerChange(BaseModel):
+    """The new values for an existing customer; anything left out stays as it is."""
+    region: str | None = None
+    lan: str | None = Field(None, examples=["192.168.81.0/24"])
+    platform: str | None = Field(None, description="c8000v or vyos: a different one rebuilds the router")
+    prefer_hub: str | None = Field(None, description="a hub's name, or empty for none")
+    customer: dict | None = Field(None, description="company fields and/or `applications`")
 
 
 class RunRequest(BaseModel):
-    mode: str = Field(examples=["customer"], description="customer | remove | deploy | plan | test")
+    mode: str = Field(examples=["customer"], description="customer | remove | modify | deploy | plan | test | drift | fixdrift | restore")
     customer: CustomerSpec | None = None
-    name: str | None = Field(None, description="remove: the customer to remove")
+    name: str | None = Field(None, description="remove / modify: the customer; restore: the uploaded backup's id")
+    changes: CustomerChange | None = Field(None, description="modify: the new values")
     options: dict = Field(default_factory=dict, description="{test: bool (default true), suites: [..]}")
 
 
 class Run(RunBase):
     LAB = "c8000v-dmvpn-lab"
     STEP_TITLES = STEP_TITLES
-    EXTRA = {"customer": "customer", "spec": "spec", "removal": "removal"}
+    EXTRA = {"customer": "customer", "spec": "spec", "removal": "removal", "modification": "modification", "drift": "drift",
+             "restore": "restore"}
 
     # the steps that read differently for a VyOS router (the defaults above describe a Catalyst 8000v)
     VYOS_TITLES = {
@@ -119,6 +148,22 @@ class Run(RunBase):
         self.spec = spec
         self.removal = (resume_of or {}).get("removal")
         self.customer = (spec or {}).get("name")
+        self.modification = (resume_of or {}).get("modification")
+        self.drift = None
+        self.restore = (resume_of or {}).get("restore")
+        if mode == "restore" and not self.restore:
+            man, files = B.load_upload(spec["name"])
+            problems, rplan = B.plan(C.facts()["inv"], files)
+            if problems:
+                raise ValueError("; ".join(problems))
+            self.restore = {"upload": spec["name"], "manifest": {k: man[k] for k in ("lab", "version", "created", "created_iso", "customers")},
+                            "plan": rplan}
+        if mode == "restore":
+            self.customer = f"backup of {self.restore['manifest']['created_iso'][:16].replace('T', ' ')}"
+        if mode == "modify" and not self.modification:
+            problems, self.modification = C.modify_plan(spec["name"], spec.get("changes") or {})
+            if problems:
+                raise ValueError("; ".join(problems))
         super().__init__(mode, options, resume_of, runs_dir=RUNS_DIR, cwd=LAB)
         self.retitle()
 
@@ -128,6 +173,8 @@ class Run(RunBase):
         if self.mode == "remove":
             n = C.facts()["nodes"].get((self.spec or {}).get("name") or "")
             return (self.removal or {}).get("platform") or (n or {}).get("platform")
+        if self.mode == "modify":
+            return self.modification["new"]["platform"]
         return None
 
     def retitle(self):
@@ -144,10 +191,31 @@ class Run(RunBase):
             return ["test"]
         if self.mode == "plan":
             return ["plan", "check"]
+        if self.mode == "drift":
+            return ["drift"]
+        if self.mode == "restore":
+            rp = self.restore["plan"]
+            takes = rp["removed"] or any(c["rebuild"] or c["relan"] for c in rp["changed"])
+            builds = rp["added"] or any(c["rebuild"] or c["relan"] for c in rp["changed"])
+            steps = ["rs_validate"] + (["rs_remove"] if takes else []) + ["rs_files"] + (["rs_build"] if builds else []) \
+                + ["nac", "provider", "rs_nautobot", "verify"]
+            return steps + (["test"] if self.options.get("test", True) else [])
+        if self.mode == "fixdrift":
+            return ["render", "fixcli", "nac", "provider", "nautobot", "check", "drift"]
         if self.mode == "deploy":
             steps = ["render", "nac", "provider", "nautobot", "check"]
         elif self.mode == "remove":
             steps = ["rm_validate", "rm_nac", "rm_vm", "rm_labconf", "nac", "rm_provider", "rm_nautobot", "nautobot", "verify"]
+        elif self.mode == "modify":
+            m = self.modification
+            steps = ["mod_validate", "mod_labconf"]
+            if m["rebuild"]:
+                steps += (["mod_forget"] if m["old"]["platform"] == "c8000v" else []) + ["mod_router"]
+            if m["relan"]:
+                steps.append("mod_host")
+            if m["routers"]:
+                steps += ["nac", "provider"]
+            steps += ["mod_nautobot", "verify"]
         else:
             steps = ["validate", "labconf", "vm", "bootstrap", "nac", "provider", "nautobot", "verify"]
         if self.options.get("test", self.mode != "plan"):
@@ -186,7 +254,8 @@ class Run(RunBase):
         # after a removal this changes no router — the departed one is already out of the state — but it rewrites
         # Terraform's local copy of the model, which would otherwise read as drift in the next plan
         self.sh([LAB / "lab.sh", "nac", "init", "-input=false", "-no-color"])
-        self.sh([LAB / "lab.sh", "nac", "apply", "-auto-approve", "-parallelism=1", "-input=false", "-no-color"],
+        replace = [f"-replace={a}" for a in getattr(self, "_replace", [])]    # fix drift: templates Terraform cannot see
+        self.sh([LAB / "lab.sh", "nac", "apply", "-auto-approve", "-parallelism=1", "-input=false", "-no-color", *replace],
                 timeout=3600)
         s["summary"] = ("applied and saved" if (self.spec or {}).get("platform", "c8000v") == "c8000v" or self.mode != "customer"
                         else "applied and saved (the new router is VyOS: Network-as-Code has nothing to add for it)")
@@ -220,6 +289,176 @@ class Run(RunBase):
         suites = self.options.get("suites") or ["all"]
         args = [f"suites/{x}.robot" for x in suites] if suites != ["all"] else []
         self.record_tests(RESULTS, s, self.sh([LAB / "tests" / "run.sh", *args], check=False, timeout=5400))
+
+    # ---- modify a customer ------------------------------------------------------------------------------------
+    def do_mod_validate(self, s):
+        m = self.modification
+        problems, again = C.modify_plan(m["name"], {**{k: m["new"][k] for k in C.MODIFIABLE}, "customer": m["new"]["customer"]})
+        if problems:
+            raise RuntimeError("; ".join(problems))
+        if again["changes"] != m["changes"]:
+            raise RuntimeError("the customer changed since the run was planned — start it again")
+        s["summary"] = f"{m['name']}: " + "; ".join(f"{c['what']} {c['old']} → {c['new']}" for c in m["changes"])[:400]
+
+    def do_mod_labconf(self, s):
+        m = self.modification
+        C.apply_modify(m)
+        self.say(f"lab.conf / customers.json: {m['name']} — " + ", ".join(c["what"] for c in m["changes"]))
+        if m["rebuild"]:               # the old platform's rendered day-0 would otherwise linger next to the new one
+            stale = LAB / "nodes" / m["name"] / ("iosxe_config.txt" if m["old"]["platform"] == "c8000v" else "vyos_config.txt")
+            stale.unlink(missing_ok=True)
+        self.sh(["python3", LAB / "tools" / "gen_configs.py"])
+        s["summary"] = "recorded and re-rendered"
+
+    def do_mod_forget(self, s):
+        name = self.modification["name"]
+        out = subprocess.run([str(LAB / "lab.sh"), "nac", "state", "list"], capture_output=True, text=True).stdout
+        mine = [l.strip() for l in out.splitlines() if f'["{name}/' in l or f'["{name}"]' in l]
+        self.say(f"{len(mine)} resources belong to {name}")
+        for i in range(0, len(mine), 40):
+            self.sh([LAB / "lab.sh", "nac", "state", "rm", *mine[i:i + 40]])
+        s["summary"] = f"{len(mine)} resources forgotten"
+
+    def do_mod_router(self, s):
+        m = self.modification
+        name = m["name"]
+        self.sh([LAB / "lab.sh", "clean", name])
+        self.sh([LAB / "lab.sh", "up", name])
+        self.sh([LAB / "lab.sh", "bootstrap", name], timeout=3600)
+        s["summary"] = f"{name} rebuilt as {C.PLATFORMS[m['new']['platform']]}, day-0 applied"
+
+    def do_mod_host(self, s):
+        host = self.modification["old"]["host"]
+        self.sh([LAB / "lab.sh", "clean", host])
+        self.sh([LAB / "lab.sh", "up", host])
+        self.sh([LAB / "lab.sh", "wait", host], timeout=1800)
+        s["summary"] = f"{host} rebuilt on {self.modification['new']['lan']}"
+
+    def do_mod_nautobot(self, s):
+        m, o = self.modification, self.modification["old"]
+        if m["rebuild"] or m["relan"]:
+            self.sh([LAB / "lab.sh", "nautobot", "remove-customer", o["name"], "--host", o["host"], "--wan", o["wan_prefix"], "--lan", o["lan"]])
+        self.sh([LAB / "lab.sh", "nautobot", "seed"])
+        s["summary"] = "re-modelled and seeded" if m["rebuild"] or m["relan"] else "seeded"
+
+    # ---- configuration drift -----------------------------------------------------------------------------------
+    def do_fixcli(self, s):
+        """Terraform writes a CLI template but never reads it back, so an apply does not repair one. From the latest
+        drift report: a line the router has under Tunnel0 and the model does not is removed (`no <line>`), and every
+        template with a line missing is written again (`terraform apply -replace` of that template's resource)."""
+        rep = D.latest() or {"nodes": {}}
+        nodes = C.facts()["nodes"]
+        self._replace, undone = [], []
+        for name, r in sorted(rep["nodes"].items()):
+            if r.get("platform") != "c8000v" or name not in nodes:
+                continue
+            tpl = {i["where"] for i in r["items"] if i.get("where", "").startswith(("tunnel0_", "bgp_hub_"))}
+            self._replace += [f'module.iosxe.iosxe_cli.cli_0["{name}/{t}"]' for t in sorted(tpl)]
+            extra = [i["line"] for i in r["items"] if i["kind"] == "extra" and i.get("where", "").startswith("tunnel0_")]
+            if extra:
+                from netmiko import ConnectHandler
+                c = ConnectHandler(device_type="cisco_xe", host=nodes[name]["mgmt_ip"], username="admin", password="admin", fast_cli=False)
+                try:
+                    self.say(c.send_config_set(["interface Tunnel0", *[f"no {l}" for l in extra]]))
+                finally:
+                    c.disconnect()
+                undone.append(f"{name}: {len(extra)} line(s) removed")
+        for a in self._replace:
+            self.say(f"will write again: {a}")
+        s["summary"] = "; ".join(undone + [f"{len(self._replace)} template(s) to write again"]) if (undone or self._replace) else "no template drift"
+
+    def do_drift(self, s):
+        rep = D.check(C.facts()["inv"], say=self.say)
+        for name, r in sorted(rep["nodes"].items()):
+            if r["status"] != "ok":
+                self.say(f"{name}: {r['status']}" + (f" — {r['error']}" if r["error"] else ""))
+                for it in r["items"][:20]:
+                    self.say(f"   {it['kind']:8s} {it.get('where', '') + ': ' if it.get('where') else ''}{it['line']}")
+        for e in rep["errors"] + ([rep["model"]["error"]] if rep["model"]["error"] else []):
+            self.say("!! " + e)
+        self.drift = {"ok": rep["ok"], "drifted": rep["drifted"], "generated": rep["generated"]}
+        s["summary"] = ("no drift: every router runs what the model says" if rep["ok"] else
+                        (f"drift on {', '.join(rep['drifted'])}" if rep["drifted"] else "the check had errors (see the log)"))
+        if self.mode == "fixdrift" and not rep["ok"]:
+            raise RuntimeError("drift remains after the fix: " + s["summary"])
+
+    # ---- restore a backup -------------------------------------------------------------------------------------
+    def do_rs_validate(self, s):
+        man, files = B.load_upload(self.restore["upload"])
+        problems, again = B.plan(C.facts()["inv"], files)
+        if problems:
+            raise RuntimeError("; ".join(problems))
+        rp = self.restore["plan"]
+        if (again["removed"], again["added"], [c["name"] for c in again["changed"]]) != (rp["removed"], rp["added"], [c["name"] for c in rp["changed"]]):
+            raise RuntimeError("the lab changed since the restore was planned — upload the backup again")
+        s["summary"] = (f"backup of {man['created_iso']} (v{man['version']}): remove {', '.join(rp['removed']) or 'nothing'}, "
+                        f"add {', '.join(rp['added']) or 'nothing'}, change {', '.join(c['name'] for c in rp['changed']) or 'nothing'}")
+
+    def _forget(self, name):
+        out = subprocess.run([str(LAB / "lab.sh"), "nac", "state", "list"], capture_output=True, text=True).stdout
+        mine = [l.strip() for l in out.splitlines() if f'["{name}/' in l or f'["{name}"]' in l]
+        for i in range(0, len(mine), 40):
+            self.sh([LAB / "lab.sh", "nac", "state", "rm", *mine[i:i + 40]])
+        return len(mine)
+
+    def do_rs_remove(self, s):
+        import shutil
+        rp, done = self.restore["plan"], []
+        for c in rp["removed"]:
+            cur = C.current(c)
+            if cur["platform"] == "c8000v":
+                self.say(f"{c}: {self._forget(c)} Terraform resources forgotten")
+            self.sh([LAB / "lab.sh", "clean", c, cur["host"]])
+            for n in (c, cur["host"]):
+                shutil.rmtree(LAB / "nodes" / n, ignore_errors=True)
+            self.sh([LAB / "lab.sh", "nautobot", "remove-customer", c, "--host", cur["host"], "--wan", cur["wan_prefix"], "--lan", cur["lan"]])
+            done.append(f"{c} removed")
+        for ch in rp["changed"]:
+            if not (ch["rebuild"] or ch["relan"]):
+                continue
+            c, cur = ch["name"], C.current(ch["name"])
+            if ch["rebuild"]:
+                if cur["platform"] == "c8000v":
+                    self.say(f"{c}: {self._forget(c)} Terraform resources forgotten")
+                self.sh([LAB / "lab.sh", "clean", c])
+                for f in ("iosxe_config.txt", "vyos_config.txt"):
+                    (LAB / "nodes" / c / f).unlink(missing_ok=True)
+            if ch["relan"]:
+                self.sh([LAB / "lab.sh", "clean", cur["host"]])
+            self.sh([LAB / "lab.sh", "nautobot", "remove-customer", c, "--host", cur["host"], "--wan", cur["wan_prefix"], "--lan", cur["lan"]])
+            done.append(f"{c}: " + " and ".join(x for x, y in (("router taken down", ch["rebuild"]), ("host taken down", ch["relan"])) if y))
+        s["summary"] = "; ".join(done) or "nothing"
+
+    def do_rs_files(self, s):
+        man, files = B.load_upload(self.restore["upload"])
+        for f in B.INTENT:
+            if f"intent/{f}" in files:
+                (LAB / f).write_bytes(files[f"intent/{f}"])
+                self.say(f"restored {f}")
+        self.sh(["python3", LAB / "tools" / "gen_configs.py"])
+        differ = [k for k, v in files.items() if k.startswith("renders/") and (LAB / k[8:]).exists() and (LAB / k[8:]).read_bytes() != v]
+        for k in differ:
+            self.say(f"note: {k[8:]} renders differently from the backup's copy (the renderer changed since v{man['version']})")
+        s["summary"] = "intent restored and re-rendered" + (f"; {len(differ)} file(s) render differently from the backup's copy" if differ else "; the renders match the backup's")
+
+    def do_rs_build(self, s):
+        rp = self.restore["plan"]
+        f = C.facts()
+        nodes = []
+        for c in rp["added"]:
+            nodes += [c, f["nodes"][c]["host"]]
+        for ch in rp["changed"]:
+            if ch["rebuild"]:
+                nodes.append(ch["name"])
+            if ch["relan"]:
+                nodes.append(f["nodes"][ch["name"]]["host"])
+        self.sh([LAB / "lab.sh", "up", *nodes])
+        self.sh([LAB / "lab.sh", "bootstrap", *nodes], timeout=3600)
+        s["summary"] = ", ".join(nodes) + " built and bootstrapped"
+
+    def do_rs_nautobot(self, s):
+        self.sh([LAB / "lab.sh", "nautobot", "seed"])
+        s["summary"] = "seeded from the restored intent"
 
     # ---- deploy / plan ----------------------------------------------------------------------------------------
     def do_render(self, s):
@@ -325,6 +564,70 @@ def api_removal(name: str):
     return plan
 
 
+@app.get("/api/customers/{name}", tags=["provisioning"], summary="A customer as it is now: what Modify edits")
+def api_customer(name: str):
+    cur = C.current(name)
+    if cur is None:
+        raise HTTPException(404, f"{name} is not a customer of this lab")
+    return cur
+
+
+@app.post("/api/customers/{name}/modify/validate", tags=["provisioning"], summary="Check changes to a customer and plan them")
+def api_modify_validate(name: str, changes: CustomerChange):
+    problems, plan = C.modify_plan(name, changes.model_dump(exclude_none=True))
+    if plan is None:
+        raise HTTPException(404, problems[0])
+    return {"problems": problems, "plan": plan}
+
+
+@app.get("/api/drift", tags=["state"], summary="The latest configuration drift report")
+def api_drift():
+    """Written by a `drift` run (Provision → Check for drift, or the map), and every DRIFT_INTERVAL_H hours by the portal
+    itself while no run is in progress. `null` until the first check."""
+    rep = D.latest()
+    if rep:
+        rep["interval_h"] = DRIFT_INTERVAL_H
+    return rep
+
+
+@app.get("/api/backup", tags=["backup"], summary="Download a backup of the whole lab state (.tar.gz)",
+         response_class=Response, responses={200: {"content": {"application/gzip": {}}}})
+def api_backup(running: bool = Query(True, description="also keep every router's running configuration (evidence)")):
+    """The intent (lab.conf, customers.json, applications.json), every rendered file, this lab's Nautobot model, the
+    routers' running configurations and the Terraform state, with a manifest of SHA-256s. See backup.py."""
+    f = C.facts()
+    data, man = B.create(f["inv"], (LAB / "VERSION").read_text().strip(), with_running=running)
+    name = f"{LAB_NAME}-backup-{time.strftime('%Y%m%d-%H%M')}.tar.gz"
+    return Response(data, media_type="application/gzip", headers={"Content-Disposition": f'attachment; filename="{name}"',
+                                                                   "X-Backup-Files": str(len(man["files"]))})
+
+
+@app.post("/api/backups", tags=["backup"], summary="Upload a backup and see what restoring it would change")
+async def api_backup_upload(request: Request):
+    """The request body is the .tar.gz itself (Content-Type: application/gzip). Nothing changes yet: the answer is the
+    backup's manifest and the restore plan; `POST /api/runs {"mode": "restore", "name": <id>}` carries it out."""
+    data = await request.body()
+    if len(data) > 64 * 1024 * 1024:
+        raise HTTPException(413, "a backup is a few hundred kB; this is too big")
+    try:
+        uid, man, files = B.save_upload(data)
+        problems, rplan = B.plan(C.facts()["inv"], files)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"id": uid, "manifest": {k: man.get(k) for k in ("lab", "version", "created", "created_iso", "host", "customers", "hubs", "notes")},
+            "files": len(man["files"]), "problems": problems, "plan": rplan}
+
+
+@app.post("/api/drift/check", tags=["state"], summary="Run the drift check now, outside the run queue, and return the report")
+def api_drift_check():
+    """The same read-only check a `drift` run makes, answered in the request (15–60 s). It does not queue behind a
+    run in progress — the test suites use it from inside one — so it may see a router mid-change."""
+    lines = []
+    rep = D.check(C.facts()["inv"], say=lines.append)
+    rep["log"] = lines
+    return rep
+
+
 @app.get("/api/query/{node}", tags=["state"], summary="One read-only `show` command on one C8000v")
 def api_query(node: str, command: str):
     nodes = C.facts()["nodes"]
@@ -367,6 +670,26 @@ def api_customer_map_pdf(name: str):
     return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="{fname}"'})
 
 
+@app.get("/api/customers/{name}/sla", tags=["state"], summary="A customer's service levels over a window, from VictoriaMetrics")
+def api_customer_sla(name: str, window: str = Query("30d", description="24h | 7d | 30d | month (this month so far) | YYYY-MM")):
+    """Availability (registered with at least one hub) and full registration (all hubs) from lab_dmvpn_nhs_up; latency
+    and loss from the portal's own probes (lab_sla_*): every minute the customer's LAN host pings every hub's LAN.
+    Each value is over the window; `coverage` says how much of the window was monitored at all."""
+    f = C.facts()
+    if name not in f["nodes"] or f["nodes"][name]["role"] != "spoke":
+        raise HTTPException(404, f"{name} is not a customer of this lab")
+    try:
+        rep = SLA.report(f"http://{f['inv']['oob']['nms']}:8428", LAB_NAME, name, f["hubs"], window)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:                                        # noqa: BLE001
+        raise HTTPException(502, f"VictoriaMetrics: {e.__class__.__name__}: {e}")
+    rep["company"] = (f["nodes"][name].get("customer") or {}).get("company")
+    with prober.lock:
+        rep["now"] = prober.latest.get(name)
+    return rep
+
+
 @app.get("/api/hosts/{host}/ping", tags=["state"], summary="Ping one LAN host from another, over the overlay")
 def api_host_ping(host: str, target: str, count: int = Query(4, ge=1, le=10)):
     """Both ends must be LAN hosts of this lab; the target's LAN address comes from the inventory, so nothing
@@ -386,6 +709,106 @@ def api_host_ping(host: str, target: str, count: int = Query(4, ge=1, le=10)):
     rc = int(out.rsplit("__rc=", 1)[1].strip()) if "__rc=" in out else -1
     return {"host": host, "target": target, "address": addr, "command": cmd, "ok": rc == 0,
             "output": out.rsplit("__rc=", 1)[0].rstrip() + "\n"}
+
+
+def _owners(nodes):
+    """Every address a traceroute can answer from -> (node, what): tunnel, WAN, LAN gateway, a hub's LAN, router-id, host."""
+    import ipaddress
+    own = {}
+    for name, n in nodes.items():
+        if n.get("tunnel_ip"):
+            own[n["tunnel_ip"]] = (name, "Tunnel0")
+        if n.get("nbma"):
+            own[n["nbma"]] = (name, "WAN")
+        if n.get("router_id"):
+            own[n["router_id"]] = (name, "router-id")
+        if n.get("lan_port"):
+            own[n["lan_port"]["ip"].split("/")[0]] = (name, "LAN")
+        elif n.get("role") == "hub" and n.get("lan"):
+            own[str(ipaddress.ip_network(n["lan"]).network_address + 1)] = (name, "LAN")
+        if n.get("role") == "host":
+            own[n["lan_ip"].split("/")[0]] = (name, "host")
+        for p_ in n.get("ports") or []:
+            if p_.get("ip"):
+                own.setdefault(p_["ip"].split("/")[0], (name, p_["name"]))
+    return own
+
+
+def _hosts_pair(host, target):
+    nodes = C.facts()["nodes"]
+    for name in (host, target):
+        if name not in nodes or nodes[name]["role"] != "host":
+            raise HTTPException(404, f"{name} is not a LAN host of this lab")
+    if host == target:
+        raise HTTPException(400, "pick another host")
+    return nodes
+
+
+@app.get("/api/hosts/{host}/traceroute", tags=["state"], summary="Trace the path from one LAN host to another, hop by hop")
+def api_host_traceroute(host: str, target: str, warm: bool = Query(False, description="send 10 pings first: traffic that makes the hub redirect and phase 3 build the shortcut")):
+    """`traceroute -n` on `host` to the target's LAN address; every hop that answers is named from the inventory. The
+    verdict: `via` — the hub the packets crossed (the path before NHRP has resolved a shortcut) — or `direct` (a
+    phase 3 shortcut between the two customer routers). A customer router answers from its tunnel address, so a
+    hub in the path shows up as its Tunnel0. Two probes per hop: the first reply of a router is sometimes lost."""
+    nodes = _hosts_pair(host, target)
+    addr = nodes[target]["lan_ip"].split("/")[0]
+    cmd = f"traceroute -n -q 2 -w 2 -m 8 {addr}"
+    pre = f"ping -c 10 -i 0.2 -W 1 -q {addr} >/dev/null 2>&1; " if warm else ""
+    try:
+        out = _ssh(nodes[host]["mgmt_ip"], pre + cmd + " 2>&1", HOST_USER, HOST_PASS, timeout=60)
+    except Exception as e:                                        # noqa: BLE001
+        raise HTTPException(502, f"{host}: {e.__class__.__name__}: {e}")
+    own = _owners(nodes)
+    hops = []
+    for line in out.splitlines():
+        m = re.match(r"^\s*(\d+)\s+(.*)$", line)
+        if not m:
+            continue
+        ip = re.search(r"(\d+\.\d+\.\d+\.\d+)", m[2])
+        rtt = re.search(r"([\d.]+) ms", m[2])
+        node, what = own.get(ip[1], (None, None)) if ip else (None, None)
+        hops.append({"hop": int(m[1]), "ip": ip[1] if ip else None, "rtt_ms": float(rtt[1]) if rtt else None,
+                     "node": node, "what": what})
+    src_router, dst_router = nodes[host]["router"], nodes[target]["router"]
+    reached = bool(hops) and hops[-1]["ip"] == addr
+    hubs = [h["node"] for h in hops if h["node"] and nodes[h["node"]]["role"] == "hub"]
+    # one hop between the two customer routers is a hub; none is the shortcut. A silent middle hop is still counted.
+    middle = len(hops) - 3 if reached else None
+    via = hubs[0] if hubs else None
+    kind = "direct" if reached and middle == 0 else ("hub" if reached and middle and middle > 0 else "unknown")
+    path = [host, src_router] + ([via or "?hub"] if kind == "hub" else []) + [dst_router, target]
+    return {"host": host, "target": target, "address": addr, "command": (f"ping -c 10 {addr}; " if warm else "") + cmd, "reached": reached, "kind": kind,
+            "via": via, "path": path, "hops": hops, "output": out}
+
+
+@app.post("/api/hosts/{host}/path/reset", tags=["state"], summary="Forget the shortcut between two customers, so the next packets go through a hub")
+def api_path_reset(host: str, target: str):
+    """Clears the NHRP entries the two customer routers hold for each other — the shortcut: on IOS the peer's LAN prefix
+    and its tunnel address — so the next traffic goes
+    through a hub again and phase 3 builds the shortcut anew. It changes no configuration and touches no hub; the
+    registrations with the hubs stay up. On a VyOS customer, nhrpd can only clear its whole cache of dynamic entries,
+    so its other shortcuts are rebuilt too."""
+    nodes = _hosts_pair(host, target)
+    a, b = nodes[host]["router"], nodes[target]["router"]
+    if a == b:
+        raise HTTPException(400, "both hosts sit behind the same router")
+    done = []
+    for me, peer in ((a, b), (b, a)):
+        n = nodes[me]
+        try:
+            if n.get("platform", "c8000v") == "vyos":
+                vtysh(n["mgmt_ip"], "clear ip nhrp cache")
+                done.append(f"{me}: clear ip nhrp cache (VyOS: every dynamic entry)")
+            else:                     # the shortcut is two entries: the peer's LAN prefix, and its tunnel address
+                import ipaddress
+                lan = ipaddress.ip_network(nodes[peer]["lan"])
+                cmds = [f"clear ip nhrp {lan.network_address} {lan.netmask}", f"clear ip nhrp {nodes[peer]['tunnel_ip']}"]
+                ios(n["mgmt_ip"], *cmds)
+                done += [f"{me}: {c}" for c in cmds]
+        except Exception as e:                                    # noqa: BLE001
+            raise HTTPException(502, f"{me}: {e.__class__.__name__}: {e}")
+    state._cache.clear()
+    return {"routers": [a, b], "done": done}
 
 
 @app.get("/api/config/{node}", tags=["state"], summary="A node's configuration, read live from the device")
@@ -412,11 +835,53 @@ def api_config(node: str):
     return {"node": node, "role": n["role"], "command": cmd, "lines": out.count("\n") + 1, "output": out}
 
 
+def _run_platform(d):
+    return ((d.get("spec") or {}).get("platform") or (d.get("removal") or {}).get("platform")
+            or ((d.get("modification") or {}).get("new") or {}).get("platform") or "*")
+
+
+@app.get("/api/runs/estimates", tags=["runs"], summary="How long each step of each kind of run usually takes")
+def api_run_estimates():
+    """The median duration of every step, from the finished runs on record: by mode and router type
+    (`customer/vyos/bootstrap`), by mode (`customer/*/bootstrap`) and by step alone (`*/*/bootstrap`). Steps carried
+    over from an earlier run by a resume are not counted — they took no time in the run that shows them. The portal's
+    progress bars add the remaining steps' medians up for an ETA."""
+    import json
+    import statistics
+    samples = {}
+    for f in RUNS_DIR.glob("*.json"):
+        try:
+            d = json.loads(f.read_text())
+        except ValueError:
+            continue
+        plat = _run_platform(d)
+        for st in d.get("steps") or []:
+            if st.get("status") != "success" or not st.get("started") or not st.get("finished") \
+                    or str(st.get("summary") or "").startswith("(from run"):
+                continue
+            secs = st["finished"] - st["started"]
+            for key in (f"{d['mode']}/{plat}/{st['name']}", f"{d['mode']}/*/{st['name']}", f"*/*/{st['name']}"):
+                samples.setdefault(key, []).append(secs)
+    return {"steps": {k: round(statistics.median(v), 1) for k, v in sorted(samples.items())},
+            "samples": {k: len(v) for k, v in sorted(samples.items())}}
+
+
 @app.post("/api/runs", tags=["runs"], summary="Start a run")
 def api_run(req: RunRequest):
-    if req.mode not in ("customer", "remove", "deploy", "plan", "test"):
+    if req.mode not in ("customer", "remove", "modify", "deploy", "plan", "test", "drift", "fixdrift", "restore"):
         raise HTTPException(400, f"unknown mode {req.mode}")
     spec = req.customer.model_dump() if req.customer else ({"name": req.name} if req.name else None)
+    if req.mode == "modify":
+        if not req.name or not req.changes:
+            raise HTTPException(400, "mode modify needs a name and changes")
+        spec = {"name": req.name, "changes": req.changes.model_dump(exclude_none=True)}
+    if req.mode in ("modify", "restore"):
+        if not (spec or {}).get("name"):
+            raise HTTPException(400, f"mode {req.mode} needs a name")
+        try:
+            return registry.start(Run(req.mode, spec, req.options))
+        except ValueError as e:
+            raise HTTPException(400, str(e))
     if req.mode == "customer" and not spec:
         raise HTTPException(400, "mode customer needs a customer spec")
     if req.mode == "remove" and not (spec or {}).get("name"):
@@ -445,9 +910,42 @@ def _refresher():
         time.sleep(60)
 
 
+prober = SLA.Prober()
+
+
+def _sla_prober():
+    """Every minute while the lab runs: each customer's LAN host pings every hub's LAN (sla.py)."""
+    while True:
+        try:
+            if any(st == "running" for st in _vm_states().values()):
+                prober.run_once(C.facts()["inv"])
+        except Exception:                                       # noqa: BLE001
+            pass
+        time.sleep(60)
+
+
+DRIFT_INTERVAL_H = float(os.environ.get("DRIFT_INTERVAL_H", "6"))    # 0 turns the scheduled drift check off
+
+
+def _drift_scheduler():
+    """A drift run every DRIFT_INTERVAL_H hours, while the lab runs and nothing else does; it shows in Runs like any other."""
+    time.sleep(300)
+    while DRIFT_INTERVAL_H > 0:
+        try:
+            last = (D.latest() or {}).get("generated") or 0
+            if time.time() - last >= DRIFT_INTERVAL_H * 3600 and not registry.busy() \
+                    and all(st == "running" for n, st in _vm_states().items()):
+                registry.start(Run("drift", None, {"scheduled": True}))
+        except Exception:                                       # noqa: BLE001 — never let the scheduler die
+            pass
+        time.sleep(600)
+
+
 @app.on_event("startup")
 def _start_refresher():
     threading.Thread(target=_refresher, daemon=True).start()
+    threading.Thread(target=_drift_scheduler, daemon=True).start()
+    threading.Thread(target=_sla_prober, daemon=True).start()
 
 
 def _vm_states():
@@ -520,6 +1018,17 @@ def prometheus_metrics():
         out.append(metric_line("lab_health_problems", {"lab": L}, len(h.get("problems") or [])))
         out += _g("lab_collector_last_refresh_seconds", "When the live state behind these gauges was collected")
         out.append(metric_line("lab_collector_last_refresh_seconds", {"lab": L}, int(snap["generated"])))
+    out += prober.metrics(L, metric_line)
+    rep = D.latest()
+    if rep:
+        out += _g("lab_config_drift", "1 if the router's running configuration differs from the model (latest drift check)")
+        out += _g("lab_config_drift_lines", "Lines or resources that differ from the model (latest drift check)")
+        for r, x in sorted(rep["nodes"].items()):
+            lab = {"lab": L, "router": r, "role": x["role"]}
+            out.append(metric_line("lab_config_drift", lab, int(x["status"] == "drift")))
+            out.append(metric_line("lab_config_drift_lines", lab, len(x["items"])))
+        out += _g("lab_config_drift_checked_seconds", "When the latest drift check ran")
+        out.append(metric_line("lab_config_drift_checked_seconds", {"lab": L}, int(rep["generated"])))
     return PlainTextResponse(exposition(out + run_metrics(L, registry.list())), media_type="text/plain; version=0.0.4")
 
 

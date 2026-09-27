@@ -1,6 +1,6 @@
 """Robot Framework keyword library for c8000v-dmvpn-lab.
 
-C8000v over SSH (netmiko) and RESTCONF (requests); the VyOS provider over SSH (netmiko); the Alpine hosts over SSH
+C8000v over SSH (netmiko) and RESTCONF (requests); the VyOS routers over SSH exec channels (tools/vyos_ssh.py); the Alpine hosts over SSH
 (paramiko); terraform and lab.sh on the lab host."""
 import os
 import socket
@@ -56,7 +56,13 @@ class LabLib:
 
     @keyword
     def vyos_command(self, host, command, timeout=60):
-        out = self._conn(host, "vyos").send_command(command, read_timeout=float(timeout))
+        """A `show ...` in op mode, anything else (`sudo vtysh -c '...'`) in the shell — plain SSH exec channels
+        (tools/vyos_ssh.py): netmiko's interactive VyOS login intermittently misses the prompt."""
+        import sys
+        sys.path.insert(0, str(LAB_DIR / "tools"))
+        import vyos_ssh
+        out = (vyos_ssh.op(host, command, timeout=float(timeout)) if command.startswith("show ")
+               else vyos_ssh.run(host, command, timeout=float(timeout))[1])
         logger.info(f"<pre>vyos@{host}$ {command}\n{out}</pre>", html=True)
         return out
 

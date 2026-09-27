@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Run operational commands on a VyOS node over SSH (netmiko, vyos/vyos).   vyos_cmd.py HOST CMD [CMD ...]"""
-import os, sys
-from netmiko import ConnectHandler
+"""Run commands on a VyOS node over SSH (exec channels, vyos/vyos).   vyos_cmd.py HOST CMD [CMD ...]
+A `show ...` command runs in op mode (VyOS's own wrapper); anything else — `sudo vtysh -c '...'` — runs in the shell."""
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import vyos_ssh  # noqa: E402
 
 host, cmds = sys.argv[1], sys.argv[2:]
-c = ConnectHandler(device_type="vyos", host=host, username=os.environ.get("VYOS_USERNAME", "vyos"), password=os.environ.get("VYOS_PASSWORD", "vyos"))
-try:
-    for cmd in cmds:
-        out = c.send_command(cmd, read_timeout=90)
-        if len(cmds) > 1: print(f"$ {cmd}")
-        print(out)
-finally:
-    c.disconnect()
+for cmd in cmds:
+    if len(cmds) > 1: print(f"$ {cmd}")
+    out = vyos_ssh.op(host, cmd) if cmd.startswith("show ") else vyos_ssh.run(host, cmd)[1]
+    print(out.rstrip("\n"))

@@ -21,3 +21,5 @@ webapp/runs/
 results/*
 !results/.gitkeep
 __pycache__/
+webapp/drift/
+webapp/backups/

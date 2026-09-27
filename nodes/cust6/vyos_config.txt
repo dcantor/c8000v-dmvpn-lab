@@ -1,20 +1,20 @@
-# cust5: DMVPN customer on VyOS (Central) — day-0 pushed over the serial console by lab.sh bootstrap; rendered by tools/render.py
-set system host-name cust5
+# cust6: DMVPN customer on VyOS (West) — day-0 pushed over the serial console by lab.sh bootstrap; rendered by tools/render.py
+set system host-name cust6
 set system login user vyos authentication plaintext-password vyos
 set system time-zone UTC
 set service ssh
 set service lldp interface all
-set interfaces ethernet eth0 address 10.5.0.25/24
+set interfaces ethernet eth0 address 10.5.0.26/24
 set interfaces ethernet eth0 description 'OOB management'
-set interfaces ethernet eth0 hw-id 52:54:00:c9:0f:00
+set interfaces ethernet eth0 hw-id 52:54:00:c9:10:00
 set service https api rest
 set service https api keys id lab key c8000v-dmvpn-lab
 set service https allow-client address 10.5.0.1
 #
 # monitoring: exporters on the OOB address, scraped from the NMS (the portal's /api/sd lists them);
 # Telegraf pushes host / FRR / service metrics to VictoriaMetrics, syslog goes to VictoriaLogs
-set service monitoring prometheus node-exporter listen-address 10.5.0.25
-set service monitoring prometheus frr-exporter listen-address 10.5.0.25
+set service monitoring prometheus node-exporter listen-address 10.5.0.26
+set service monitoring prometheus frr-exporter listen-address 10.5.0.26
 set service monitoring telegraf influxdb url http://10.5.0.10
 set service monitoring telegraf influxdb port 8428
 set service monitoring telegraf influxdb bucket c8000v-dmvpn-lab
@@ -22,33 +22,33 @@ set service monitoring telegraf influxdb authentication organization lab
 set service monitoring telegraf influxdb authentication token c8dlab-telegraf_______________________________________________________________________==
 set service monitoring telegraf global-tag lab value c8000v-dmvpn-lab
 set service monitoring telegraf global-tag role value spoke
-set service monitoring telegraf global-tag dc value Central
+set service monitoring telegraf global-tag dc value West
 set system syslog remote 10.5.0.10 port 5514
 set system syslog remote 10.5.0.10 protocol udp
 set system syslog remote 10.5.0.10 facility all level info
 #
 # ports: eth2 to the provider, eth3 the site LAN (eth1, eth4 spare) — cabled like a C8000v customer
-set interfaces ethernet eth1 hw-id 52:54:00:c9:0f:01
+set interfaces ethernet eth1 hw-id 52:54:00:c9:10:01
 set interfaces ethernet eth1 description 'unwired'
 set interfaces ethernet eth1 disable
-set interfaces ethernet eth2 hw-id 52:54:00:c9:0f:02
-set interfaces ethernet eth2 address 100.70.15.2/30
-set interfaces ethernet eth2 description 'provider: mpls eth6'
-set interfaces ethernet eth3 hw-id 52:54:00:c9:0f:03
-set interfaces ethernet eth3 address 192.168.65.1/24
-set interfaces ethernet eth3 description 'host: host-cust5 eth1'
-set interfaces ethernet eth4 hw-id 52:54:00:c9:0f:04
+set interfaces ethernet eth2 hw-id 52:54:00:c9:10:02
+set interfaces ethernet eth2 address 100.70.16.2/30
+set interfaces ethernet eth2 description 'provider: mpls eth8'
+set interfaces ethernet eth3 hw-id 52:54:00:c9:10:03
+set interfaces ethernet eth3 address 192.168.66.1/24
+set interfaces ethernet eth3 description 'host: host-cust6 eth1'
+set interfaces ethernet eth4 hw-id 52:54:00:c9:10:04
 set interfaces ethernet eth4 description 'unwired'
 set interfaces ethernet eth4 disable
 #
 # the router-id
-set interfaces dummy dum0 address 10.255.5.15/32
+set interfaces dummy dum0 address 10.255.5.16/32
 set interfaces dummy dum0 description 'router-id'
 #
 # filters: the provider gets our access link and nothing else; the overlay carries LANs and router-ids
 set policy prefix-list WAN-OUT description 'offer the provider our own access link and nothing else'
 set policy prefix-list WAN-OUT rule 10 action permit
-set policy prefix-list WAN-OUT rule 10 prefix 100.70.15.0/30
+set policy prefix-list WAN-OUT rule 10 prefix 100.70.16.0/30
 set policy prefix-list WAN-IN description 'accept only the provider access-link range'
 set policy prefix-list WAN-IN rule 10 action permit
 set policy prefix-list WAN-IN rule 10 prefix 100.70.0.0/16
@@ -69,20 +69,20 @@ set policy route-map OVERLAY-OUT rule 10 match ip address prefix-list OVERLAY-RO
 #
 # BGP AS 65100: eBGP to the provider (AS 65000) underneath, iBGP with every hub over the tunnel
 set protocols bgp system-as 65100
-set protocols bgp parameters router-id 10.255.5.15
+set protocols bgp parameters router-id 10.255.5.16
 set protocols bgp parameters log-neighbor-changes
 set protocols bgp timers keepalive 3
 set protocols bgp timers holdtime 9
-set protocols bgp address-family ipv4-unicast network 192.168.65.0/24
-set protocols bgp address-family ipv4-unicast network 10.255.5.15/32
-set protocols bgp address-family ipv4-unicast network 100.70.15.0/30
-set protocols bgp neighbor 100.70.15.1 remote-as 65000
-set protocols bgp neighbor 100.70.15.1 description 'provider mpls'
-set protocols bgp neighbor 100.70.15.1 address-family ipv4-unicast prefix-list export WAN-OUT
-set protocols bgp neighbor 100.70.15.1 address-family ipv4-unicast prefix-list import WAN-IN
+set protocols bgp address-family ipv4-unicast network 192.168.66.0/24
+set protocols bgp address-family ipv4-unicast network 10.255.5.16/32
+set protocols bgp address-family ipv4-unicast network 100.70.16.0/30
+set protocols bgp neighbor 100.70.16.1 remote-as 65000
+set protocols bgp neighbor 100.70.16.1 description 'provider mpls'
+set protocols bgp neighbor 100.70.16.1 address-family ipv4-unicast prefix-list export WAN-OUT
+set protocols bgp neighbor 100.70.16.1 address-family ipv4-unicast prefix-list import WAN-IN
 set protocols bgp peer-group HUBS remote-as 65100
 set protocols bgp peer-group HUBS description 'the DMVPN hubs (route reflectors)'
-set protocols bgp peer-group HUBS update-source 172.28.0.15
+set protocols bgp peer-group HUBS update-source 172.28.0.16
 set protocols bgp peer-group HUBS address-family ipv4-unicast soft-reconfiguration inbound
 set protocols bgp peer-group HUBS address-family ipv4-unicast route-map import OVERLAY-IN
 set protocols bgp peer-group HUBS address-family ipv4-unicast route-map export OVERLAY-OUT
@@ -93,29 +93,6 @@ set protocols bgp neighbor 172.28.0.2 description 'DMVPN hub hub-central'
 set protocols bgp neighbor 172.28.0.3 peer-group HUBS
 set protocols bgp neighbor 172.28.0.3 description 'DMVPN hub hub-west'
 #
-# the preferred hub, hub-east: its routes rank first (local-preference 200); the hubs' own prefixes are not ranked
-set policy prefix-list HUB-PREFIXES description 'the hubs own LANs and router-ids'
-set policy prefix-list HUB-PREFIXES rule 10 action permit
-set policy prefix-list HUB-PREFIXES rule 10 prefix 192.168.71.0/24
-set policy prefix-list HUB-PREFIXES rule 15 action permit
-set policy prefix-list HUB-PREFIXES rule 15 prefix 10.255.5.1/32
-set policy prefix-list HUB-PREFIXES rule 20 action permit
-set policy prefix-list HUB-PREFIXES rule 20 prefix 192.168.72.0/24
-set policy prefix-list HUB-PREFIXES rule 25 action permit
-set policy prefix-list HUB-PREFIXES rule 25 prefix 10.255.5.2/32
-set policy prefix-list HUB-PREFIXES rule 30 action permit
-set policy prefix-list HUB-PREFIXES rule 30 prefix 192.168.73.0/24
-set policy prefix-list HUB-PREFIXES rule 35 action permit
-set policy prefix-list HUB-PREFIXES rule 35 prefix 10.255.5.3/32
-set policy route-map OVERLAY-IN-PREFERRED rule 10 action permit
-set policy route-map OVERLAY-IN-PREFERRED rule 10 match ip address prefix-list HUB-PREFIXES
-set policy route-map OVERLAY-IN-PREFERRED rule 10 set ip-next-hop peer-address
-set policy route-map OVERLAY-IN-PREFERRED rule 20 action permit
-set policy route-map OVERLAY-IN-PREFERRED rule 20 match ip address prefix-list OVERLAY-ROUTES
-set policy route-map OVERLAY-IN-PREFERRED rule 20 set ip-next-hop peer-address
-set policy route-map OVERLAY-IN-PREFERRED rule 20 set local-preference 200
-set protocols bgp neighbor 172.28.0.1 address-family ipv4-unicast route-map import OVERLAY-IN-PREFERRED
-#
 # the overlay through the hubs, below any shortcut: lets nhrpd answer resolution requests
 set protocols static route 172.28.0.0/24 next-hop 172.28.0.1 distance 250
 set protocols static route 172.28.0.0/24 next-hop 172.28.0.2 distance 250
@@ -123,8 +100,8 @@ set protocols static route 172.28.0.0/24 next-hop 172.28.0.3 distance 250
 #
 # the DMVPN tunnel: mGRE (no remote), a /32 as NHRP on VyOS requires, the hubs' GRE key
 set interfaces tunnel tun0 encapsulation gre
-set interfaces tunnel tun0 source-address 100.70.15.2
-set interfaces tunnel tun0 address 172.28.0.15/32
+set interfaces tunnel tun0 source-address 100.70.16.2
+set interfaces tunnel tun0 address 172.28.0.16/32
 set interfaces tunnel tun0 mtu 1400
 set interfaces tunnel tun0 ip adjust-mss 1360
 set interfaces tunnel tun0 parameters ip key 100

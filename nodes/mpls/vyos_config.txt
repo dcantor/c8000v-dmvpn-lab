@@ -50,8 +50,8 @@ set interfaces ethernet eth7 hw-id 52:54:00:c9:15:07
 set interfaces ethernet eth7 address 100.70.14.1/30
 set interfaces ethernet eth7 description 'spoke: cust4 eth2'
 set interfaces ethernet eth8 hw-id 52:54:00:c9:15:08
-set interfaces ethernet eth8 description 'unwired'
-set interfaces ethernet eth8 disable
+set interfaces ethernet eth8 address 100.70.16.1/30
+set interfaces ethernet eth8 description 'spoke: cust6 eth2'
 set interfaces ethernet eth9 hw-id 52:54:00:c9:15:09
 set interfaces ethernet eth9 description 'unwired'
 set interfaces ethernet eth9 disable
