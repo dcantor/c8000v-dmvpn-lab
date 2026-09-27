@@ -42,11 +42,40 @@ input { width:100%; padding:5px 8px; border:1px solid var(--line); border-radius
 .actions { display:flex; gap:8px; margin-top:14px; align-items:center }
 pre.out { background:#0c2129; color:#d7e3e8; padding:12px 14px; border-radius:8px; overflow:auto; max-height:420px; font-size:12.5px }
 .steps { padding-left:18px } .steps li { margin-bottom:5px } .steps .s { font-weight:600 } .steps .d { color:var(--muted); font-size:12.5px }
+
+/* network map */
+.mapwrap { display:grid; grid-template-columns:minmax(0,1fr) 320px; gap:14px; align-items:start }
+@media (max-width: 980px) { .mapwrap { grid-template-columns:1fr } }
+.maptools { display:flex; gap:14px; flex-wrap:wrap; align-items:center; font-size:13px; margin-bottom:8px }
+.maptools label { display:inline-flex; gap:5px; align-items:center; margin:0; font-size:13px; color:var(--body) }
+.maptools input { width:auto }
+.mapscroll { overflow-x:auto } #map { width:100%; min-width:760px; height:auto; display:block; --ok:#15803d; --warn:#b45309; --bad:#b91c1c; --tun:#0e7490; --sc:#7c3aed; --ul:#64748b }
+:root[data-theme=dark] #map { --ok:#4ade80; --warn:#fbbf24; --bad:#f87171; --tun:#22d3ee; --sc:#c4b5fd; --ul:#94a3b8 }
+#map .band { fill:var(--tun); fill-opacity:.07; stroke:var(--line); stroke-dasharray:4 4 }
+#map .bandlbl { fill:var(--muted); font-size:13px }
+#map .node rect { fill:var(--card); stroke-width:2.5 } #map .node { cursor:pointer }
+#map .node.ok rect { stroke:var(--ok) } #map .node.warn rect { stroke:var(--warn) } #map .node.bad rect { stroke:var(--bad) } #map .node.sel rect { stroke-width:4.5 }
+#map .node text { fill:var(--body); text-anchor:middle; font-size:13px } #map .node .sub { fill:var(--muted); font-size:11px; font-family:"DejaVu Sans Mono",Consolas,monospace }
+#map .node .role { font-size:10px; fill:var(--muted); text-transform:uppercase; letter-spacing:.06em }
+#map .e { fill:none } #map .e.ok { stroke:var(--ok) } #map .e.bad { stroke:var(--bad) } #map .e.warn { stroke:var(--warn) }
+#map .ul { stroke-width:3 } #map .ul.ok { stroke:var(--ul) }
+#map .tun { stroke-width:1.8; stroke-dasharray:7 5 } #map .tun.ok { stroke:var(--tun) }
+#map .hh { stroke-width:1.5; stroke-dasharray:2 4 } #map .hh.ok { stroke:var(--tun) }
+#map .sc { stroke:var(--sc); stroke-width:3.5 }
+#map .lan { stroke-width:2 } #map .lan.ok { stroke:var(--ul) }
+#map .lbl { fill:var(--muted); font-size:10.5px; font-family:"DejaVu Sans Mono",Consolas,monospace; paint-order:stroke; stroke:var(--card); stroke-width:3px }
+#map .e:hover { stroke-width:5 } #map g.hide { display:none }
+.legend { display:flex; gap:16px; flex-wrap:wrap; font-size:12.5px; color:var(--muted); margin-top:6px }
+.legend svg { vertical-align:middle; margin-right:5px }
+#mapinfo dl { display:grid; grid-template-columns:auto 1fr; gap:3px 10px; margin:0; font-size:13px } #mapinfo dt { color:var(--muted) }
+#mapinfo dd { margin:0; font-family:"DejaVu Sans Mono",Consolas,monospace; font-size:12.5px; word-break:break-word }
+#mapinfo .cmds { display:flex; gap:6px; flex-wrap:wrap; margin:10px 0 6px } #mapinfo .cmds button { font-size:12px; padding:3px 8px }
+#mapinfo pre.out { max-height:300px; font-size:11.5px }
 </style></head><body>
 <header>
   <div><h1>C8000v DMVPN Portal</h1>
     <div class="sub">three hubs &middot; Catalyst 8000v customers &middot; a VyOS MPLS provider &middot; Network-as-Code &middot; Nautobot</div></div>
-  <nav><a href="#cloud" data-view="cloud" class="on">The cloud</a><a href="#provision" data-view="provision">Provision</a>
+  <nav><a href="#cloud" data-view="cloud" class="on">The cloud</a><a href="#map" data-view="map">Network map</a><a href="#provision" data-view="provision">Provision</a>
        <a href="#runs" data-view="runs">Runs</a><a href="/docs" target="_blank">API</a></nav>
   <div class="right"><span id="hdr"></span> &middot; <a href="#" id="theme">&#9790; dark</a></div>
 </header>
@@ -62,6 +91,29 @@ pre.out { background:#0c2129; color:#d7e3e8; padding:12px 14px; border-radius:8p
   <div class="card"><h2>The provider <small>a VyOS router standing in for the MPLS network: it carries the sites' WAN addresses and nothing else</small></h2>
     <table id="prov"><thead><tr><th>Router</th><th>AS</th><th>Accepts</th><th>Interfaces up</th><th>eBGP customers</th><th>Attached</th></tr></thead><tbody></tbody></table></div>
   <div class="card"><h2>Health</h2><div id="health"></div></div>
+</section>
+
+<section id="v-map" class="view">
+  <div class="mapwrap">
+    <div class="card"><h2>Network map <small>drawn from the routers' live state &mdash; click a node for details</small>
+      <span style="float:right"><span class="hint" id="map-when"></span> <button onclick="load(true)">Refresh</button></span></h2>
+      <div class="maptools">
+        <label><input type="checkbox" data-layer="underlay" checked> Provider links (eBGP)</label>
+        <label><input type="checkbox" data-layer="overlay" checked> DMVPN tunnels</label>
+        <label><input type="checkbox" data-layer="shortcuts" checked> Shortcuts (phase 3)</label>
+        <label><input type="checkbox" data-layer="hosts" checked> LAN hosts</label>
+        <label><input type="checkbox" data-layer="labels" checked> Labels</label>
+      </div>
+      <div class="mapscroll"><svg id="map" viewBox="0 0 1200 800" role="img" aria-label="network topology"></svg></div>
+      <div class="legend">
+        <span><svg width="34" height="10"><line x1="0" y1="5" x2="34" y2="5" stroke="#64748b" stroke-width="3"/></svg>access link, eBGP to the provider</span>
+        <span><svg width="34" height="10"><line x1="0" y1="5" x2="34" y2="5" stroke="#0e7490" stroke-width="2" stroke-dasharray="7 5"/></svg>DMVPN tunnel (NHRP + IPsec)</span>
+        <span><svg width="34" height="10"><line x1="0" y1="5" x2="34" y2="5" stroke="#7c3aed" stroke-width="3.5"/></svg>live customer-to-customer shortcut</span>
+        <span><svg width="34" height="10"><line x1="0" y1="5" x2="34" y2="5" stroke="#b91c1c" stroke-width="3"/></svg>down</span>
+        <span>outline: <b style="color:#15803d">healthy</b> &middot; <b style="color:#b45309">partial</b> &middot; <b style="color:#b91c1c">down / unreachable</b></span>
+      </div></div>
+    <div class="card" id="mapinfo"><h2>Details</h2><p class="hint">Select a router, the provider or a host on the map.</p></div>
+  </div>
 </section>
 
 <section id="v-provision" class="view">
@@ -161,6 +213,7 @@ async function load(refresh) {
       <td class="hint">${wired.map(esc).join(', ')}</td></tr>`; }).join('');
   $('health').innerHTML = h.ok ? pill(true, 'everything the model expects is true')
     : '<ul>' + (h.problems || []).map(p => `<li>${esc(p)}</li>`).join('') + '</ul>';
+  drawMap();
   $('hdr').textContent = `${CU.length} customers · ${h.shortcuts ?? 0} shortcuts · ${h.ok ? 'healthy' : (h.problems || []).length + ' problems'}`;
 }
 
@@ -244,6 +297,139 @@ async function watch(id) {
 }
 async function resume(id) { const r = await fetch(`/api/runs/${encodeURIComponent(id)}/resume`, { method: 'POST' });
   const run = await r.json(); if (!r.ok) { alert(run.detail); return; } watch(run.id); }
+
+
+// ---- network map --------------------------------------------------------------------------------------------------
+let MAPSEL = null;
+const MAPLAYERS = { underlay: true, overlay: true, shortcuts: true, hosts: true, labels: true };
+try { Object.assign(MAPLAYERS, JSON.parse(localStorage.getItem('c8d-map-layers') || '{}')); } catch (e) {}
+document.querySelectorAll('[data-layer]').forEach(cb => { cb.checked = MAPLAYERS[cb.dataset.layer] !== false;
+  cb.onchange = () => { MAPLAYERS[cb.dataset.layer] = cb.checked;
+    try { localStorage.setItem('c8d-map-layers', JSON.stringify(MAPLAYERS)); } catch (e) {}
+    applyLayers(); }; });
+function applyLayers() { document.querySelectorAll('#map [data-g]').forEach(g => g.classList.toggle('hide', !MAPLAYERS[g.dataset.g])); }
+
+function nodeStatus(n) {
+  const m = ST.nodes[n] || {}, c = (ST.cloud || {})[n], H = ST.hubs, CU = ST.customers;
+  if (m.role === 'provider') { const s = (ST.provider_state || {})[n] || {}, want = H.length + CU.length;
+    return s.error ? 'bad' : (s.customers_up >= want ? 'ok' : (s.customers_up ? 'warn' : 'bad')); }
+  if (m.role === 'host') return (ST.hosts_up || {})[n] ? 'ok' : 'bad';
+  if (!c || c.error) return 'bad';
+  if (!c.underlay_up) return 'bad';
+  if (m.role === 'hub') return (c.registered || []).length >= CU.length ? 'ok' : 'warn';
+  const k = (c.nhs_up || []).length; return k >= H.length ? 'ok' : (k ? 'warn' : 'bad');
+}
+
+function drawMap() {
+  if (!ST || !$('map')) return;
+  const W = 1200, H = ST.hubs, CU = ST.customers, P = ST.provider.nodes[0], svg = [], cloud = ST.cloud || {};
+  const xs = (i, n) => W * (i + 1) / (n + 1), pos = {};
+  H.forEach((h, i) => pos[h] = { x: xs(i, H.length), y: 120 });
+  CU.forEach((c, i) => { pos[c] = { x: xs(i, CU.length), y: 580 }; const host = ST.nodes[c].host; if (host) pos[host] = { x: pos[c].x, y: 725 }; });
+  pos[P] = { x: W / 2, y: 350 };
+  const nw = 168, nh = 56, top = n => pos[n].y - nh / 2, bot = n => pos[n].y + nh / 2;
+  const t = (x, y, txt, cls = 'lbl') => `<text class="${cls}" x="${x}" y="${y}">${esc(txt)}</text>`;
+  const edge = (cls, d, title) => `<path class="e ${cls}" d="${d}"><title>${esc(title)}</title></path>`;
+
+  // the provider band: the MPLS network everything rides over
+  svg.push(`<rect class="band" x="40" y="280" width="${W - 80}" height="140" rx="70"/>`,
+           `<text class="bandlbl" x="80" y="306">MPLS provider · AS ${esc(ST.provider.as)} · ${esc(ST.provider.wan_net)}</text>`,
+           `<text class="bandlbl" x="${W - 80}" y="306" text-anchor="end">overlay ${esc(ST.service.overlay)} · iBGP AS ${esc(ST.service.as)}</text>`);
+
+  // underlay: every router's Gi2 to the provider, coloured by its eBGP session
+  const ul = [], ull = [];
+  [...H, ...CU].forEach(r => { const m = ST.nodes[r], c = cloud[r] || {}, up = (c.underlay_up || 0) >= 1 && !c.error;
+    const y1 = H.includes(r) ? bot(r) : top(r), y2 = H.includes(r) ? pos[P].y - nh / 2 : pos[P].y + nh / 2;
+    const x2 = pos[P].x + (pos[r].x - pos[P].x) * 0.28;
+    ul.push(edge(`ul ${up ? 'ok' : 'bad'}`, `M${pos[r].x},${y1} L${x2},${y2}`,
+      `${r} ${m.wan.name} ${m.wan.ip}  ⇄  ${P} ${m.wan.peer_port} ${m.wan.peer_ip} — eBGP ${up ? 'Established' : 'DOWN'}`));
+    const lx = pos[r].x + (x2 - pos[r].x) * 0.3, ly = y1 + (y2 - y1) * 0.3;
+    ull.push(t(lx + 6, ly, `${m.wan.peer_port} ${m.wan.prefix}`)); });
+  svg.push(`<g data-g="underlay">${ul.join('')}<g data-g="labels">${ull.join('')}</g></g>`);
+
+  // overlay: each customer's tunnel to each hub (up = registered with that hub), and the hubs' static mesh
+  const ov = [];
+  CU.forEach(c => { const up = new Set((cloud[c] || {}).nhs_up || []);
+    H.forEach(h => { const ok = up.has(h), a = pos[c], b = pos[h];
+      const bow = Math.abs(a.x - b.x) < 40 ? 90 : 0;   // a vertical tunnel would lie on the access links: bow it aside
+      ov.push(edge(`tun ${ok ? 'ok' : 'bad'}`, `M${a.x},${top(c)} C${a.x + bow},${a.y - 250} ${b.x + bow},${b.y + 250} ${b.x},${bot(h)}`,
+        `${c} ${ST.nodes[c].tunnel_ip} → ${h} ${ST.nodes[h].tunnel_ip}: ${ok ? 'registered (NHRP), IPsec up' : 'NOT registered'}`)); }); });
+  H.forEach((h, i) => H.slice(i + 1).forEach(o => { const ok = ((cloud[h] || {}).sa_peers || []).includes(ST.nodes[o].nbma), a = pos[h], b = pos[o];
+    ov.push(edge(`hh ${ok ? 'ok' : 'bad'}`, `M${a.x},${top(h)} Q${(a.x + b.x) / 2},${a.y - 95 - Math.abs(b.x - a.x) * 0.08} ${b.x},${top(o)}`,
+      `${h} ⇄ ${o}: static NHRP map, iBGP between hubs — IPsec ${ok ? 'up' : 'DOWN'}`)); }));
+  svg.push(`<g data-g="overlay">${ov.join('')}</g>`);
+
+  // shortcuts: pairs of customers talking directly (dynamic NHRP entries)
+  const sc = [], seen = new Set();
+  CU.forEach(c => ((cloud[c] || {}).shortcuts || []).forEach(o => { const k = [c, o].sort().join('|');
+    if (seen.has(k) || !pos[o]) return; seen.add(k); const a = pos[c], b = pos[o];
+    sc.push(edge('sc', `M${a.x},${top(c)} Q${(a.x + b.x) / 2},${a.y - 110} ${b.x},${top(o)}`, `shortcut ${c} ⇄ ${o}: a direct IPsec tunnel NHRP resolved`)); }));
+  svg.push(`<g data-g="shortcuts">${sc.join('')}</g>`);
+
+  // hosts behind the customers
+  const hs = [], hl = [];
+  CU.forEach(c => { const host = ST.nodes[c].host; if (!host) return; const ok = (ST.hosts_up || {})[host], lp = ST.nodes[c].lan_port || {};
+    hs.push(edge(`lan ${ok ? 'ok' : 'bad'}`, `M${pos[c].x},${bot(c)} L${pos[c].x},${pos[host].y - 22}`, `${c} ${lp.name} ${lp.ip} ⇄ ${host} eth1 ${lp.peer_ip}`));
+    hl.push(t(pos[c].x + 8, bot(c) + 34, ST.nodes[c].lan)); });
+  svg.push(`<g data-g="hosts">${hs.join('')}<g data-g="labels">${hl.join('')}</g></g>`);
+
+  // nodes
+  const box = (n, w, h, lines, extraCls = '') => { const p = pos[n], st = nodeStatus(n);
+    return `<g class="node ${st} ${MAPSEL === n ? 'sel' : ''} ${extraCls}" data-node="${esc(n)}" tabindex="0">
+      <rect x="${p.x - w / 2}" y="${p.y - h / 2}" width="${w}" height="${h}" rx="10"/>${lines.map(([txt, cls, dy]) =>
+        `<text class="${cls}" x="${p.x}" y="${p.y + dy}">${esc(txt)}</text>`).join('')}<title>${esc(n)}: ${st}</title></g>`; };
+  const nodes = [];
+  H.forEach(h => nodes.push(box(h, nw, nh, [['hub · ' + (ST.nodes[h].region || ''), 'role', -12], [h, '', 5], [ST.nodes[h].tunnel_ip, 'sub', 20]])));
+  CU.forEach(c => nodes.push(box(c, nw, nh, [['customer · ' + (ST.nodes[c].region || ''), 'role', -12], [c, '', 5], [ST.nodes[c].tunnel_ip, 'sub', 20]])));
+  nodes.push(box(P, 190, nh, [['provider · VyOS', 'role', -12], [P, '', 5], [`AS ${ST.provider.as}`, 'sub', 20]]));
+  const hn = [];
+  CU.forEach(c => { const host = ST.nodes[c].host; if (host) hn.push(box(host, 150, 44, [[host, '', -2], [(ST.nodes[c].lan_port || {}).peer_ip || '', 'sub', 14]])); });
+  svg.push(nodes.join(''), `<g data-g="hosts">${hn.join('')}</g>`);
+
+  $('map').innerHTML = svg.join('');
+  applyLayers();
+  $('map').querySelectorAll('.node').forEach(g => { g.onclick = () => selectNode(g.dataset.node);
+    g.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectNode(g.dataset.node); } }; });
+  $('map-when').textContent = ST.generated ? 'live · ' + new Date(ST.generated * 1000).toLocaleTimeString() : '';
+  if (MAPSEL) renderInfo(MAPSEL, false);
+}
+
+function selectNode(n) { MAPSEL = n; drawMap(); renderInfo(n, true); }
+function renderInfo(n, fresh) {
+  // a refresh redraws the panel; keep the command output the operator is reading (a new selection clears it)
+  const keep = !fresh && $('mapout') && !$('mapout').hidden ? $('mapout').textContent : null;
+  const m = ST.nodes[n] || {}, c = (ST.cloud || {})[n] || {}, st = nodeStatus(n), rows = [];
+  const add = (k, v) => { if (v !== undefined && v !== null && v !== '') rows.push(`<dt>${esc(k)}</dt><dd>${v}</dd>`); };
+  add('Role', esc(m.role === 'spoke' ? 'customer' : m.role) + (m.region ? ' · ' + esc(m.region) : ''));
+  add('Status', pill(st === 'ok', st === 'ok' ? 'healthy' : st === 'warn' ? 'partial' : 'down', st === 'warn'));
+  add('VM', esc(m.domain)); add('Management', esc(m.mgmt_ip));
+  if (m.role === 'hub' || m.role === 'spoke') {
+    add('Tunnel0', esc(m.tunnel_ip)); add('NBMA (Gi2)', esc(m.nbma)); add('Router-id', esc(m.router_id)); add('LAN', esc(m.lan));
+    add('Provider link', esc(`${m.wan.peer} ${m.wan.peer_port} · ${m.wan.prefix}`));
+    if (c.error) add('Live', pill(false, 'unreachable: ' + c.error));
+    else {
+      if (m.role === 'hub') add('Registered', esc((c.registered || []).join(', ') || 'none'));
+      else { add('NHS up', esc((c.nhs_up || []).join(', ') || 'none')); add('Shortcuts', esc((c.shortcuts || []).join(', ') || 'none')); }
+      add('IPsec up', esc(c.sa)); add('Overlay BGP', esc(`${c.overlay_up} / ${c.overlay}`));
+      add('Provider eBGP', c.underlay_up ? pill(true, 'Established') : pill(false, 'down')); add('CPU (1 min)', esc((c.cpu_1m ?? '?') + ' %'));
+    }
+  } else if (m.role === 'provider') {
+    const s = (ST.provider_state || {})[n] || {};
+    add('Accepts', esc(ST.provider.wan_net)); add('eBGP customers', esc(`${s.customers_up ?? '?'} / ${ST.hubs.length + ST.customers.length}`));
+    add('Sessions', (s.sessions || []).map(x => `${esc(x.peer)} ${x.state.match(/^\d+$/) ? '✓' : esc(x.state)}`).join('<br>'));
+  } else if (m.role === 'host') {
+    add('LAN address', esc(m.lan_ip)); add('Gateway', esc(`${m.gateway} (${m.router})`)); add('Login', 'lab / lab');
+  }
+  const cmds = (m.role === 'hub' || m.role === 'spoke') ? ['show dmvpn', 'show crypto session brief', 'show ip bgp summary', 'show ip route bgp', 'show ip nhrp'] : [];
+  $('mapinfo').innerHTML = `<h2>${esc(n)}</h2><dl>${rows.join('')}</dl>
+    ${cmds.length ? `<div class="cmds">${cmds.map(x => `<button data-cmd="${esc(x)}">${esc(x)}</button>`).join('')}</div><pre class="out" id="mapout" hidden></pre>` : ''}`;
+  if (keep !== null && $('mapout')) { $('mapout').hidden = false; $('mapout').textContent = keep; }
+  $('mapinfo').querySelectorAll('[data-cmd]').forEach(b => b.onclick = async () => {
+    const out = $('mapout'); out.hidden = false; out.textContent = `${n}# ${b.dataset.cmd}\n…`;
+    try { const r = await fetch(`/api/query/${encodeURIComponent(n)}?command=${encodeURIComponent(b.dataset.cmd)}`); const j = await r.json();
+      out.textContent = `${n}# ${b.dataset.cmd}\n` + (r.ok ? j.output : (j.detail || 'failed')); }
+    catch (e) { out.textContent = String(e); } });
+}
 
 renderTasks(); show(location.hash.slice(1) || 'cloud'); load(); setInterval(() => { if (!watching) load(); }, 30000);
 </script></body></html>

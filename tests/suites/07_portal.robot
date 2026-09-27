@@ -41,3 +41,22 @@ A customer that would collide with the running lab is refused
     Should Contain    ${problems}    cust1 already exists
     Should Contain    ${problems}    index 11 is taken
     Should Contain    ${problems}    overlaps ${ROUTERS}[cust1][lan]
+
+The Network map page is served, with everything it draws present in the live state
+    [Documentation]    The map is drawn in the browser from /api/state: every router's access link and LAN port, each
+    ...                customer's registrations and shortcuts, the hubs' IPsec peers and the provider's sessions.
+    ${page}=    GET On Session    portal    /
+    Should Contain    ${page.text}    data-view="map"
+    Should Contain    ${page.text}    id="map"
+    ${r}=    GET On Session    portal    /api/state
+    ${s}=    Set Variable    ${r.json()}
+    FOR    ${n}    IN    @{HUBS}    @{SPOKES}
+        Dictionary Should Contain Key    ${s}[nodes][${n}][wan]    peer_port
+        Dictionary Should Contain Key    ${s}[cloud][${n}]    sa_peers
+    END
+    FOR    ${c}    IN    @{SPOKES}
+        Dictionary Should Contain Key    ${s}[nodes][${c}][lan_port]    peer_ip
+        Dictionary Should Contain Key    ${s}[cloud][${c}]    nhs_up
+        Dictionary Should Contain Key    ${s}[cloud][${c}]    shortcuts
+    END
+    Dictionary Should Contain Key    ${s}[provider_state][${PROVIDER}]    sessions
