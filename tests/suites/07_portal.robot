@@ -80,7 +80,7 @@ Each customer's view of the Network map downloads as a one-page PDF
         Should Be Equal    ${r.headers}[content-type]    application/pdf
         Should Contain    ${r.headers}[content-disposition]    ${c}-network-map-
         Should Start With    ${r.content}    ${{b"%PDF"}}
-        ${pages}=    Evaluate    len(__import__("re").findall(rb"/Type\s*/Page[^s]", $r.content))
+        ${pages}=    Pdf Page Count    ${r.content}
         Should Be Equal As Integers    ${pages}    1    msg=${c}'s map PDF runs to ${pages} pages
     END
     GET On Session    portal    /api/customers/${HUBS}[0]/map.pdf    expected_status=404

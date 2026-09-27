@@ -150,6 +150,16 @@ class LabLib:
         return sorted(names)
 
     @keyword
+    def pdf_page_count(self, content):
+        """Pages in a PDF (bytes), by poppler's pdfinfo — Chrome compresses its object streams, so the raw bytes do
+        not show the page objects."""
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix=".pdf") as f:
+            f.write(content); f.flush()
+            out = subprocess.run(["pdfinfo", f.name], capture_output=True, text=True, check=True).stdout
+        return int(next(l.split()[1] for l in out.splitlines() if l.startswith("Pages:")))
+
+    @keyword
     def read_lab_file(self, rel):
         return (LAB_DIR / rel).read_text()
 
