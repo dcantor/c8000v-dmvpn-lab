@@ -94,6 +94,8 @@ def add_customer(text, spec):
     text = add_list_item(text, "LINKS", f'"{spec["provider"]}:{num(spec["provider_port"])} {c}:2 {spec["wan_prefix"]}"',
                          comment=f"{c}: added by the portal")
     text = add_list_item(text, "LINKS", f'"{c}:{num(spec["lan_port"])} {h}:1 {spec["lan"]}"')
+    if spec.get("dual_homed"):
+        text = add_list_item(text, "LINKS", dual_line(c, spec))
     text = _word_array(text, "SPOKES", add=c)
     return _word_array(text, "HOSTS", add=h)
 
@@ -113,6 +115,12 @@ def remove_customer(text, spec):
     return _word_array(text, "HOSTS", drop=h)
 
 
+def dual_line(c, spec):
+    """The second provider's link: the provider anchors it (.1), the customer's port 4 is .2."""
+    num = "".join(ch for ch in str(spec["provider2_port"]) if ch.isdigit())
+    return f'"{spec["provider2"]}:{num} {c}:4 {spec["wan2_prefix"]}"'
+
+
 def modify_customer(text, c, h, old, new):
     """Change what can change about a customer in place: its region, its site LAN (and so its host's link), its router
     platform and its preferred hub. Its identity — name, index, addresses, ports — stays."""
@@ -124,6 +132,12 @@ def modify_customer(text, c, h, old, new):
         if not re.search(r"^declare -A PREFER_HUB=\(", text, re.M):
             text = text.replace("\n# ---- the wiring", "\ndeclare -A PREFER_HUB=( )\n\n# ---- the wiring", 1)
         text = set_assoc(text, "PREFER_HUB", c, new["prefer_hub"]) if new.get("prefer_hub") else remove_assoc(text, "PREFER_HUB", c)
+    if new.get("dual_homed") != old.get("dual_homed"):
+        if new.get("dual_homed"):
+            text = add_list_item(text, "LINKS", dual_line(c, new))
+        else:
+            s, e = _block(text, "LINKS")
+            text = text[:s] + re.sub(rf'\n[ \t]*"{re.escape(old["provider2"])}:\d+ {re.escape(c)}:4 [^"\n]*"', "", text[s:e]) + text[e:]
     if new["lan"] != old["lan"]:
         text = set_assoc(text, "LAN", c, new["lan"])
         s, e = _block(text, "LINKS")

@@ -4,7 +4,9 @@
 # See lab.conf.
 set -euo pipefail
 source "$(dirname "$(readlink -f "$0")")/lab.conf"
-declare -p PREFER_HUB &>/dev/null || declare -A PREFER_HUB=()   # a lab.conf from before 0.21.0 has no preferences
+declare -p PREFER_HUB &>/dev/null || declare -A PREFER_HUB=()   # a lab.conf from before 0.18.0 has no preferences
+# the second provider and the second DMVPN cloud (0.19.0); empty in a lab.conf without them
+: "${PROVIDER2_AS:=}" "${WAN2_NET:=}" "${DMVPN2_OVERLAY:=}" "${DMVPN2_NETWORK_ID:=}" "${DMVPN2_TUNNEL_KEY:=}"
 
 # Re-exec under the libvirt group if this login session doesn't have it yet.
 if ! id -nG | tr ' ' '\n' | grep -qx libvirt && getent group libvirt | grep -qw "${USER:-$(id -un)}"; then
@@ -467,7 +469,7 @@ cmd_inventory() {  # the lab as JSON — the one contract the renderer, the test
   {
     for var in LAB_NAME DOMAIN_PREFIX OOB_NET OOB_GATEWAY OOB_PREFIX NMS_IP DMVPN_AS DMVPN_OVERLAY DMVPN_NETWORK_ID DMVPN_TUNNEL_KEY \
                DMVPN_HOLDTIME DMVPN_MTU DMVPN_MSS DMVPN_PSK NHRP_SECRET BGP_KEEPALIVE BGP_HOLDTIME PROVIDER_AS WAN_NET \
-               ROUTER_ID_NET LAN_PORT MAC_OUI; do
+               ROUTER_ID_NET LAN_PORT MAC_OUI PROVIDER2_AS WAN2_NET DMVPN2_OVERLAY DMVPN2_NETWORK_ID DMVPN2_TUNNEL_KEY; do
       printf 'scalar\t%s\t%s\n' "$var" "${!var}"
     done
     for n in "${ALL_NODES[@]}"; do printf 'map\tPLATFORM\t%s\t%s\n' "$n" "$(platform "$n")"; done
@@ -517,7 +519,7 @@ vy()  { need_python; "$PY" "$LAB_DIR/tools/vyos_cmd.py" "${MGMT_IP[$1]}" "${@:2}
 
 cmd_verify() {     # a quick look at every layer, bottom up
   local n
-  echo "== provider: eBGP sessions on mpls =="; vy mpls "show ip bgp summary" | sed 's/^/  /'
+  for n in "${PROVIDERS[@]}"; do echo "== provider: eBGP sessions on $n =="; vy "$n" "show ip bgp summary" | sed 's/^/  /'; done
   echo; echo "== each router: underlay eBGP, NHRP, IPsec, overlay iBGP =="
   for n in "${DMVPN_ROUTERS[@]}"; do
     echo "[$n] ($(platform "$n"))"

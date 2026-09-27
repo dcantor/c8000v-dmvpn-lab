@@ -75,11 +75,17 @@ A VyOS customer builds a phase 3 shortcut to a Catalyst customer
         ${h}=    Set Variable    ${ROUTERS}[${s}][host_vm]
         On Host    ${h}    ping -c 8 -W 2 ${ROUTERS}[${o}][lan_ip]
         Wait Until Keyword Succeeds    45s    5s    VyOS Has Shortcut To    ${s}    ${o}
-        ${tr}=    On Host    ${h}    traceroute -n -q 1 -w 2 ${HOST_VMS}[${ROUTERS}[${o}][host_vm]][lan_ip]
-        Should Match Regexp    ${tr}[1]    (?m)^\\s*2\\s+${ROUTERS}[${o}][tunnel]\\s    msg=${s} -> ${o} still goes through a hub
+        # the NHRP entry can precede the shortcut route by a moment: keep the traffic flowing until the path is direct
+        Wait Until Keyword Succeeds    60s    5s    Path Is Direct    ${h}    ${o}
     END
 
 *** Keywords ***
+Path Is Direct
+    [Arguments]    ${h}    ${o}
+    On Host    ${h}    ping -c 5 -i 0.2 -W 1 ${HOST_VMS}[${ROUTERS}[${o}][host_vm]][lan_ip]
+    ${tr}=    On Host    ${h}    traceroute -n -q 2 -w 2 -m 6 ${HOST_VMS}[${ROUTERS}[${o}][host_vm]][lan_ip]
+    Should Match Regexp    ${tr}[1]    (?m)^\\s*2\\s+${ROUTERS}[${o}][tunnel]\\s    msg=${h} -> ${o} still goes through a hub
+
 VyOS Has Shortcut To
     [Arguments]    ${s}    ${o}
     ${c}=    On VyOS    ${s}    sudo vtysh -c 'show ip nhrp cache'

@@ -66,18 +66,19 @@ def vyos_drift(node, ip, rendered_file):
 
 def c8k_template_drift(ip, templates):
     """The CLI templates' lines against the running configuration of the sections they write."""
-    out = ios(ip, "show running-config interface Tunnel0", "show running-config | section router bgp")
-    tun = out["show running-config interface Tunnel0"]
-    bgp = out["show running-config | section router bgp"]
+    cmds = {"tunnel0_": "show running-config interface Tunnel0", "tunnel1_": "show running-config interface Tunnel1",
+            "bgp_hub_": "show running-config | section router bgp"}
+    need = [c for pre, c in cmds.items() if any(n.startswith(pre) for n in templates)]
+    out = ios(ip, *need)
     items = []
     for name, content in templates.items():
-        running = tun if name.startswith("tunnel0_") else bgp
+        running = out[next(c for pre, c in cmds.items() if name.startswith(pre))]
         have = {l.strip() for l in running.splitlines()}
         want = [l.strip() for l in content.splitlines() if l.strip()]
         for w in want:
             if w not in have and w not in IOS_DEFAULTS:
                 items.append({"kind": "missing", "line": w, "where": name})
-        if name.startswith("tunnel0_"):              # Tunnel0 is the template's alone: anything else there is drift
+        if name.startswith(("tunnel0_", "tunnel1_")):  # the tunnel is the template's alone: anything else there is drift
             wset = set(want)
             for l in running.splitlines():
                 if l.startswith(" ") and l.strip() not in wset:

@@ -51,6 +51,8 @@ class Renderer:
         self.hubs = [self.nodes[h] for h in self.svc["hubs"]]
         self.spokes = [self.nodes[s] for s in self.svc["spokes"]]
         self.overlay = ipaddress.ip_network(self.svc["overlay"])
+        self.prov2 = inv.get("provider2")                     # the second provider, or None
+        self.cloud2 = self.svc.get("cloud2")                  # the DMVPN cloud over it, or None
 
     # ---- C8000v day-0 ---------------------------------------------------------------------------------------------
     def day0(self, n):
@@ -150,15 +152,19 @@ class Renderer:
         return out
 
     def provider(self, n):
-        out = self.vyos_base(n, "the MPLS provider", "provider", "access links: one /30 per site, the provider is .1")
-        pg, pl, wan = "CE", "WAN-ADDRESSES", self.prov["wan_net"]
+        second = bool(self.prov2) and n["name"] in self.prov2["nodes"]
+        prov = self.prov2 if second else self.prov
+        out = self.vyos_base(n, "the second provider" if second else "the MPLS provider", "provider",
+                             "access links: one /30 per site; the provider is .1 on a customer's, .2 on a hub's (the hub anchors it)"
+                             if second else "access links: one /30 per site, the provider is .1")
+        pg, pl, wan = "CE", "WAN-ADDRESSES", prov["wan_net"]
         out += ["#", f"# {n['name']}: its own AS, eBGP with every site through a listen range; it carries the sites' WAN "
                      "addresses and nothing else",
                 f"set policy prefix-list {pl} description 'the access links, and nothing else'",
                 f"set policy prefix-list {pl} rule 10 action permit",
                 f"set policy prefix-list {pl} rule 10 prefix {wan}",
                 f"set policy prefix-list {pl} rule 10 le 32",
-                f"set protocols bgp system-as {self.prov['as']}",
+                f"set protocols bgp system-as {prov['as']}",
                 f"set protocols bgp parameters router-id {n['router_id']}",
                 "set protocols bgp parameters log-neighbor-changes",
                 f"set protocols bgp timers keepalive {self.svc['keepalive']}",
@@ -275,12 +281,14 @@ class Renderer:
                 "set protocols nhrp tunnel tun0 registration-no-unique",
                 "set protocols nhrp tunnel tun0 shortcut"]
         out += [f"set protocols nhrp tunnel tun0 nhs tunnel-ip {h['tunnel_ip']} nbma {h['nbma']}" for h in self.hubs]
+        if n.get("wan2"):
+            out += self.vyos_customer_cloud2(n)
         out += ["#", "# IKEv2 / IPsec, matched to the hubs: AES-256 / SHA-256 / DH 14, ESP tunnel mode, no PFS",
                 "set vpn ipsec ike-group DMVPN-IKE key-exchange ikev2",
                 "set vpn ipsec ike-group DMVPN-IKE lifetime 28800",
                 "set vpn ipsec ike-group DMVPN-IKE dead-peer-detection action clear",
-                "set vpn ipsec ike-group DMVPN-IKE dead-peer-detection interval 30",
-                "set vpn ipsec ike-group DMVPN-IKE dead-peer-detection timeout 150",
+                "set vpn ipsec ike-group DMVPN-IKE dead-peer-detection interval 10",      # as the hubs: periodic, dead in ~30 s
+                "set vpn ipsec ike-group DMVPN-IKE dead-peer-detection timeout 30",
                 "set vpn ipsec ike-group DMVPN-IKE proposal 1 encryption aes256",
                 "set vpn ipsec ike-group DMVPN-IKE proposal 1 hash sha256",
                 "set vpn ipsec ike-group DMVPN-IKE proposal 1 dh-group 14",
@@ -293,22 +301,77 @@ class Renderer:
                 f"set vpn ipsec profile DMVPN-IPSEC authentication pre-shared-secret {s_['psk']}",
                 "set vpn ipsec profile DMVPN-IPSEC ike-group DMVPN-IKE",
                 "set vpn ipsec profile DMVPN-IPSEC esp-group DMVPN-ESP",
-                "set vpn ipsec profile DMVPN-IPSEC bind tunnel tun0",
+                "set vpn ipsec profile DMVPN-IPSEC bind tunnel tun0"] + (["set vpn ipsec profile DMVPN-IPSEC bind tunnel tun1"] if n.get("wan2") else []) + [
+
                 "set vpn ipsec disable-uniqreqids",
                 "set vpn ipsec options disable-route-autoinstall"]
         return "\n".join(out) + "\n"
 
+    def vyos_customer_cloud2(self, n):
+        """A dual-homed VyOS customer: eBGP with the second provider on eth4, and a second tunnel (tun1) in the second
+        cloud, registered with every hub; its routes rank below the first cloud's (local-preference 50)."""
+        c2, w2, s_ = self.cloud2, n["wan2"], self.svc
+        out = ["#", f"# the second provider ({w2['peer']}, AS {self.prov2['as']}) and the second cloud {c2['overlay']}: the backup path",
+               "set policy prefix-list WAN2-OUT description 'offer the second provider our own access link to it and nothing else'",
+               "set policy prefix-list WAN2-OUT rule 10 action permit",
+               f"set policy prefix-list WAN2-OUT rule 10 prefix {w2['prefix']}",
+               "set policy prefix-list WAN2-IN description 'accept only the second provider access-link range'",
+               "set policy prefix-list WAN2-IN rule 10 action permit",
+               f"set policy prefix-list WAN2-IN rule 10 prefix {self.prov2['wan_net']}",
+               "set policy prefix-list WAN2-IN rule 10 le 32",
+               "set policy route-map OVERLAY2-IN rule 10 action permit",
+               "set policy route-map OVERLAY2-IN rule 10 match ip address prefix-list OVERLAY-ROUTES",
+               "set policy route-map OVERLAY2-IN rule 10 set ip-next-hop peer-address",
+               "set policy route-map OVERLAY2-IN rule 10 set local-preference 50",
+               f"set protocols bgp address-family ipv4-unicast network {w2['prefix']}",
+               f"set protocols bgp neighbor {w2['peer_ip']} remote-as {self.prov2['as']}",
+               f"set protocols bgp neighbor {w2['peer_ip']} description 'provider {w2['peer']}'",
+               f"set protocols bgp neighbor {w2['peer_ip']} address-family ipv4-unicast prefix-list export WAN2-OUT",
+               f"set protocols bgp neighbor {w2['peer_ip']} address-family ipv4-unicast prefix-list import WAN2-IN",
+               f"set protocols bgp peer-group HUBS2 remote-as {s_['as']}",
+               "set protocols bgp peer-group HUBS2 description 'the DMVPN hubs over the second cloud (backup)'",
+               f"set protocols bgp peer-group HUBS2 update-source {n['tunnel2_ip']}",
+               "set protocols bgp peer-group HUBS2 address-family ipv4-unicast soft-reconfiguration inbound",
+               "set protocols bgp peer-group HUBS2 address-family ipv4-unicast route-map import OVERLAY2-IN",
+               "set protocols bgp peer-group HUBS2 address-family ipv4-unicast route-map export OVERLAY-OUT"]
+        for h in self.hubs:
+            out += [f"set protocols bgp neighbor {h['tunnel2_ip']} peer-group HUBS2",
+                    f"set protocols bgp neighbor {h['tunnel2_ip']} description 'DMVPN hub {h['name']} (cloud 2)'"]
+        out += [f"set protocols static route {c2['overlay']} next-hop {h['tunnel2_ip']} distance 250" for h in self.hubs]
+        out += ["set interfaces tunnel tun1 encapsulation gre",
+                f"set interfaces tunnel tun1 source-address {n['nbma2']}",
+                f"set interfaces tunnel tun1 address {n['tunnel2_ip']}/32",
+                f"set interfaces tunnel tun1 mtu {s_['mtu']}",
+                f"set interfaces tunnel tun1 ip adjust-mss {s_['mss']}",
+                f"set interfaces tunnel tun1 parameters ip key {c2['tunnel_key']}",
+                "set interfaces tunnel tun1 parameters ip ttl 64",
+                f"set interfaces tunnel tun1 description 'DMVPN customer, cloud 2 (mGRE, phase 3) {c2['overlay']}'",
+                f"set protocols nhrp tunnel tun1 network-id {c2['network_id']}",
+                f"set protocols nhrp tunnel tun1 holdtime {s_['holdtime']}",
+                f"set protocols nhrp tunnel tun1 mtu {s_['mtu']}",
+                f"set protocols nhrp tunnel tun1 authentication {s_['nhrp_secret']}",
+                "set protocols nhrp tunnel tun1 registration-no-unique",
+                "set protocols nhrp tunnel tun1 shortcut"]
+        out += [f"set protocols nhrp tunnel tun1 nhs tunnel-ip {h['tunnel2_ip']} nbma {h['nbma2']}" for h in self.hubs]
+        return out
+
     # ---- C8000v: Network-as-Code ----------------------------------------------------------------------------------
-    def tunnel_cli(self, n):
+    def tunnel_cli(self, n, cloud=1):
+        """Tunnel0 in the first cloud (over the first provider, from Gi2), or Tunnel1 in the second (over the second
+        provider, from Gi4): the same design with the second cloud's addresses, network-id and tunnel key."""
         hub = n["role"] == "hub"
-        lines = ["interface Tunnel0",
-                 f" description DMVPN {'hub' if hub else 'customer'} (mGRE, phase 3)",
-                 f" ip address {n['tunnel_ip']} {self.overlay.netmask}",
+        c2 = cloud == 2
+        tun, nbma = ("tunnel2_ip", "nbma2") if c2 else ("tunnel_ip", "nbma")
+        overlay = ipaddress.ip_network(self.cloud2["overlay"]) if c2 else self.overlay
+        net_id, key = (self.cloud2["network_id"], self.cloud2["tunnel_key"]) if c2 else (self.svc["network_id"], self.svc["tunnel_key"])
+        lines = [f"interface Tunnel{cloud - 1}",
+                 f" description DMVPN {'hub' if hub else 'customer'}{', cloud 2 (backup)' if c2 else ''} (mGRE, phase 3)",
+                 f" ip address {n[tun]} {overlay.netmask}",
                  " no ip redirects",
                  f" ip mtu {self.svc['mtu']}",
                  f" ip tcp adjust-mss {self.svc['mss']}",
                  f" ip nhrp authentication {self.svc['nhrp_secret']}",
-                 f" ip nhrp network-id {self.svc['network_id']}",
+                 f" ip nhrp network-id {net_id}",
                  f" ip nhrp holdtime {self.svc['holdtime']}"]
         if hub:
             lines.append(" ip nhrp map multicast dynamic")
@@ -316,14 +379,14 @@ class Renderer:
             # another hub's client
             for h in self.hubs:
                 if h is not n:
-                    lines += [f" ip nhrp map {h['tunnel_ip']} {h['nbma']}", f" ip nhrp map multicast {h['nbma']}"]
+                    lines += [f" ip nhrp map {h[tun]} {h[nbma]}", f" ip nhrp map multicast {h[nbma]}"]
             lines.append(" ip nhrp redirect")
         else:
-            lines += [f" ip nhrp nhs {h['tunnel_ip']} nbma {h['nbma']} multicast" for h in self.hubs]
+            lines += [f" ip nhrp nhs {h[tun]} nbma {h[nbma]} multicast" for h in self.hubs]
             lines.append(" ip nhrp shortcut")
-        lines += [" tunnel source GigabitEthernet2",
+        lines += [f" tunnel source GigabitEthernet{4 if c2 else 2}",
                   " tunnel mode gre multipoint",
-                  f" tunnel key {self.svc['tunnel_key']}",
+                  f" tunnel key {key}",
                   " tunnel protection ipsec profile DMVPN-IPSEC"]
         return "\n".join(lines) + "\n"
 
@@ -344,8 +407,26 @@ class Renderer:
             "  neighbor CUSTOMERS route-reflector-client",
             "  neighbor CUSTOMERS route-map OVERLAY in",
             "  neighbor CUSTOMERS route-map OVERLAY out",
+            # the hub is the next hop of everything it reflects to a customer: the first packets to another site enter
+            # the cloud at a hub, whose NHRP redirect builds the shortcut (phase 3) — and a route never points at an
+            # address the customer cannot reach, such as another site's second-cloud tunnel while its first is down
+            "  neighbor CUSTOMERS next-hop-self all",
             " exit-address-family",
-        ]) + "\n"
+        ] + ([] if not n.get("wan2") else [
+            # the second cloud: its own peer-group, so its routes can be ranked below the first cloud's
+            " neighbor CUSTOMERS2 peer-group",
+            f" neighbor CUSTOMERS2 remote-as {a}",
+            " neighbor CUSTOMERS2 description DMVPN customers over cloud 2 (dynamic, listen range)",
+            f" neighbor CUSTOMERS2 timers {k} {h}",
+            f" bgp listen range {self.cloud2['overlay']} peer-group CUSTOMERS2",
+            " address-family ipv4",
+            "  neighbor CUSTOMERS2 activate",
+            "  neighbor CUSTOMERS2 route-reflector-client",
+            "  neighbor CUSTOMERS2 route-map OVERLAY2-IN in",
+            "  neighbor CUSTOMERS2 route-map OVERLAY out",
+            "  neighbor CUSTOMERS2 next-hop-self all",
+            " exit-address-family",
+        ])) + "\n"
 
     def device(self, n):
         hub = n["role"] == "hub"
@@ -353,6 +434,11 @@ class Renderer:
         ethernets = [{"type": "GigabitEthernet", "id": "2", "description": f"WAN: {wan['peer']} {wan['peer_port']} (provider AS {self.prov['as']})",
                       "shutdown": False,
                       "ipv4": {"address": addr(wan["ip"]), "address_mask": mask(wan["prefix"])}}]
+        w2 = n.get("wan2")
+        if w2:
+            ethernets.append({"type": "GigabitEthernet", "id": str(w2["num"]),
+                              "description": f"WAN 2: {w2['peer']} {w2['peer_port']} (provider AS {self.prov2['as']})",
+                              "shutdown": False, "ipv4": {"address": addr(w2["ip"]), "address_mask": mask(w2["prefix"])}})
         loopbacks = [{"id": 0, "description": "router-id",
                       "ipv4": {"address": n["router_id"], "address_mask": "255.255.255.255"}}]
         lan = ipaddress.ip_network(n["lan"])
@@ -375,6 +461,16 @@ class Renderer:
                                         "timers_holdtime": h} for x in overlay_peers]
         af_neighbors = [{"ip": wan["peer_ip"], "activate": True,
                          "route_maps": [{"direction": "in", "name": "WAN-IN"}, {"direction": "out", "name": "WAN-OUT"}]}]
+        if w2:            # the second provider underneath, and the second cloud's iBGP over Tunnel1
+            neighbors.append({"ip": w2["peer_ip"], "remote_as": self.prov2["as"], "description": f"provider {w2['peer']}",
+                              "timers_keepalive": k, "timers_holdtime": h})
+            af_neighbors.append({"ip": w2["peer_ip"], "activate": True,
+                                 "route_maps": [{"direction": "in", "name": "WAN2-IN"}, {"direction": "out", "name": "WAN2-OUT"}]})
+            for x in overlay_peers:
+                neighbors.append({"ip": x["tunnel2_ip"], "remote_as": self.svc["as"], "description": f"DMVPN hub {x['name']} (cloud 2)",
+                                  "timers_keepalive": k, "timers_holdtime": h})
+                af_neighbors.append({"ip": x["tunnel2_ip"], "activate": True, "route_maps": [
+                    {"direction": "in", "name": "OVERLAY2-IN"}, {"direction": "out", "name": "OVERLAY"}]})
         pref = n.get("prefer_hub") if not hub else None
         rm_in = (lambda x: f"OVERLAY-{x['name'].upper()}") if pref else (lambda x: "OVERLAY")
         af_neighbors += [{"ip": x["tunnel_ip"], "activate": True,
@@ -384,8 +480,10 @@ class Renderer:
                     {"network": str(lan.network_address)} if classful(n["lan"]) else
                     {"network": str(lan.network_address), "mask": str(lan.netmask)},
                     {"network": str(ipaddress.ip_network(wan["prefix"]).network_address), "mask": mask(wan["prefix"])}]
+        if w2:
+            networks.append({"network": str(ipaddress.ip_network(w2["prefix"]).network_address), "mask": mask(w2["prefix"])})
 
-        templates = [f"tunnel0_{n['name']}"] + ([f"bgp_hub_{n['name']}"] if hub else [])
+        templates = [f"tunnel0_{n['name']}"] + ([f"tunnel1_{n['name']}"] if w2 else []) + ([f"bgp_hub_{n['name']}"] if hub else [])
         return {
             "name": n["name"], "host": n["mgmt_ip"], "protocol": "restconf",
             "device_groups": ["DMVPN", "DMVPN_HUB" if hub else "DMVPN_CUSTOMER"],
@@ -406,12 +504,16 @@ class Renderer:
                               {"seq": 20, "action": "permit", "prefix": f"{n['router_id'].rsplit('.', 1)[0]}.0/24",
                                "greater_equal": 32}]},   # IOS stores `ge 32 le 32` as `ge 32`
                 ] + ([{"name": "HUB-PREFIXES", "description": "the hubs' own LANs and router-ids: reached at the hub itself",
-                       "seqs": self.hub_prefix_seqs()}] if pref else []),
+                       "seqs": self.hub_prefix_seqs()}] if pref else [])
+                  + ([{"name": "WAN2-OUT", "description": "offer the second provider our own access link to it and nothing else",
+                       "seqs": [{"seq": 10, "action": "permit", "prefix": w2["prefix"]}]},
+                      {"name": "WAN2-IN", "description": "accept only the second provider's access-link range",
+                       "seqs": [{"seq": 10, "action": "permit", "prefix": self.prov2["wan_net"], "less_equal": 32}]}] if w2 else []),
                 "route_maps": [
                     {"name": "WAN-OUT", "entries": [{"seq": 10, "operation": "permit", "match": {"ipv4_address_prefix_lists": ["WAN-OUT"]}}]},
                     {"name": "WAN-IN", "entries": [{"seq": 10, "operation": "permit", "match": {"ipv4_address_prefix_lists": ["WAN-IN"]}}]},
                     {"name": "OVERLAY", "entries": [{"seq": 10, "operation": "permit", "match": {"ipv4_address_prefix_lists": ["OVERLAY-ROUTES"]}}]},
-                ] + self.prefer_route_maps(n, pref),
+                ] + self.prefer_route_maps(n, pref) + self.cloud2_route_maps(n, hub),
                 "routing": {"bgp": {
                     "as_number": self.svc["as"], "router_id": n["router_id"], "log_neighbor_changes": True,
                     "neighbors": neighbors,
@@ -429,9 +531,10 @@ class Renderer:
         return seqs
 
     def prefer_route_maps(self, n, pref):
-        """A customer that prefers a hub takes the other customers' routes with that hub as next hop — so the first packets
-        enter the cloud there, until the hub's NHRP redirect builds the shortcut — and ranks the preferred hub's copy
-        first (local-preference 200 against 100). The hubs' own prefixes keep their next hop: a hub's LAN is reached at
+        """A customer that prefers a hub ranks the preferred hub's copy of the other customers' routes first
+        (local-preference 200 against 100), with that hub as next hop — so the first packets enter the cloud there, until
+        the hub's NHRP redirect builds the shortcut. (Every hub now sends itself as next hop anyway; the explicit next hop
+        keeps the policy right on its own.) The hubs' own prefixes keep their next hop: a hub's LAN is reached at
         that hub, whichever hub reflected the route. One route-map per hub, bound inbound on that hub's session."""
         if not pref:
             return []
@@ -443,9 +546,20 @@ class Renderer:
                  "set": {"ipv4_next_hop_addresses": [h["tunnel_ip"]], "local_preference": 200 if h["name"] == pref else 100}}]})
         return out
 
+    def cloud2_route_maps(self, n, hub):
+        """The second cloud ranks below the first: local-preference 50 on everything learned over it, on a hub and on
+        a customer alike. (The next hop needs no rewriting: a hub sends itself as next hop to its customers.)"""
+        if not n.get("wan2"):
+            return []
+        return [{"name": "WAN2-OUT", "entries": [{"seq": 10, "operation": "permit", "match": {"ipv4_address_prefix_lists": ["WAN2-OUT"]}}]},
+                {"name": "WAN2-IN", "entries": [{"seq": 10, "operation": "permit", "match": {"ipv4_address_prefix_lists": ["WAN2-IN"]}}]},
+                {"name": "OVERLAY2-IN", "entries": [{"seq": 10, "operation": "permit",
+                 "match": {"ipv4_address_prefix_lists": ["OVERLAY-ROUTES"]}, "set": {"local_preference": 50}}]}]
+
     def nac_devices(self):
         c8k = [n for n in self.hubs + self.spokes if n.get("platform", "c8000v") == "c8000v"]
         templates = [{"name": f"tunnel0_{n['name']}", "type": "cli", "content": self.tunnel_cli(n)} for n in c8k]
+        templates += [{"name": f"tunnel1_{n['name']}", "type": "cli", "content": self.tunnel_cli(n, 2)} for n in c8k if n.get("wan2")]
         templates += [{"name": f"bgp_hub_{n['name']}", "type": "cli", "content": self.hub_bgp_cli(n)} for n in self.hubs]
         doc = {"iosxe": {"templates": templates, "devices": [self.device(n) for n in c8k]}}
         head = ("---\n# GENERATED by tools/render.py from `lab.sh inventory` — do not edit by hand.\n"

@@ -77,6 +77,8 @@ pre.out { background:#0c2129; color:#d7e3e8; padding:12px 14px; border-radius:8p
 #map .ul { stroke-width:3 } #map .ul.ok { stroke:var(--ul) }
 #map .tun { stroke-width:1.8; stroke-dasharray:7 5 } #map .tun.ok { stroke:var(--tun) }
 #map .tun.pref { stroke-width:3.4; stroke-dasharray:none }
+#map .tun2 { stroke-width:1.6; stroke-dasharray:3 4 } #map .tun2.ok { stroke:#c2410c } :root[data-theme=dark] #map .tun2.ok { stroke:#fb923c }
+#map .ul2 { stroke-width:2.4; stroke-dasharray:9 3 } #map .ul2.ok { stroke:#a16207 } :root[data-theme=dark] #map .ul2.ok { stroke:#facc15 }
 #map .hh { stroke-width:1.5; stroke-dasharray:2 4 } #map .hh.ok { stroke:var(--tun) }
 #map .sc { stroke:var(--sc); stroke-width:3.5 }
 #map .lan { stroke-width:2 } #map .lan.ok { stroke:var(--ul) }
@@ -92,7 +94,7 @@ pre.out { background:#0c2129; color:#d7e3e8; padding:12px 14px; border-radius:8p
 #mapinfo .company h3 { margin:0 0 2px; font-size:15px } #mapinfo .company .ind { color:var(--muted); font-size:12.5px; margin-bottom:6px }
 #mapinfo .company dl { grid-template-columns:auto 1fr } #mapinfo .company dd { font-family:inherit; font-size:13px }
 #mapinfo .company a { color:var(--teal) } :root[data-theme=dark] #mapinfo .company a { color:#67e8f9 }
-.mapfocus[hidden], #mapcmd[hidden] { display:none }
+.mapfocus[hidden], #mapcmd[hidden], .legend span[hidden], .maptools label[hidden], .row > div[hidden] { display:none }
 body.print #mapinfo .company dl { grid-template-columns:repeat(3, auto 1fr); column-gap:14px; row-gap:1px }
 body.print #mapinfo .company { padding:6px 10px; margin-bottom:6px } body.print #mapinfo .company h3 { font-size:14px }
 body.print #mapinfo { font-size:12px } body.print .legend { font-size:11.5px }
@@ -142,6 +144,20 @@ body.print .slakpi .n { font-size:18px } body.print .chart { margin:0 0 2px; wid
 body.print .chart.short { height:24mm } body.print .slanote { font-size:9.5px; margin:3px 0 0 }
 body.print .slakpis { grid-template-columns:repeat(6, 1fr); gap:6px; margin-bottom:6px } body.print .slakpi { padding:5px 8px }
 body.print .slah3 { margin-top:6px } body.print .slaprint table td, body.print .slaprint table th { padding:2px 6px }
+/* resilience */
+.fbanner { background:#fde2e2; color:#7f1d1d; border:1px solid #fca5a5; border-radius:8px; padding:7px 12px; margin:0 0 12px; font-size:13.5px; display:flex; gap:10px; align-items:center; flex-wrap:wrap }
+:root[data-theme=dark] .fbanner { background:#3b1111; color:#fecaca; border-color:#7f1d1d } .fbanner[hidden] { display:none }
+.verdict { font-size:11.5px; font-weight:600; padding:1px 7px; border-radius:999px; background:var(--pill) }
+.verdict.unaffected { color:var(--green) } .verdict.failed-over { color:var(--amber) } .verdict.cut-off, .verdict.no-data { color:var(--red) } .verdict.hit-on-restore { color:var(--teal) }
+.tl { width:100%; height:auto; display:block } .tl .bg { fill:var(--pill) } .tl .out { fill:var(--red) } .tl .fault { fill:var(--red); fill-opacity:.08 }
+.tl .mk { stroke:var(--body); stroke-dasharray:3 3 } .tl text { fill:var(--muted); font-size:10.5px }
+#map .faultmark circle { fill:var(--bad) } #map .faultmark text { fill:#fff; font-size:13px; font-weight:700; text-anchor:middle }
+#map .ul.faulted { stroke:var(--bad) !important; stroke-dasharray:4 4; stroke-width:4 }
+/* the customer's view */
+body.cview #v-cloud, body.cview nav a:not([data-view=map]):not([data-view=sla]), body.cview .right .me, body.cview #chg-hdr, body.cview #theme ~ *,
+body.cview .maptools, body.cview .export, body.cview #mapfocus, body.cview .mapactions button, body.cview .slactl #sla-cust { display:none !important }
+.notices .svc { font-size:15px; margin-bottom:4px } .notices .svc.up b { color:var(--green) } .notices .svc.degraded b { color:var(--amber) } .notices .svc.down b { color:var(--red) }
+.notices .inc { color:var(--red); margin:3px 0 } .notices .plan { color:var(--amber); margin:3px 0 } .notices[hidden] { display:none }
 /* lab tools */
 .toolgrid { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:10px }
 .tool { border:1px solid var(--line); border-radius:9px; padding:10px 12px; background:var(--bg) }
@@ -151,17 +167,24 @@ body.print .slah3 { margin-top:6px } body.print .slaprint table td, body.print .
 .tool .url { font-family:"DejaVu Sans Mono",Consolas,monospace; font-size:11.5px; color:var(--muted); word-break:break-all }
 .grp { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:12px 0 6px } .grp:first-child { margin-top:0 }
 .copy { font-size:11px; padding:1px 7px; margin-left:4px } .cmd { font-family:"DejaVu Sans Mono",Consolas,monospace; font-size:12.5px; white-space:nowrap }
+.right .me input { width:90px; padding:1px 6px; font-size:12px; background:#0f2230; color:#fff; border:1px solid #294155; border-radius:5px }
+#chg-hdr { background:#b45309; color:#fff !important; padding:1px 8px; border-radius:999px; text-decoration:none } #chg-hdr[hidden] { display:none }
+.cr .st { font-weight:600 } .cr .st.pending { color:var(--amber) } .cr .st.scheduled { color:var(--teal) } .cr .st.started, .cr .st.done, .cr .st.approved { color:var(--green) }
+.cr .st.rejected, .cr .st.failed, .cr .st.expired, .cr .st.cancelled { color:var(--red) }
+#pol .row > div { min-width:120px } #pol label.ck { display:inline-flex; gap:5px; align-items:center; margin:0 12px 4px 0; font-size:13px; color:var(--body) } #pol input[type=checkbox] { width:auto }
+.slot { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:4px 0; font-size:13px } .slot input[type=time] { width:auto }
 #nodes-t td { font-size:13px } #nodes-t .sub { color:var(--muted); font-size:11.5px } #nodes-t ul { margin:0; padding-left:15px; font-size:12px }
 .access { display:flex; gap:10px; flex-wrap:wrap; align-items:center; font-size:13.5px }
 </style></head><body>
 <header>
   <div><h1>C8000v DMVPN Portal</h1>
-    <div class="sub">three hubs &middot; Catalyst 8000v customers &middot; a VyOS MPLS provider &middot; Network-as-Code &middot; Nautobot</div></div>
-  <nav><a href="#cloud" data-view="cloud" class="on">The cloud</a><a href="#map" data-view="map">Network map</a><a href="#sla" data-view="sla">SLA</a><a href="#provision" data-view="provision">Provision</a>
+    <div class="sub">three hubs &middot; Catalyst 8000v and VyOS customers &middot; two VyOS providers &middot; Network-as-Code &middot; Nautobot</div></div>
+  <nav><a href="#cloud" data-view="cloud" class="on">The cloud</a><a href="#map" data-view="map">Network map</a><a href="#sla" data-view="sla">SLA</a><a href="#resilience" data-view="resilience">Resilience</a><a href="#provision" data-view="provision">Provision</a>
        <a href="#runs" data-view="runs">Runs</a><a href="#tools" data-view="tools">Lab Tools</a><a href="/docs" target="_blank">API</a></nav>
-  <div class="right"><a id="ver" href="https://github.com/dcantor/c8000v-dmvpn-lab/blob/main/CHANGELOG.md" target="_blank" rel="noopener" title="what changed (CHANGELOG.md)"></a> &middot; <span id="hdr"></span> &middot; <a href="#" id="theme">&#9790; dark</a></div>
+  <div class="right"><span class="me" title="your name on change requests and approvals (the lab portal has no logins)">you: <input id="me" placeholder="your name" size="10"></span> &middot; <a href="#runs" id="chg-hdr" hidden></a> <a id="ver" href="https://github.com/dcantor/c8000v-dmvpn-lab/blob/main/CHANGELOG.md" target="_blank" rel="noopener" title="what changed (CHANGELOG.md)"></a> &middot; <span id="hdr"></span> &middot; <a href="#" id="theme">&#9790; dark</a></div>
 </header>
 <main>
+<div class="fbanner" id="fbanner" hidden></div>
 
 <section id="v-cloud" class="view on">
   <div class="kpis" id="kpis"></div>
@@ -179,6 +202,7 @@ body.print .slah3 { margin-top:6px } body.print .slaprint table td, body.print .
 </section>
 
 <section id="v-map" class="view">
+  <div class="card notices" id="notices" hidden></div>
   <div class="mapwrap">
     <div class="card"><h2>Network map <small>drawn from the routers' live state &mdash; click a node for details</small>
       <span style="float:right" class="mapactions"><span class="hint" id="map-when"></span> <button onclick="load(true)">Refresh</button>
@@ -190,6 +214,7 @@ body.print .slah3 { margin-top:6px } body.print .slaprint table td, body.print .
       <div class="maptools">
         <label><input type="checkbox" data-layer="underlay" checked> Provider links (eBGP)</label>
         <label><input type="checkbox" data-layer="overlay" checked> DMVPN tunnels</label>
+        <label id="lay-cloud2"><input type="checkbox" data-layer="cloud2" checked> Provider 2 &amp; cloud 2</label>
         <label><input type="checkbox" data-layer="shortcuts" checked> Shortcuts (phase 3)</label>
         <label><input type="checkbox" data-layer="hosts" checked> LAN hosts</label>
         <label><input type="checkbox" data-layer="labels" checked> Labels</label>
@@ -199,6 +224,8 @@ body.print .slah3 { margin-top:6px } body.print .slaprint table td, body.print .
         <span><svg width="34" height="10"><line x1="0" y1="5" x2="34" y2="5" stroke="#64748b" stroke-width="3"/></svg>access link, eBGP to the provider</span>
         <span><svg width="34" height="10"><line x1="0" y1="5" x2="34" y2="5" stroke="#0e7490" stroke-width="2" stroke-dasharray="7 5"/></svg>DMVPN tunnel (NHRP + IPsec)</span>
         <span><svg width="34" height="10"><line x1="0" y1="5" x2="34" y2="5" stroke="#0e7490" stroke-width="3.4"/></svg>tunnel to the customer's preferred hub</span>
+        <span class="c2only"><svg width="34" height="10"><line x1="0" y1="5" x2="34" y2="5" stroke="#a16207" stroke-width="2.4" stroke-dasharray="9 3"/></svg>access link into provider 2</span>
+        <span class="c2only"><svg width="34" height="10"><line x1="0" y1="5" x2="34" y2="5" stroke="#c2410c" stroke-width="1.6" stroke-dasharray="3 4"/></svg>cloud 2 tunnel (backup)</span>
         <span><svg width="34" height="10"><line x1="0" y1="5" x2="34" y2="5" stroke="#7c3aed" stroke-width="3.5"/></svg>live customer-to-customer shortcut</span>
         <span><svg width="34" height="10"><line x1="0" y1="5" x2="34" y2="5" stroke="#b91c1c" stroke-width="3"/></svg>down</span>
         <span><svg width="34" height="10"><line x1="0" y1="5" x2="34" y2="5" stroke="#b45309" stroke-width="5" stroke-dasharray="8 5"/></svg>traced path through a hub</span>
@@ -223,6 +250,22 @@ body.print .slah3 { margin-top:6px } body.print .slaprint table td, body.print .
     <div id="sla-body"><p class="hint">loading…</p></div></div>
 </section>
 
+<section id="v-resilience" class="view">
+  <div class="card"><h2>Simulate a failure <small>take part of the lab down on purpose, see what the design does, put it back</small></h2>
+    <div class="row"><div><label>What fails</label><select id="f-kind" style="padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--body);font:inherit;font-size:13.5px" style="width:100%"></select></div>
+      <div><label>Where</label><select id="f-target" style="padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--body);font:inherit;font-size:13.5px" style="width:100%"></select></div>
+      <div style="max-width:160px"><label>Hold (failover test)</label><input id="f-hold" type="number" value="60" min="20" max="600"></div></div>
+    <p class="hint" id="f-what"></p><p class="hint" id="f-expect"></p>
+    <div class="actions"><button class="danger-fill" id="f-apply">Fail it now</button>
+      <button class="primary" id="f-measure" title="a run: every host pings every other host and hub; the fault goes in, is held, comes out; every flow's outage is measured">Measure failover</button>
+      <span class="hint" id="f-msg"></span></div></div>
+  <div class="card"><h2>In now <small id="f-max"></small> <span style="float:right"><button id="f-restore-all">Restore all</button></span></h2><div id="f-active"></div></div>
+  <div class="card"><h2>Failover measurements <small>every LAN host pings every other host and every hub's LAN five times a second while the fault is in</small></h2>
+    <table id="fo-list"><thead><tr><th>When</th><th>Failure</th><th>Held</th><th>Flows</th><th>Worst failover</th><th>Back to healthy</th></tr></thead><tbody></tbody></table>
+    <div id="fo-detail"></div></div>
+  <div class="card"><h2>Earlier failures</h2><div id="f-history"></div></div>
+</section>
+
 <section id="v-tools" class="view">
   <div class="card"><h2>How to get in</h2>
     <div class="access" id="tools-access"></div>
@@ -242,6 +285,11 @@ body.print .slah3 { margin-top:6px } body.print .slaprint table td, body.print .
 </section>
 
 <section id="v-runs" class="view">
+  <div class="card cr"><h2>Change requests <small id="cr-policy"></small>
+    <span style="float:right"><button id="pol-toggle">Change policy…</button></span></h2>
+    <p class="hint" id="cr-msg" style="margin:0 0 6px"></p>
+    <div id="pol" hidden></div>
+    <table id="cr-t"><thead><tr><th>Change</th><th>What</th><th>Asked by</th><th>Status</th><th></th></tr></thead><tbody></tbody></table></div>
   <div class="card"><h2>Runs <small>one at a time; a failed run resumes from the step that failed</small></h2>
     <table id="runs"><thead><tr><th>Started</th><th>Mode</th><th>Customer</th><th>Status</th><th>Progress</th><th>Tests</th></tr></thead><tbody></tbody></table></div>
   <div class="card"><h2 id="run-title">Run</h2><div id="run-body" class="hint">select a run</div></div>
@@ -252,7 +300,8 @@ body.print .slah3 { margin-top:6px } body.print .slaprint table td, body.print .
   <div class="row"><div><label>Router type</label><select id="w-plat" style="width:100%;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--body);font:inherit;font-size:13.5px">
       <option value="c8000v">Cisco Catalyst 8000v (IOS-XE, Network-as-Code)</option>
       <option value="vyos">VyOS (FRR nhrpd + strongSwan)</option></select></div>
-    <div><label>Preferred hub</label><select id="w-pref" style="width:100%;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--body);font:inherit;font-size:13.5px"></select></div></div>
+    <div><label>Preferred hub</label><select id="w-pref" style="width:100%;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--body);font:inherit;font-size:13.5px"></select></div>
+    <div id="w-dual-box"><label>Second provider</label><label style="display:flex;gap:6px;align-items:center;font-size:13.5px;color:var(--body);margin:6px 0 0"><input type="checkbox" id="w-dual" style="width:auto"> dual-homed <span class="hint" id="w-dual-what"></span></label></div></div>
   <div class="row" style="margin-top:9px"><div><label>Name</label><input id="w-name"></div>
     <div><label>Region</label><input id="w-region"></div>
     <div><label>Management address</label><input id="w-mgmt"></div>
@@ -281,6 +330,7 @@ body.print .slah3 { margin-top:6px } body.print .slaprint table td, body.print .
   <div class="row" style="margin-top:9px">
     <div><label>Router type</label><select id="m-plat" style="width:100%;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--body);font:inherit;font-size:13.5px"><option value="c8000v">Cisco Catalyst 8000v (IOS-XE, Network-as-Code)</option><option value="vyos">VyOS (FRR nhrpd + strongSwan)</option></select></div>
     <div><label>Preferred hub</label><select id="m-pref" style="width:100%;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--body);font:inherit;font-size:13.5px"></select></div>
+    <div id="m-dual-box"><label>Second provider</label><label style="display:flex;gap:6px;align-items:center;font-size:13.5px;color:var(--body);margin:6px 0 0"><input type="checkbox" id="m-dual" style="width:auto"> dual-homed</label></div>
     <div><label>Region</label><input id="m-region"></div>
     <div><label>Site LAN</label><input id="m-lan"></div></div>
   <div class="row" style="margin-top:9px">
@@ -342,6 +392,14 @@ body.print .slah3 { margin-top:6px } body.print .slaprint table td, body.print .
 <script>
 const $ = id => document.getElementById(id), esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const J = { method: 'POST', headers: { 'content-type': 'application/json' } };
+const CVIEW = (location.pathname.match(/^\/c\/([A-Za-z0-9_-]+)/) || [])[1] || null;     // a customer's own read-only view
+try { $('me').value = localStorage.getItem('c8d-user') || ''; } catch (e) {}
+$('me').onchange = () => { try { localStorage.setItem('c8d-user', $('me').value.trim()); } catch (e) {} };
+// who is asking: the header's name, asked for once if it is empty
+function who() { let n = $('me').value.trim();
+  if (!n) { n = (prompt('Your name, for the change request (the approver must be someone else):') || '').trim(); $('me').value = n; $('me').onchange(); }
+  return n; }
+const changeFiled = cr => `<b>${esc(cr.id)}</b> filed — change control covers this: it waits for someone other than ${esc(cr.requested_by)} to approve it (Runs → Change requests).`;
 let ST = null, SPEC = null, watching = null;
 function applyTheme() { let t = null; try { t = localStorage.getItem('c8d-theme'); } catch (e) {}
   const dark = t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
@@ -352,7 +410,7 @@ applyTheme(); $('theme').onclick = e => { e.preventDefault();
 document.querySelectorAll('nav a[data-view]').forEach(a => a.onclick = e => { e.preventDefault(); show(a.dataset.view); });
 function show(v) { document.querySelectorAll('.view').forEach(x => x.classList.toggle('on', x.id === 'v-' + v));
   document.querySelectorAll('nav a[data-view]').forEach(a => a.classList.toggle('on', a.dataset.view === v));
-  location.hash = v; if (v === 'runs') loadRuns(); if (v === 'tools') loadTools(); if (v === 'sla') openSla(); }
+  location.hash = v; if (v === 'runs') { loadRuns(); loadChanges(); } if (v === 'tools') loadTools(); if (v === 'sla') openSla(); if (v === 'resilience') loadResilience(); }
 const pill = (ok, text, warn) => `<span class="pill ${ok ? 'ok' : (warn ? 'warn' : 'bad')}">${esc(text)}</span>`;
 
 const TASKS = [
@@ -390,8 +448,9 @@ function renderDrift() {
     <table><thead><tr><th>Router</th><th>Verdict</th><th>Differences (missing: the model has it, the router does not · extra: the router has it, the model does not · changed: Terraform would update it)</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 async function load(refresh) {
-  loadDrift().then(() => { renderDrift(); if (ST) drawMap(); });
-  ST = await (await fetch('/api/state' + (refresh ? '?refresh=true' : ''))).json();
+  if (!CVIEW) loadDrift().then(() => { renderDrift(); if (ST) drawMap(); });
+  ST = await (await fetch((CVIEW ? `/api/c/${CVIEW}/state` : '/api/state') + (refresh ? '?refresh=true' : ''))).json();
+  if (CVIEW) { MAPFOCUS = ST.customer; renderNotices(); drawMap(); return; }
   const cloud = ST.cloud || {}, H = ST.hubs, CU = ST.customers, h = ST.health || {};
   const regs = CU.reduce((a, c) => a + ((cloud[c] || {}).nhs_up || []).length, 0);
   $('kpis').innerHTML = [['Hubs', H.length], ['Customers', CU.length], ['Registrations', `${regs} / ${H.length * CU.length}`],
@@ -400,15 +459,18 @@ async function load(refresh) {
   $('cloud').querySelector('tbody').innerHTML = [...H, ...CU].map(n => {
     const s = cloud[n] || {}, m = ST.nodes[n] || {}, hub = m.role === 'hub';
     if (s.error) return `<tr><td><b>${esc(n)}</b></td><td colspan="10">${pill(false, 'unreachable: ' + s.error)}</td></tr>`;
-    const wantOv = hub ? H.length - 1 + CU.length : H.length;
-    const nhrp = hub ? pill((s.registered || []).length >= CU.length, `${(s.registered || []).length} registered`)
-                     : pill((s.nhs_up || []).length >= H.length, `${(s.nhs_up || []).length} / ${H.length} hubs`);
+    const e = s.expect || {}, wantOv = e.overlay ?? (hub ? H.length - 1 + CU.length : H.length);
+    const nhrp = (hub ? pill((s.registered || []).length >= CU.length, `${(s.registered || []).length} registered`)
+                      : pill((s.nhs_up || []).length >= H.length, `${(s.nhs_up || []).length} / ${H.length} hubs`))
+      + (m.wan2 ? ' ' + (hub ? pill((s.registered2 || []).length >= (e.registered2 || 0), `cloud 2: ${(s.registered2 || []).length}`)
+                            : pill((s.nhs2_up || []).length >= (e.nhs2 || 0), `cloud 2: ${(s.nhs2_up || []).length} / ${e.nhs2}`)) : '');
     return `<tr><td><b>${esc(n)}</b> <span class="hint">${esc(m.region || '')}</span>${m.customer ? `<div class="hint">${esc(m.customer.company)}</div>` : ''}</td>
       <td><span class="pill ${hub ? 'teal' : ''}">${hub ? 'hub' : 'customer'}</span></td>
       <td class="mono">${esc(m.tunnel_ip)}</td><td class="mono">${esc(m.nbma)}</td><td>${nhrp}</td>
       <td>${pill((s.sa || 0) >= wantOv, s.sa ?? '?', true)}</td>
       <td>${pill((s.overlay_up || 0) >= wantOv, `${s.overlay_up ?? '?'} / ${wantOv}`, true)}</td>
-      <td>${pill((s.underlay_up || 0) >= 1, (s.underlay_up || 0) >= 1 ? 'established' : 'down')}</td>
+      <td>${(s.underlay_up || 0) >= (e.underlay || 1) ? pill(true, e.underlay > 1 ? 'both established' : 'established')
+            : pill(false, s.underlay_up ? `${s.underlay_up} of ${e.underlay}` : 'down', !!s.underlay_up)}</td>
       <td>${hub ? '<span class="hint">—</span>' : ((s.shortcuts || []).map(x => `<span class="pill teal">${esc(x)}</span>`).join(' ') || '<span class="hint">none</span>')}</td>
       <td class="mono">${esc(m.lan || '')}</td>
       <td>${m.host ? `${esc(m.host)} ${pill((ST.hosts_up || {})[m.host], (ST.hosts_up || {})[m.host] ? 'up' : 'down')}` : ''}</td></tr>`;
@@ -416,16 +478,18 @@ async function load(refresh) {
   $('cloud-hint').textContent = `A customer registers with every hub, so NHRP should read ${H.length} / ${H.length}. `
     + `Shortcuts are customer-to-customer tunnels NHRP has resolved (phase 3); they come and go with traffic.`;
   const PS = ST.provider_state || {};
-  $('prov').querySelector('tbody').innerHTML = (ST.provider.nodes || []).map(p => {
-    const s = PS[p] || {}, wired = (ST.nodes[p].ports || []).filter(x => x.peer).map(x => `${x.peer} (${x.name})`);
-    return `<tr><td><b>${esc(p)}</b></td><td class="mono">AS ${esc(ST.provider.as)}</td><td class="mono">${esc(ST.provider.wan_net)}</td>
+  $('prov').querySelector('tbody').innerHTML = allProviders().map(p => {
+    const s = PS[p] || {}, pv = provOf(p), want = (s.expect || {}).customers, wired = (ST.nodes[p].ports || []).filter(x => x.peer).map(x => `${x.peer} (${x.name})`);
+    return `<tr><td><b>${esc(p)}</b>${ST.provider2 ? ` <span class="hint">${pv === ST.provider ? 'primary' : 'second: the backup cloud'}</span>` : ''}</td><td class="mono">AS ${esc(pv.as)}</td><td class="mono">${esc(pv.wan_net)}</td>
       <td>${s.error ? pill(false, s.error) : pill(true, (s.up ?? '?') + ' up')}</td>
-      <td>${pill(s.customers_up === H.length + CU.length, `${s.customers_up ?? '?'} / ${H.length + CU.length}`, true)}</td>
+      <td>${pill(s.customers_up >= want, `${s.customers_up ?? '?'} / ${want ?? '?'}`, true)}</td>
       <td class="hint">${wired.map(esc).join(', ')}</td></tr>`; }).join('');
   $('health').innerHTML = h.ok ? pill(true, 'everything the model expects is true')
     : '<ul>' + (h.problems || []).map(p => `<li>${esc(p)}</li>`).join('') + '</ul>';
   drawMap();
   $('hdr').textContent = `${CU.length} customers · ${h.shortcuts ?? 0} shortcuts · ${h.ok ? 'healthy' : (h.problems || []).length + ' problems'}`;
+  $('chg-hdr').hidden = !ST.changes_open; $('chg-hdr').textContent = `${ST.changes_open} change${ST.changes_open === 1 ? '' : 's'} waiting`;
+  faultBanner();
 }
 
 function specFromForm() {
@@ -434,6 +498,7 @@ function specFromForm() {
   return { ...base, name: $('w-name').value.trim(), region: $('w-region').value.trim(), mgmt_ip: $('w-mgmt').value.trim(),
     lan: $('w-lan').value.trim(), t_idx: t, tunnel_ip: `172.28.0.${t}`, nbma: `100.70.${t}.2`, router_id: `10.255.5.${t}`,
     wan_prefix: wan, provider_port: $('w-pport').value.trim(), platform: $('w-plat').value, prefer_hub: $('w-pref').value || null,
+    dual_homed: $('w-dual').checked, wan2_prefix: base.wan2_prefix ? base.wan2_prefix.replace(/\.\d+\.0\/30$/, `.${t}.0/30`) : null,
     host: $('w-host').value.trim(), host_mgmt: $('w-hmgmt').value.trim(),
     customer: { ...(base.customer || {}), company: $('w-co').value.trim(), industry: $('w-ind').value.trim(), address: $('w-addr').value.trim(),
                 phone: $('w-phone').value.trim(), contact: $('w-contact').value.trim(), email: $('w-email').value.trim(),
@@ -456,6 +521,8 @@ async function openWizard() {
   $('w-name').value = SPEC.name; $('w-region').value = SPEC.region; $('w-mgmt').value = SPEC.mgmt_ip; $('w-lan').value = SPEC.lan;
   $('w-plat').value = SPEC.platform || 'c8000v'; $('w-plat').onchange = check;
   $('w-pref').innerHTML = hubOptions(SPEC.prefer_hub); $('w-pref').onchange = check;
+  $('w-dual-box').hidden = !SPEC.provider2; $('w-dual').checked = false; $('w-dual').onchange = check;
+  $('w-dual-what').textContent = SPEC.provider2 ? `(${SPEC.provider2} ${SPEC.provider2_port}, ${SPEC.wan2_prefix})` : '';
   const cu = SPEC.customer || {};
   $('w-co').value = cu.company || ''; $('w-ind').value = cu.industry || ''; $('w-addr').value = cu.address || '';
   $('w-phone').value = cu.phone || ''; $('w-contact').value = cu.contact || ''; $('w-email').value = cu.email || '';
@@ -480,7 +547,7 @@ async function openModify() {
   $('m-cust').innerHTML = ST.customers.map(c => { const m = ST.nodes[c] || {}, cu = m.customer || {};
     return `<option value="${esc(c)}">${esc(c)} — ${esc(cu.company || 'no company')} (${esc(PLAT[m.platform] || m.platform)}, ${esc(m.region || '')})</option>`; }).join('');
   $('m-cust').onchange = loadModify; $('m-check').onclick = checkModify;
-  ['m-plat', 'm-pref'].forEach(id => $(id).onchange = checkModify);
+  ['m-plat', 'm-pref', 'm-dual'].forEach(id => $(id).onchange = checkModify);
   ['m-region', 'm-lan', 'm-co', 'm-ind', 'm-contact', 'm-addr', 'm-phone', 'm-email'].forEach(id => $(id).oninput = debounceCheck);
   await loadModify(); mod.showModal();
 }
@@ -490,6 +557,7 @@ async function loadModify() {
   if (!r.ok) { $('mod-msg').textContent = MODCUR.detail; return; }
   const c = MODCUR, cu = c.customer || {}, set = (id, v) => $(id).value = v ?? '';
   set('m-plat', c.platform); $('m-pref').innerHTML = hubOptions(c.prefer_hub); set('m-region', c.region); set('m-lan', c.lan);
+  $('m-dual-box').hidden = !c.has_provider2; $('m-dual').checked = !!c.dual_homed;
   set('m-mgmt', c.mgmt_ip); set('m-tidx', c.t_idx); set('m-pport', `${c.provider} ${c.provider_port}`); set('m-host', c.host); set('m-hmgmt', c.host_mgmt);
   set('m-co', cu.company); set('m-ind', cu.industry); set('m-contact', cu.contact); set('m-addr', cu.address); set('m-phone', cu.phone); set('m-email', cu.email);
   const on = new Set(cu.applications || []);
@@ -500,6 +568,7 @@ async function loadModify() {
 }
 function modifyFromForm() {
   return { region: $('m-region').value.trim(), lan: $('m-lan').value.trim(), platform: $('m-plat').value, prefer_hub: $('m-pref').value,
+    ...(MODCUR && MODCUR.has_provider2 ? { dual_homed: $('m-dual').checked } : {}),
     customer: { company: $('m-co').value.trim(), industry: $('m-ind').value.trim(), contact: $('m-contact').value.trim(), address: $('m-addr').value.trim(),
                 phone: $('m-phone').value.trim(), email: $('m-email').value.trim(), applications: [...document.querySelectorAll('#m-apps input:checked')].map(i => i.value) } };
 }
@@ -513,6 +582,7 @@ async function checkModify() {
       + `<tr><th>The run</th><td><ul style="margin:0;padding-left:18px">${p.what.map(w => `<li>${esc(w)}</li>`).join('')}</ul></td></tr>`
     : '<tr><td class="hint">nothing changed yet — edit a field</td></tr>';
   $('m-note').textContent = p.rebuild ? `Rebuilding the router takes the site offline until the new ${p.new.platform === 'c8000v' ? 'C8000v' : 'VyOS'} is up and registered.`
+    : p.rewire ? 'Re-wiring port 4 restarts the router: the site is offline for a few minutes.'
     : p.relan ? 'The host is rebuilt on the new LAN; the other sites learn it over BGP.' : (p.routers ? '' : 'A data-only change: no router is touched.');
   $('mod-msg').textContent = probs.join('\n');
   go.disabled = !!probs.length || !p.changes.length;
@@ -581,7 +651,8 @@ async function checkRemoval() {
     ['Company', cu.company ? `${cu.company} (${cu.industry})` : '—'],
     ['Router', `${p.name}: ${PLAT[p.platform] || p.platform} (${p.mgmt_ip}) and its Alpine host ${p.host} (${p.host_mgmt}) — powered off and deleted`],
     ['Cloud', `Tunnel0 ${p.tunnel_ip} (NBMA ${p.nbma}) stops registering with ${ST.hubs.join(', ')}`],
-    ['WAN', `${p.provider} ${p.provider_port} released (${p.wan_prefix}): address removed, port disabled`],
+    ['WAN', `${p.provider} ${p.provider_port} released (${p.wan_prefix}): address removed, port disabled`
+      + (p.dual_homed ? `; ${p.provider2} ${p.provider2_port} released too (${p.wan2_prefix})` : '')],
     ['LAN', `${p.lan} and router-id ${p.router_id} withdrawn`],
     ['Changes', `lab.conf, customers.json, ${p.platform === 'c8000v' ? "Terraform's state, " : ''}${p.provider}, Nautobot`]];
   $('r-plan').innerHTML = steps.map(([k, x]) => `<tr><th>${esc(k)}</th><td>${esc(x)}</td></tr>`).join('');
@@ -592,10 +663,16 @@ async function checkRemoval() {
 }
 
 async function start(body) {
-  const r = await fetch('/api/runs', { ...J, body: JSON.stringify(body) });
-  const run = await r.json();
-  if (!r.ok) { alert(run.detail || 'could not start'); return; }
-  show('runs'); watch(run.id);
+  body = { requested_by: $('me').value.trim() || undefined, ...body };
+  let r = await fetch('/api/runs', { ...J, body: JSON.stringify(body) }), run = await r.json();
+  if (r.status === 400 && /requested_by/.test(run.detail || '')) {       // change control wants a name
+    body.requested_by = who(); if (!body.requested_by) return;
+    r = await fetch('/api/runs', { ...J, body: JSON.stringify(body) }); run = await r.json();
+  }
+  if (!r.ok) { alert(typeof run.detail === 'string' ? run.detail : JSON.stringify(run.detail) || 'could not start'); return; }
+  show('runs');
+  if (r.status === 202) { await loadChanges(); $('cr-msg').innerHTML = changeFiled(run.change); load(); return; }
+  watch(run.id);
 }
 // running blinks (the step being processed, the run in progress); pending / queued / skipped stay grey
 const stCls = s => s === 'success' ? 'ok' : (s === 'failed' || s === 'interrupted') ? 'bad' : s === 'running' ? 'warn live' : '';
@@ -672,10 +749,68 @@ async function resume(id) { const r = await fetch(`/api/runs/${encodeURIComponen
   const run = await r.json(); if (!r.ok) { alert(run.detail); return; } watch(run.id); }
 
 
+// ---- change control ----------------------------------------------------------------------------------------------
+let CHG = null;
+async function loadChanges() {
+  CHG = await (await fetch('/api/changes')).json();
+  const P = CHG.policy, rq = CHG.requests;
+  $('cr-policy').textContent = !P.approval.enabled ? 'approval is off: every run starts at once'
+    : `approval for: ${P.approval.covers.join(', ')}${P.approval.four_eyes ? ' · four eyes' : ''} · windows ${P.windows.enabled ? (CHG.window_open ? 'on — one is open now' : 'on — next opens ' + (CHG.next_window ? fmtT(CHG.next_window) : 'never')) : 'off'}`;
+  const me = $('me').value.trim().toLowerCase();
+  $('cr-t').querySelector('tbody').innerHTML = rq.slice(0, 25).map(c => {
+    const open = c.status === 'pending', mine = me && c.requested_by.toLowerCase() === me;
+    const acts = open ? (mine && P.approval.four_eyes ? `<span class="hint">waiting for someone else</span> <button data-cancel="${esc(c.id)}">Withdraw</button>`
+        : `<button class="primary" data-approve="${esc(c.id)}">Approve</button> <button data-reject="${esc(c.id)}">Reject</button>${P.emergency ? ` <button class="danger" data-emerg="${esc(c.id)}" title="approve and start now, outside the change window">Emergency</button>` : ''}`)
+      : c.status === 'scheduled' ? `<span class="hint">starts ${c.scheduled_for ? esc(fmtT(c.scheduled_for)) : 'in the next window'}</span> <button data-cancel="${esc(c.id)}">Cancel</button>`
+      : c.run_id ? `<a href="#runs" data-run="${esc(c.run_id)}">run</a>` : '';
+    return `<tr><td class="mono"><b>${esc(c.id)}</b><div class="hint">${esc(fmtT(c.requested_at))}</div></td><td><b>${esc(c.title)}</b><div>${esc(c.summary)}</div>${c.reason ? `<div class="hint">why: ${esc(c.reason)}</div>` : ''}</td>
+      <td>${esc(c.requested_by)}${c.decided_by ? `<div class="hint">${esc(c.status === 'rejected' ? 'rejected' : 'approved')} by ${esc(c.decided_by)}${c.emergency ? ' (emergency)' : ''}${c.comment ? ': ' + esc(c.comment) : ''}</div>` : ''}</td>
+      <td><span class="st ${esc(c.status)}">${esc(c.status)}</span>${c.error ? `<div class="msg">${esc(c.error)}</div>` : ''}</td><td style="white-space:nowrap">${acts}</td></tr>`; }).join('')
+    || '<tr><td colspan="5" class="hint">no change requests</td></tr>';
+  const T = $('cr-t');
+  T.querySelectorAll('[data-approve]').forEach(b => b.onclick = () => decide(b.dataset.approve, 'approve'));
+  T.querySelectorAll('[data-reject]').forEach(b => b.onclick = () => decide(b.dataset.reject, 'reject'));
+  T.querySelectorAll('[data-emerg]').forEach(b => b.onclick = () => decide(b.dataset.emerg, 'approve', true));
+  T.querySelectorAll('[data-cancel]').forEach(b => b.onclick = () => decide(b.dataset.cancel, 'cancel'));
+  T.querySelectorAll('[data-run]').forEach(a => a.onclick = e => { e.preventDefault(); watch(a.dataset.run); });
+  renderPolicy();
+}
+async function decide(id, what, emergency) {
+  const by = who(); if (!by) return;
+  const comment = what === 'cancel' ? '' : (prompt(emergency ? `Emergency: why must ${id} run now, outside the window?` : `${what === 'approve' ? 'Approve' : 'Reject'} ${id} — comment (optional):`) ?? null);
+  if (comment === null) return;
+  const r = await fetch(`/api/changes/${encodeURIComponent(id)}/${what}`, { ...J, body: JSON.stringify({ by, comment, emergency: !!emergency }) }), j = await r.json();
+  $('cr-msg').innerHTML = r.ok ? `<b>${esc(j.id)}</b> is ${esc(j.status)}${j.run_id ? ` — run ${esc(j.run_id)} started` : ''}${j.error ? ': ' + esc(j.error) : ''}` : `<span class="msg">${esc(j.detail)}</span>`;
+  await loadChanges(); loadRuns(); load(); if (j.run_id) watch(j.run_id);
+}
+function renderPolicy() {
+  const P = CHG.policy, el = $('pol'), days = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'], cov = CHG.policy.approval.covers;
+  const COV = { remove: 'Remove a customer', modify: 'Modify a customer', restore: 'Restore from a backup', deploy: 'Deploy the model', fixdrift: 'Fix drift', failover: 'Measure a failover', fault: 'Simulate a failure' };
+  el.innerHTML = `<div style="border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:0 0 10px;background:var(--bg)">
+    <label class="ck"><input type="checkbox" id="p-on" ${P.approval.enabled ? 'checked' : ''}> <b>approval needed for:</b></label>
+    ${Object.entries(COV).map(([k, v]) => `<label class="ck"><input type="checkbox" data-cov="${k}" ${cov.includes(k) ? 'checked' : ''}> ${esc(v)}</label>`).join('')}
+    <div><label class="ck"><input type="checkbox" id="p-4e" ${P.approval.four_eyes ? 'checked' : ''}> four eyes: the approver is never the requester</label>
+      <label class="ck"><input type="checkbox" id="p-em" ${P.emergency ? 'checked' : ''}> emergency approvals allowed (start now, outside the window, with a reason)</label>
+      <label class="ck">requests expire after <input id="p-exp" type="number" min="0" value="${esc(P.expire_hours)}" style="width:60px"> h</label></div>
+    <div style="margin-top:6px"><label class="ck"><input type="checkbox" id="p-win" ${P.windows.enabled ? 'checked' : ''}> <b>change windows:</b> approved changes start only inside one</label></div>
+    <div id="p-slots">${P.windows.slots.map((sl, i) => `<div class="slot" data-slot="${i}">${days.map(d => `<label class="ck"><input type="checkbox" data-day="${d}" ${sl.days.includes(d) ? 'checked' : ''}> ${d}</label>`).join('')}
+      from <input type="time" data-k="start" value="${esc(sl.start)}"> to <input type="time" data-k="end" value="${esc(sl.end)}"> <button data-del="${i}">✕</button></div>`).join('')}</div>
+    <div class="actions" style="margin-top:6px"><button id="p-add">Add a window</button><button class="primary" id="p-save">Save the policy</button><span class="msg" id="p-msg"></span></div></div>`;
+  const read = () => ({ approval: { enabled: $('p-on').checked, four_eyes: $('p-4e').checked, covers: [...el.querySelectorAll('[data-cov]:checked')].map(x => x.dataset.cov) },
+    emergency: $('p-em').checked, expire_hours: +$('p-exp').value || 0,
+    windows: { enabled: $('p-win').checked, slots: [...el.querySelectorAll('[data-slot]')].map(d => ({ days: [...d.querySelectorAll('[data-day]:checked')].map(x => x.dataset.day),
+      start: d.querySelector('[data-k=start]').value, end: d.querySelector('[data-k=end]').value })) } });
+  $('p-add').onclick = () => { CHG.policy = { ...read() }; CHG.policy.windows.slots.push({ days: ['sat', 'sun'], start: '08:00', end: '18:00' }); renderPolicy(); };
+  el.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { CHG.policy = read(); CHG.policy.windows.slots.splice(+b.dataset.del, 1); renderPolicy(); });
+  $('p-save').onclick = async () => { const r = await fetch('/api/policy', { method: 'PUT', headers: J.headers, body: JSON.stringify(read()) }), j = await r.json();
+    if (!r.ok) { $('p-msg').textContent = j.detail; return; } $('p-msg').textContent = ''; $('pol').hidden = true; loadChanges(); };
+}
+$('pol-toggle').onclick = () => { $('pol').hidden = !$('pol').hidden; };
+
 // ---- network map --------------------------------------------------------------------------------------------------
 let MAPSEL = null, MAPFOCUS = null, PATHS = [];   // PATHS: traced paths drawn on the map, oldest first
 const PRINT = new URLSearchParams(location.search).get('print');   // ?print=<customer>: the PDF view
-const MAPLAYERS = { underlay: true, overlay: true, shortcuts: true, hosts: true, labels: true };
+const MAPLAYERS = { underlay: true, overlay: true, cloud2: true, shortcuts: true, hosts: true, labels: true };
 try { Object.assign(MAPLAYERS, JSON.parse(localStorage.getItem('c8d-map-layers') || '{}')); } catch (e) {}
 document.querySelectorAll('[data-layer]').forEach(cb => { cb.checked = MAPLAYERS[cb.dataset.layer] !== false;
   cb.onchange = () => { MAPLAYERS[cb.dataset.layer] = cb.checked;
@@ -683,53 +818,70 @@ document.querySelectorAll('[data-layer]').forEach(cb => { cb.checked = MAPLAYERS
     applyLayers(); }; });
 function applyLayers() { document.querySelectorAll('#map [data-g]').forEach(g => g.classList.toggle('hide', g.dataset.g !== 'path' && !MAPLAYERS[g.dataset.g])); }
 
+// which provider a node is, and every provider of the lab (the second one is optional)
+const provOf = n => (ST.provider2 && ST.provider2.nodes.includes(n)) ? ST.provider2 : ST.provider;
+const allProviders = () => [...ST.provider.nodes, ...((ST.provider2 || {}).nodes || [])];
+// a router's session with a provider, as the provider sees it (the router's address on that link)
+const provSess = (p, ip) => (((ST.provider_state || {})[p] || {}).sessions || []).find(x => x.peer === String(ip || '').split('/')[0]);
+const sessUp = x => !!x && /^\d+$/.test(x.state);
 function nodeStatus(n) {
   const m = ST.nodes[n] || {}, c = (ST.cloud || {})[n], H = ST.hubs, CU = ST.customers;
   if (MAPFOCUS && (m.role === 'hub' || m.role === 'provider')) {     // what this customer sees of the hub / the provider
     const f = (ST.cloud || {})[MAPFOCUS] || {};
     if (m.role === 'hub') return (!c || c.error || !c.underlay_up) ? 'bad' : ((f.nhs_up || []).includes(n) ? 'ok' : 'bad');
-    if (!f.underlay_up) return 'bad';
-    return H.every(h => ((ST.cloud || {})[h] || {}).underlay_up) ? 'ok' : 'warn';
+    const fm = ST.nodes[MAPFOCUS], link = provOf(n) === ST.provider ? fm.wan : fm.wan2;
+    if (!link) return 'ok';                                   // not this customer's provider: only its hubs use it
+    return sessUp(provSess(n, link.ip)) ? (H.every(h => sessUp(provSess(n, (provOf(n) === ST.provider ? ST.nodes[h].wan : ST.nodes[h].wan2 || {}).ip))) ? 'ok' : 'warn') : 'bad';
   }
-  if (m.role === 'provider') { const s = (ST.provider_state || {})[n] || {}, want = H.length + CU.length;
+  if (m.role === 'provider') { const s = (ST.provider_state || {})[n] || {}, want = (s.expect || {}).customers ?? (H.length + CU.length);
     return s.error ? 'bad' : (s.customers_up >= want ? 'ok' : (s.customers_up ? 'warn' : 'bad')); }
   if (m.role === 'host') return (ST.hosts_up || {})[n] ? 'ok' : 'bad';
   if (!c || c.error) return 'bad';
   if (!c.underlay_up) return 'bad';
-  if (m.role === 'hub') return (c.registered || []).length >= CU.length ? 'ok' : 'warn';
-  const k = (c.nhs_up || []).length; return k >= H.length ? 'ok' : (k ? 'warn' : 'bad');
+  const e = c.expect || {};
+  if (m.role === 'hub') return (c.registered || []).length >= CU.length && (c.underlay_up || 0) >= (e.underlay || 1)
+    && (c.registered2 || []).length >= (e.registered2 || 0) ? 'ok' : 'warn';
+  const k = (c.nhs_up || []).length, k2 = (c.nhs2_up || []).length;
+  return k >= H.length && k2 >= (e.nhs2 || 0) && (c.underlay_up || 0) >= (e.underlay || 1) ? 'ok' : ((k || k2) ? 'warn' : 'bad');
 }
 
 function drawMap() {
   if (!ST || !$('map')) return;
   if (MAPFOCUS && !ST.customers.includes(MAPFOCUS)) MAPFOCUS = null;   // a removed customer drops the focus
   const W = 1200, H = ST.hubs, CU = MAPFOCUS ? [MAPFOCUS] : ST.customers, P = ST.provider.nodes[0], svg = [], cloud = ST.cloud || {};
+  const P2 = ST.provider2 ? ST.provider2.nodes[0] : null;
+  $('lay-cloud2').hidden = !P2; document.querySelectorAll('.c2only').forEach(e => e.hidden = !P2);
   const fb = $('mapfocus'); fb.hidden = !MAPFOCUS;
   if (MAPFOCUS) { fb.innerHTML = `<span>Showing <b>${esc(MAPFOCUS)}</b>'s view: the hubs, the provider and its own site — hubs coloured by whether ${esc(MAPFOCUS)} is registered with them. ${ST.customers.length - 1} other customer(s) hidden.</span>
       <button id="mapfocus-all">Show all customers</button>`; $('mapfocus-all').onclick = () => setFocus(null); }
   const xs = (i, n) => W * (i + 1) / (n + 1), pos = {};
   H.forEach((h, i) => pos[h] = { x: xs(i, H.length), y: 120 });
   CU.forEach((c, i) => { pos[c] = { x: xs(i, CU.length), y: 580 }; const host = ST.nodes[c].host; if (host) pos[host] = { x: pos[c].x, y: 725 }; });
-  pos[P] = { x: W / 2, y: 350 };
+  pos[P] = { x: P2 ? W / 2 - 210 : W / 2, y: 350 }; if (P2) pos[P2] = { x: W / 2 + 210, y: 350 };
   const nw = 168, nh = 56, top = n => pos[n].y - nh / 2, bot = n => pos[n].y + nh / 2;
   const t = (x, y, txt, cls = 'lbl') => `<text class="${cls}" x="${x}" y="${y}">${esc(txt)}</text>`;
   const edge = (cls, d, title) => `<path class="e ${cls}" d="${d}"><title>${esc(title)}</title></path>`;
 
   // the provider band: the MPLS network everything rides over
   svg.push(`<rect class="band" x="40" y="280" width="${W - 80}" height="140" rx="70"/>`,
-           `<text class="bandlbl" x="80" y="306">MPLS provider · AS ${esc(ST.provider.as)} · ${esc(ST.provider.wan_net)}</text>`,
-           `<text class="bandlbl" x="${W - 80}" y="306" text-anchor="end">overlay ${esc(ST.service.overlay)} · iBGP AS ${esc(ST.service.as)}</text>`);
+           `<text class="bandlbl" x="80" y="306">${P2 ? `${esc(P)} · AS ${esc(ST.provider.as)} · ${esc(ST.provider.wan_net)}` : `MPLS provider · AS ${esc(ST.provider.as)} · ${esc(ST.provider.wan_net)}`}</text>`,
+           `<text class="bandlbl" x="${W - 80}" y="306" text-anchor="end">${P2 ? `${esc(P2)} · AS ${esc(ST.provider2.as)} · ${esc(ST.provider2.wan_net)}` : `overlay ${esc(ST.service.overlay)} · iBGP AS ${esc(ST.service.as)}`}</text>`,
+           P2 ? `<text class="bandlbl" x="${W / 2}" y="410" text-anchor="middle">overlays ${esc(ST.service.overlay)} and ${esc(ST.service.cloud2.overlay)} (backup) · iBGP AS ${esc(ST.service.as)}</text>` : '');
 
   // underlay: every router's Gi2 to the provider, coloured by its eBGP session
   const ul = [], ull = [];
-  [...H, ...CU].forEach(r => { const m = ST.nodes[r], c = cloud[r] || {}, up = (c.underlay_up || 0) >= 1 && !c.error;
-    const y1 = H.includes(r) ? bot(r) : top(r), y2 = H.includes(r) ? pos[P].y - nh / 2 : pos[P].y + nh / 2;
-    const x2 = pos[P].x + (pos[r].x - pos[P].x) * 0.28;
-    ul.push(edge(`ul ${up ? 'ok' : 'bad'}`, `M${pos[r].x},${y1} L${x2},${y2}`,
-      `${r} ${m.wan.name} ${m.wan.ip}  ⇄  ${P} ${m.wan.peer_port} ${m.wan.peer_ip} — eBGP ${up ? 'Established' : 'DOWN'}`));
-    const lx = pos[r].x + (x2 - pos[r].x) * 0.3, ly = y1 + (y2 - y1) * 0.3;
-    ull.push(t(lx + 6, ly, `${m.wan.peer_port} ${m.wan.prefix}`)); });
-  svg.push(`<g data-g="underlay">${ul.join('')}<g data-g="labels">${ull.join('')}</g></g>`);
+  const ul2 = [];
+  [...H, ...CU].forEach(r => { const m = ST.nodes[r], c = cloud[r] || {};
+    [[m.wan, P, ul, ''], [m.wan2, P2, ul2, 'ul2']].forEach(([w, PP, into, cls]) => { if (!w || !PP) return;
+      const ps = provSess(PP, w.ip), up = ps ? sessUp(ps) : ((c.underlay_up || 0) >= 1 && !c.error);
+      const y1 = H.includes(r) ? bot(r) : top(r), y2 = H.includes(r) ? pos[PP].y - nh / 2 : pos[PP].y + nh / 2;
+      const x2 = pos[PP].x + (pos[r].x - pos[PP].x) * 0.28 + (P2 ? (PP === P ? -18 : 18) : 0);
+      const lk = `${r}:${cls ? 'wan2' : 'wan'}`, cut = (ST.faults || []).some(x => (x.links || []).includes(lk));
+      into.push(edge(`ul ${cls} ${up ? 'ok' : 'bad'} ${cut ? 'faulted' : ''}`, `M${pos[r].x + (cls ? 10 : 0)},${y1} L${x2},${y2}`,
+        `${r} ${w.name} ${w.ip}  ⇄  ${PP} ${w.peer_port} ${w.peer_ip} — eBGP ${up ? 'Established' : 'DOWN'}`));
+      const lx = pos[r].x + (x2 - pos[r].x) * 0.3, ly = y1 + (y2 - y1) * 0.3;
+      if (!cls) ull.push(t(lx + 6, ly, `${w.peer_port} ${w.prefix}`)); }); });
+  svg.push(`<g data-g="underlay">${ul.join('')}<g data-g="labels">${ull.join('')}</g></g>`, `<g data-g="cloud2">${ul2.join('')}</g>`);
 
   // overlay: each customer's tunnel to each hub (up = registered with that hub), and the hubs' static mesh
   const ov = [];
@@ -743,13 +895,19 @@ function drawMap() {
     ov.push(edge(`hh ${ok ? 'ok' : 'bad'}`, `M${a.x},${top(h)} Q${(a.x + b.x) / 2},${a.y - 95 - Math.abs(b.x - a.x) * 0.08} ${b.x},${top(o)}`,
       `${h} ⇄ ${o}: static NHRP map, iBGP between hubs — IPsec ${ok ? 'up' : 'DOWN'}`)); }));
   svg.push(`<g data-g="overlay">${ov.join('')}</g>`);
+  const ov2 = [];
+  CU.filter(c => ST.nodes[c].wan2).forEach(c => { const up = new Set((cloud[c] || {}).nhs2_up || []);
+    H.forEach(h => { const ok = up.has(h), a = pos[c], b = pos[h], bow = (Math.abs(a.x - b.x) < 40 ? 90 : 0) + 26;
+      ov2.push(edge(`tun2 ${ok ? 'ok' : 'bad'}`, `M${a.x + 12},${top(c)} C${a.x + bow},${a.y - 230} ${b.x + bow},${b.y + 230} ${b.x + 12},${bot(h)}`,
+        `${c} ${ST.nodes[c].tunnel2_ip} → ${h} ${ST.nodes[h].tunnel2_ip}: cloud 2 (backup) — ${ok ? 'registered, IPsec up' : 'NOT registered'}`)); }); });
+  svg.push(`<g data-g="cloud2">${ov2.join('')}</g>`);
 
   // shortcuts: pairs of customers talking directly (dynamic NHRP entries)
   const sc = [], seen = new Set();
   CU.forEach(c => ((cloud[c] || {}).shortcuts || []).forEach(o => { const k = [c, o].sort().join('|');
-    if (!pos[o]) { const a = pos[c], i = sc.length, x2 = a.x + 250, y2 = a.y - 70 - i * 30;
+    if (!pos[o]) { const a = pos[c], i = sc.length, x2 = a.x + 250, y2 = a.y - 70 - i * 30, on = ST.nodes[o];
       sc.push(edge('sc', `M${a.x + 84},${a.y - 10} Q${a.x + 170},${y2 + 10} ${x2},${y2}`, `shortcut ${c} ⇄ ${o}: a direct IPsec tunnel NHRP resolved`),
-              `<text class="lbl" x="${x2 + 6}" y="${y2 + 4}">shortcut → ${esc(o)} ${esc(ST.nodes[o].tunnel_ip)}</text>`); return; }
+              `<text class="lbl" x="${x2 + 6}" y="${y2 + 4}">shortcut → ${esc(o)} ${esc(on ? on.tunnel_ip : '')}</text>`); return; }
     if (seen.has(k)) return; seen.add(k); const a = pos[c], b = pos[o];
     sc.push(edge('sc', `M${a.x},${top(c)} Q${(a.x + b.x) / 2},${a.y - 110} ${b.x},${top(o)}`, `shortcut ${c} ⇄ ${o}: a direct IPsec tunnel NHRP resolved`)); }));
   svg.push(`<g data-g="shortcuts">${sc.join('')}</g>`);
@@ -780,10 +938,11 @@ function drawMap() {
 
   // nodes
   const drifted = n => DRIFT && DRIFT.nodes && DRIFT.nodes[n] && DRIFT.nodes[n].status === 'drift';
+  const faulted = n => (ST.faults || []).filter(x => (x.nodes || []).includes(n) && !(x.links || []).length);
   const box = (n, w, h, lines, extraCls = '') => { const p = pos[n], st = nodeStatus(n), dr = drifted(n);
     return `<g class="node ${st} ${MAPSEL === n ? 'sel' : ''} ${extraCls}" data-node="${esc(n)}" tabindex="0">
       <rect x="${p.x - w / 2}" y="${p.y - h / 2}" width="${w}" height="${h}" rx="10"/>${lines.map(([txt, cls, dy]) =>
-        `<text class="${cls}" x="${p.x}" y="${p.y + dy}">${esc(txt)}</text>`).join('')}${dr ? `<g class="driftbadge"><circle cx="${p.x + w / 2 - 4}" cy="${p.y - h / 2 + 4}" r="10"/><text x="${p.x + w / 2 - 4}" y="${p.y - h / 2 + 8.5}">≠</text></g>` : ''}<title>${esc(n)}: ${st}${dr ? ' · configuration drift: ' + DRIFT.nodes[n].items.length + ' difference(s) from the model' : ''}</title></g>`; };
+        `<text class="${cls}" x="${p.x}" y="${p.y + dy}">${esc(txt)}</text>`).join('')}${faulted(n).length ? `<g class="faultmark"><circle cx="${p.x - w / 2 + 4}" cy="${p.y - h / 2 + 4}" r="10"/><text x="${p.x - w / 2 + 4}" y="${p.y - h / 2 + 8.5}">⚡</text><title>${esc(faulted(n).map(x => x.title).join(', '))} (simulated)</title></g>` : ''}${dr ? `<g class="driftbadge"><circle cx="${p.x + w / 2 - 4}" cy="${p.y - h / 2 + 4}" r="10"/><text x="${p.x + w / 2 - 4}" y="${p.y - h / 2 + 8.5}">≠</text></g>` : ''}<title>${esc(n)}: ${st}${dr ? ' · configuration drift: ' + DRIFT.nodes[n].items.length + ' difference(s) from the model' : ''}</title></g>`; };
   const nodes = [];
   H.forEach(h => nodes.push(box(h, nw, nh, [['hub · ' + (ST.nodes[h].region || ''), 'role', -12], [h, '', 5], [ST.nodes[h].tunnel_ip, 'sub', 20]])));
   const hosted = h => (ST.applications || []).filter(a => a.hubs.includes(h));
@@ -797,7 +956,8 @@ function drawMap() {
   CU.forEach(c => { const co = (ST.nodes[c].customer || {}).company;
     const vy = ST.nodes[c].platform === 'vyos' ? ' · VyOS' : '';
     nodes.push(box(c, co ? 196 : nw, nh, [[co ? short(co, vy ? 23 : 30) + vy : 'customer · ' + (ST.nodes[c].region || '') + vy, 'role', -12], [c, '', 5], [ST.nodes[c].tunnel_ip, 'sub', 20]])); });
-  nodes.push(box(P, 190, nh, [['provider · VyOS', 'role', -12], [P, '', 5], [`AS ${ST.provider.as}`, 'sub', 20]]));
+  nodes.push(box(P, 190, nh, [[P2 ? 'provider 1 · VyOS' : 'provider · VyOS', 'role', -12], [P, '', 5], [`AS ${ST.provider.as}`, 'sub', 20]]));
+  if (P2) nodes.push(box(P2, 190, nh, [['provider 2 · VyOS', 'role', -12], [P2, '', 5], [`AS ${ST.provider2.as}`, 'sub', 20]]));
   const hn = [];
   CU.forEach(c => { const host = ST.nodes[c].host; if (host) hn.push(box(host, 150, 44, [[host, '', -2], [(ST.nodes[c].lan_port || {}).peer_ip || '', 'sub', 14]])); });
   svg.push(nodes.join(''), `<g data-g="hosts">${hn.join('')}</g>`);
@@ -910,7 +1070,7 @@ function renderInfo(n, fresh) {
   add('Role', esc(m.role === 'spoke' ? 'customer' : m.role) + (m.region ? ' · ' + esc(m.region) : ''));
   add('Platform', esc(PLAT[m.platform] || m.platform));
   add('Status', pill(st === 'ok', st === 'ok' ? 'healthy' : st === 'warn' ? 'partial' : 'down', st === 'warn'));
-  add('VM', esc(m.domain)); add('Management', esc(m.mgmt_ip));
+  if (!CVIEW) { add('VM', esc(m.domain)); add('Management', esc(m.mgmt_ip)); }
   const dn = DRIFT && DRIFT.nodes ? DRIFT.nodes[n] : null;
   if (dn) add('Config', dn.status === 'ok' ? pill(true, 'matches the model') : dn.status === 'error' ? pill(false, 'drift not checked')
     : pill(false, `drift: ${dn.items.length} difference(s)`, true) + `<div class="driftlist">${dn.items.slice(0, 8).map(i => `<div><span class="dk ${esc(i.kind)}">${esc(i.kind)}</span> ${esc(i.line)}</div>`).join('')}</div>
@@ -919,26 +1079,37 @@ function renderInfo(n, fresh) {
   if (m.role === 'hub' || m.role === 'spoke') {
     add('Tunnel0', esc(m.tunnel_ip)); add('NBMA (Gi2)', esc(m.nbma)); add('Router-id', esc(m.router_id)); add('LAN', esc(m.lan));
     add('Provider link', esc(`${m.wan.peer} ${m.wan.peer_port} · ${m.wan.prefix}`));
+    if (m.wan2) { add('Provider 2 link', esc(`${m.wan2.peer} ${m.wan2.peer_port} · ${m.wan2.prefix}`)); add('Tunnel1 (cloud 2)', esc(`${m.tunnel2_ip} · NBMA ${m.nbma2}`)); }
+    else if (m.role === 'spoke' && ST.provider2) add('Provider 2', '<span class="hint">single-homed</span>');
     if (c.error) add('Live', pill(false, 'unreachable: ' + c.error));
     else {
-      if (m.role === 'hub') add('Registered', esc((c.registered || []).join(', ') || 'none'));
-      else { add('NHS up', esc((c.nhs_up || []).join(', ') || 'none')); add('Shortcuts', esc((c.shortcuts || []).join(', ') || 'none')); }
-      add('IPsec up', esc(c.sa)); add('Overlay BGP', esc(`${c.overlay_up} / ${c.overlay}`));
-      add('Provider eBGP', c.underlay_up ? pill(true, 'Established') : pill(false, 'down')); add('CPU (1 min)', esc((c.cpu_1m ?? '?') + ' %'));
+      const e = c.expect || {};
+      if (m.role === 'hub') { add('Registered', esc((c.registered || []).join(', ') || 'none'));
+        if (m.wan2) add('Registered (cloud 2)', esc((c.registered2 || []).join(', ') || 'none')); }
+      else { add('NHS up', esc((c.nhs_up || []).join(', ') || 'none'));
+        if (m.wan2) add('NHS up (cloud 2)', esc((c.nhs2_up || []).join(', ') || 'none'));
+        add('Shortcuts', esc((c.shortcuts || []).join(', ') || 'none')); }
+      add('IPsec up', esc(`${c.sa} / ${e.sa ?? '?'}`)); add('Overlay BGP', esc(`${c.overlay_up} / ${e.overlay ?? c.overlay}`));
+      add('Provider eBGP', (c.underlay_up || 0) >= (e.underlay || 1) ? pill(true, e.underlay > 1 ? 'both Established' : 'Established')
+        : c.underlay_up ? pill(false, `${c.underlay_up} of ${e.underlay} up`, true) : pill(false, 'down')); add('CPU (1 min)', esc((c.cpu_1m ?? '?') + ' %'));
     }
   } else if (m.role === 'provider') {
     const s = (ST.provider_state || {})[n] || {};
-    add('Accepts', esc(ST.provider.wan_net)); add('eBGP customers', esc(`${s.customers_up ?? '?'} / ${ST.hubs.length + ST.customers.length}`));
+    const pv = provOf(n);
+    add('AS', esc(pv.as)); add('Accepts', esc(pv.wan_net)); add('eBGP customers', esc(`${s.customers_up ?? '?'} / ${(s.expect || {}).customers ?? '?'}`));
     add('Sessions', (s.sessions || []).map(x => `${esc(x.peer)} ${x.state.match(/^\d+$/) ? '✓' : esc(x.state)}`).join('<br>'));
   } else if (m.role === 'host') {
     add('LAN address', esc(m.lan_ip)); add('Gateway', esc(`${m.gateway} (${m.router})`)); add('Login', 'lab / lab');
   }
-  const view = m.role === 'spoke' ? `<div class="cmds">
+  const view = m.role !== 'spoke' ? '' : CVIEW ? `<div class="cmds">
+      <button data-pdf title="your network view, your applications and this month's service report">Download your report (PDF)</button>
+      <button data-sla>Service levels</button></div>` : `<div class="cmds">
       <button data-focus>${MAPFOCUS === n ? 'Show all customers' : `Show only ${esc(n)}'s view`}</button>
       <button data-pdf title="${esc(n)}'s view of the network, with its details and this month's SLA report, as a PDF">Download PDF</button>
-      <button data-sla>Service levels</button></div>` : '';
-  const pings = m.role === 'host' ? Object.keys(ST.nodes).filter(x => ST.nodes[x].role === 'host' && x !== n).sort() : [];
-  const cmds = (m.role === 'hub' || m.role === 'spoke')
+      <button data-sla>Service levels</button> <button data-plink title="a read-only link for the customer: its own map, service levels, reports, maintenance and incidents">Customer portal link</button></div>
+      <div id="portal-link" hidden style="margin:6px 0"></div>`;
+  const pings = !CVIEW && m.role === 'host' ? Object.keys(ST.nodes).filter(x => ST.nodes[x].role === 'host' && x !== n).sort() : [];
+  const cmds = CVIEW ? [] : (m.role === 'hub' || m.role === 'spoke')
     ? (m.platform === 'vyos' ? ['show ip nhrp nhs', 'show ip nhrp cache', 'show ip nhrp shortcut', 'show vpn ipsec sa', 'show ip bgp summary', 'show ip route bgp']
                              : ['show dmvpn', 'show crypto session brief', 'show ip bgp summary', 'show ip route bgp', 'show ip nhrp']) : [];
   const owner = m.role === 'spoke' ? n : (m.role === 'host' ? m.router : null), cu = owner ? (ST.nodes[owner] || {}).customer : null;
@@ -967,7 +1138,7 @@ function renderInfo(n, fresh) {
         <div class="hint">subscribers: ${who(a).map(c => esc(c) + ' (' + esc(((ST.nodes[c] || {}).customer || {}).company || '') + ')').join(', ') || 'none'}</div></div>`).join('') : '<p class="hint">hosts no application</p>'}</div>`;
   }
   $('mapinfo').innerHTML = `<h2>${esc(n)}</h2>${company}${apps}<dl>${rows.join('')}</dl>${view}
-    <div class="cmds">${cmds.map(x => `<button data-cmd="${esc(x)}">${esc(x)}</button>`).join('')}<button data-config title="read the configuration live from ${esc(n)}">show configuration</button></div>
+    ${CVIEW ? '' : `<div class="cmds">${cmds.map(x => `<button data-cmd="${esc(x)}">${esc(x)}</button>`).join('')}<button data-config title="read the configuration live from ${esc(n)}">show configuration</button></div>`}
     ${pings.length ? `<div class="cmds"><button data-pingall title="ping ${esc(pings.join(', '))} from ${esc(n)}">ping all hosts (${pings.length})</button></div>
     <div class="pathctl"><label for="trace-to">Path to another host <span class="hint">(traceroute, drawn on the map)</span></label>
       <div class="cmds" style="margin-top:4px"><select id="trace-to">${pings.map(x => `<option value="${esc(x)}" ${x === (PATHS[0] || {}).target ? 'selected' : ''}>${esc(x)}${ST.nodes[x].router ? ' (' + esc(ST.nodes[x].router) + ')' : ''}</option>`).join('')}</select>
@@ -977,6 +1148,7 @@ function renderInfo(n, fresh) {
   $('mapinfo').querySelectorAll('[data-config]').forEach(b => b.onclick = () => runMapConfig(n));
   $('mapinfo').querySelectorAll('[data-focus]').forEach(b => b.onclick = () => setFocus(MAPFOCUS === n ? null : n));
   $('mapinfo').querySelectorAll('[data-pdf]').forEach(b => b.onclick = () => downloadCustomerPdf(n, b));
+  $('mapinfo').querySelectorAll('[data-plink]').forEach(b => b.onclick = () => portalLink(n));
   $('mapinfo').querySelectorAll('[data-sla]').forEach(b => b.onclick = () => { show('sla'); $('sla-cust').value = n; renderSla(); });
   $('mapinfo').querySelectorAll('[data-pingall]').forEach(b => b.onclick = () => runMapPingAll(n, pings));
   $('mapinfo').querySelectorAll('[data-trace]').forEach(b => b.onclick = () => tracePath(n, $('trace-to').value, false));
@@ -1151,6 +1323,72 @@ async function renderSla() {
   catch (e) { $('sla-body').innerHTML = `<p class="msg">${esc(e.message)}</p>`; }
 }
 
+// ---- resilience ----------------------------------------------------------------------------------------------------
+let FAULTS = null;
+const fmtT = t => new Date(t * 1000).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+function faultBanner() {
+  const a = (ST && ST.faults) || [], b = $('fbanner');
+  b.hidden = !a.length || !!CVIEW;
+  if (a.length) b.innerHTML = `<b>⚡ ${a.length} simulated failure${a.length > 1 ? 's' : ''} in:</b> ${a.map(x => `${esc(x.title)} on <b>${esc(x.target)}</b> <span class="hint">since ${esc(fmtT(x.started))}</span> <button data-restore="${esc(x.id)}">Restore</button>`).join(' · ')}`;
+  b.querySelectorAll('[data-restore]').forEach(x => x.onclick = () => restoreFault(x.dataset.restore));
+}
+async function restoreFault(id) { const r = await fetch(`/api/faults/${encodeURIComponent(id)}`, { method: 'DELETE' }), j = await r.json();
+  if (!r.ok) alert(j.detail); await load(true); if (location.hash === '#resilience') loadResilience(); }
+async function loadResilience() {
+  FAULTS = await (await fetch('/api/faults')).json();
+  const kinds = FAULTS.catalog, ks = $('f-kind'), keep = ks.value;
+  ks.innerHTML = kinds.map(k => `<option value="${esc(k.kind)}">${esc(k.title)}</option>`).join(''); if (keep) ks.value = keep;
+  const fill = () => { const k = kinds.find(x => x.kind === ks.value) || kinds[0], ts = $('f-target'), kt = ts.value;
+    ts.innerHTML = k.options.map(o => `<option value="${esc(o.id)}">${esc(o.label)}</option>`).join(''); if (k.options.some(o => o.id === kt)) ts.value = kt;
+    $('f-what').innerHTML = '<b>What happens:</b> ' + esc(k.what); $('f-expect').innerHTML = '<b>What the design should do:</b> ' + esc(k.expect); };
+  ks.onchange = fill; fill();
+  $('f-max').textContent = `a failure left in is put back after ${FAULTS.max_minutes} min`;
+  $('f-active').innerHTML = FAULTS.active.length ? `<table><thead><tr><th>Failure</th><th>Where</th><th>Since</th><th>Done</th><th></th></tr></thead><tbody>${FAULTS.active.map(x =>
+      `<tr><td><b>${esc(x.title)}</b></td><td>${esc(x.target)}</td><td>${esc(fmtT(x.started))}</td><td class="mono">${esc(x.done)}</td><td><button data-restore="${esc(x.id)}">Restore</button></td></tr>`).join('')}</tbody></table>`
+    : '<p class="hint">nothing is failed right now</p>';
+  $('f-active').querySelectorAll('[data-restore]').forEach(x => x.onclick = () => restoreFault(x.dataset.restore));
+  $('f-restore-all').disabled = !FAULTS.active.length;
+  $('f-history').innerHTML = FAULTS.history.length ? `<table><thead><tr><th>Failure</th><th>Where</th><th>In</th><th>Out</th><th>How it ended</th></tr></thead><tbody>${FAULTS.history.slice(0, 15).map(x =>
+      `<tr><td>${esc(x.title)}</td><td>${esc(x.target)}</td><td>${esc(fmtT(x.started))}</td><td>${esc(fmtT(x.ended))} <span class="hint">(${Math.round(x.ended - x.started)} s)</span></td><td class="hint">${esc(x.reason)}</td></tr>`).join('')}</tbody></table>`
+    : '<p class="hint">none yet</p>';
+  const list = await (await fetch('/api/failover')).json();
+  $('fo-list').querySelector('tbody').innerHTML = list.map(r => { const v = r.summary.by_verdict || {};
+    return `<tr style="cursor:pointer" data-fo="${esc(r.run)}"><td class="hint">${esc(fmtT(r.t_inject))}</td><td><b>${esc(r.title)}</b> on ${esc(r.target)}</td><td>${esc(r.hold)} s</td>
+      <td>${['unaffected', 'failed over', 'cut off', 'hit on restore'].filter(k => v[k]).map(k => `<span class="verdict ${k.replace(/ /g, '-')}">${v[k]} ${esc(k)}</span>`).join(' ')}</td>
+      <td>${r.summary.failover_worst != null ? esc(r.summary.failover_worst.toFixed(1) + ' s') : '<span class="hint">—</span>'}</td><td>${r.recovery_s != null ? esc(r.recovery_s + ' s') : '—'}</td></tr>`; }).join('')
+    || '<tr><td colspan="6" class="hint">no measurement yet — pick a failure above and press Measure failover</td></tr>';
+  $('fo-list').querySelectorAll('[data-fo]').forEach(tr => tr.onclick = () => showFailover(tr.dataset.fo));
+}
+async function showFailover(id) {
+  const r = await (await fetch(`/api/failover/${encodeURIComponent(id)}`)).json(), el = $('fo-detail');
+  const span = Math.ceil(r.hold + (r.recovery_s ?? 60) + 20), W = 520, X0 = 0, sx = t => X0 + (t + 10) / (span + 10) * W;   // the whole experiment
+  const bar = f => `<svg class="tl" viewBox="0 0 ${W} 16" preserveAspectRatio="none"><rect class="bg" x="0" y="4" width="${W}" height="8"/>
+      <rect class="fault" x="${sx(0)}" y="0" width="${sx(r.hold) - sx(0)}" height="16"/>
+      ${f.outages.map(o => `<rect class="out" x="${sx(Math.max(o.from, -10))}" y="3" width="${Math.max(2, sx(Math.min(o.to, span)) - sx(Math.max(o.from, -10)))}" height="10"><title>${o.seconds} s lost, from ${o.from} s</title></rect>`).join('')}
+      <line class="mk" x1="${sx(0)}" x2="${sx(0)}" y1="0" y2="16"/><line class="mk" x1="${sx(r.hold)}" x2="${sx(r.hold)}" y1="0" y2="16"/></svg>`;
+  const rows = r.flows.slice().sort((a, b) => (b.worst || 0) + (b.verdict === 'cut off' ? 1000 : 0) - (a.worst || 0) - (a.verdict === 'cut off' ? 1000 : 0));
+  el.innerHTML = `<h3 style="margin:14px 0 4px;font-size:15px">${esc(r.title)} on ${esc(r.target)} · ${esc(fmtT(r.t_inject))} · held ${esc(r.hold)} s</h3>
+    <p class="hint" style="margin:0 0 6px">${esc(r.expect)}${r.dual_homed && r.dual_homed.length ? ` · dual-homed: ${esc(r.dual_homed.join(', '))}` : ' · no customer is dual-homed'}</p>
+    <p style="margin:0 0 8px">${Object.entries(r.summary.by_verdict).map(([k, n]) => `<span class="verdict ${k.replace(/ /g, '-')}">${n} ${esc(k)}</span>`).join(' ')}
+      ${r.summary.failover_worst != null ? ` · failover: worst ${r.summary.failover_worst.toFixed(1)} s, median ${r.summary.failover_median.toFixed(1)} s` : ''}
+      ${r.summary.restore_worst ? ` · on restore: worst ${r.summary.restore_worst.toFixed(1)} s` : ''} · healthy again ${r.recovery_s ?? '?'} s after the restore</p>
+    <table><thead><tr><th>Flow</th><th>Verdict</th><th>Worst outage</th><th style="width:${W}px">−10 s · <span style="color:var(--red)">fault in (shaded, ${esc(r.hold)} s)</span> · healthy +${esc(Math.round(r.hold + (r.recovery_s ?? 0)))} s · +${span} s</th></tr></thead><tbody>
+    ${rows.map(f => `<tr><td class="mono" style="white-space:nowrap">${esc(f.src)} → ${esc(f.dst)}</td><td><span class="verdict ${esc(f.verdict.replace(/ /g, '-'))}">${esc(f.verdict)}</span></td>
+      <td>${f.worst ? esc(f.worst.toFixed(1) + ' s') : ''}${f.worst_restore ? ` <span class="hint">· ${esc(f.worst_restore.toFixed(1))} s on restore</span>` : ''}</td><td>${bar(f)}</td></tr>`).join('')}</tbody></table>
+    <details style="margin-top:8px"><summary class="hint">control-plane timeline</summary><pre class="out">${esc(r.timeline.map(x => fmtT(x.t) + '  ' + x.what).join('\n'))}</pre></details>`;
+  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+$('f-apply').onclick = async () => {
+  const body = { kind: $('f-kind').value, target: $('f-target').value, requested_by: who(), reason: '' };
+  if (!body.requested_by) return;
+  const r = await fetch('/api/faults', { ...J, body: JSON.stringify(body) }), j = await r.json();
+  if (r.status === 202) { $('f-msg').innerHTML = changeFiled(j.change); return; }
+  if (!r.ok) { $('f-msg').textContent = j.detail; return; }
+  $('f-msg').textContent = `${j.title} on ${j.target}: ${j.done}`; await load(true); loadResilience();
+};
+$('f-measure').onclick = () => start({ mode: 'failover', fault: { kind: $('f-kind').value, target: $('f-target').value, hold: +$('f-hold').value || 60 }, options: { test: false } });
+$('f-restore-all').onclick = async () => { await fetch('/api/faults/restore-all', { method: 'POST' }); await load(true); loadResilience(); };
+
 // ---- lab tools ------------------------------------------------------------------------------------------------------
 let TOOLS = null;
 const copyBtn = t => `<button class="copy" data-copy="${esc(t)}" title="copy">copy</button>`;
@@ -1188,9 +1426,45 @@ function drawNodes() {
 $('nodes-q').oninput = () => TOOLS && drawNodes();
 
 fetch('/api/version').then(r => r.json()).then(v => { $('ver').textContent = 'v' + v.version; }).catch(() => {});
+
+// ---- the customer's own view (/c/<token>): read-only, only its own service ------------------------------------------
+async function customerMode() {
+  document.body.classList.add('cview');
+  document.querySelector('nav a[data-view=map]').textContent = 'Your network';
+  document.querySelector('nav a[data-view=sla]').textContent = 'Service levels';
+  document.querySelector('header h1').textContent = 'Your network service'; document.querySelector('header .sub').textContent = 'loading…';
+  show(['map', 'sla'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'map');
+  await load();
+  const cu = (ST.nodes[ST.customer] || {}).customer || {};
+  document.title = `${cu.company || ST.customer} — network service`;
+  document.querySelector('header h1').textContent = cu.company || ST.customer;
+  document.querySelector('header .sub').textContent = `your managed network service · site ${ST.customer} · read-only`;
+  MAPFOCUS = ST.customer; MAPSEL = ST.customer;
+  show(['map', 'sla'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'map'); drawMap();
+  setInterval(() => load(), 30000);
+}
+function renderNotices() {
+  const el = $('notices'); if (!CVIEW) { el.hidden = true; return; }
+  const h = ST.health || {}, inc = ST.incidents || [], pl = ST.planned || [];
+  el.hidden = false;
+  el.innerHTML = `<div class="svc ${esc(h.service)}"><b>Your service is ${esc(h.service)}</b>${h.service === 'up' ? ' — registered with every hub, your LAN host answering' : h.service === 'degraded' ? ' — working, with less redundancy than usual' : ' — we are on it'}</div>
+    ${inc.map(x => `<div class="inc">⚡ <b>Incident:</b> ${esc(x.title)} — ${esc(x.what)} <span class="hint">since ${esc(fmtT(x.since))}</span></div>`).join('')}
+    ${pl.map(x => `<div class="plan">🛠 <b>Planned maintenance ${esc(x.id)}:</b> ${esc(x.summary)} <span class="hint">${x.status === 'scheduled' && x.scheduled_for ? 'scheduled for ' + esc(fmtT(x.scheduled_for)) : 'awaiting approval'}</span></div>`).join('')}`;
+}
+async function portalLink(n, rotate) {
+  const r = await fetch(`/api/customers/${encodeURIComponent(n)}/portal-link${rotate ? '/rotate' : ''}`, rotate ? { method: 'POST' } : {}), j = await r.json();
+  if (!r.ok) { alert(j.detail); return; }
+  const el = $('portal-link'); el.hidden = false;
+  el.innerHTML = `<div class="hint">${esc(n)}'s own read-only view — give this link to the customer only:</div>
+    <div class="mono" style="word-break:break-all;margin:3px 0"><a href="${esc(j.path)}" target="_blank" rel="noopener">${esc(j.url)}</a></div>
+    <button class="copy" data-copy="${esc(j.url)}">copy</button> <button class="copy" id="pl-rot" title="a new link; the old one stops working">new link</button>`;
+  $('pl-rot').onclick = () => { if (confirm(`Give ${n} a new link? The current one stops working.`)) portalLink(n, true); };
+}
 if (PRINT) {
   document.documentElement.dataset.theme = 'light'; document.body.classList.add('print');
   MAPFOCUS = PRINT; MAPSEL = PRINT; show('map'); load();
+} else if (CVIEW) {
+  customerMode();
 } else {
   renderTasks(); show(location.hash.slice(1) || 'cloud'); load(); setInterval(() => { if (!watching) load(); }, 30000);
 }

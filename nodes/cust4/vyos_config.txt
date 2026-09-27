@@ -38,8 +38,8 @@ set interfaces ethernet eth3 hw-id 52:54:00:c9:0e:03
 set interfaces ethernet eth3 address 192.168.64.1/24
 set interfaces ethernet eth3 description 'host: host-cust4 eth1'
 set interfaces ethernet eth4 hw-id 52:54:00:c9:0e:04
-set interfaces ethernet eth4 description 'unwired'
-set interfaces ethernet eth4 disable
+set interfaces ethernet eth4 address 100.71.14.2/30
+set interfaces ethernet eth4 description 'provider: mpls2 eth4'
 #
 # the router-id
 set interfaces dummy dum0 address 10.255.5.14/32
@@ -110,7 +110,7 @@ set interfaces tunnel tun0 description 'DMVPN customer (mGRE, phase 3) 172.28.0.
 #
 # NHRP: registered with every hub, shortcuts on (the hubs send redirects)
 set protocols nhrp tunnel tun0 network-id 1
-set protocols nhrp tunnel tun0 holdtime 300
+set protocols nhrp tunnel tun0 holdtime 60
 set protocols nhrp tunnel tun0 mtu 1400
 set protocols nhrp tunnel tun0 authentication c8dnhrp
 set protocols nhrp tunnel tun0 registration-no-unique
@@ -119,12 +119,62 @@ set protocols nhrp tunnel tun0 nhs tunnel-ip 172.28.0.1 nbma 100.70.1.2
 set protocols nhrp tunnel tun0 nhs tunnel-ip 172.28.0.2 nbma 100.70.2.2
 set protocols nhrp tunnel tun0 nhs tunnel-ip 172.28.0.3 nbma 100.70.3.2
 #
+# the second provider (mpls2, AS 65010) and the second cloud 172.29.0.0/24: the backup path
+set policy prefix-list WAN2-OUT description 'offer the second provider our own access link to it and nothing else'
+set policy prefix-list WAN2-OUT rule 10 action permit
+set policy prefix-list WAN2-OUT rule 10 prefix 100.71.14.0/30
+set policy prefix-list WAN2-IN description 'accept only the second provider access-link range'
+set policy prefix-list WAN2-IN rule 10 action permit
+set policy prefix-list WAN2-IN rule 10 prefix 100.71.0.0/16
+set policy prefix-list WAN2-IN rule 10 le 32
+set policy route-map OVERLAY2-IN rule 10 action permit
+set policy route-map OVERLAY2-IN rule 10 match ip address prefix-list OVERLAY-ROUTES
+set policy route-map OVERLAY2-IN rule 10 set ip-next-hop peer-address
+set policy route-map OVERLAY2-IN rule 10 set local-preference 50
+set protocols bgp address-family ipv4-unicast network 100.71.14.0/30
+set protocols bgp neighbor 100.71.14.1 remote-as 65010
+set protocols bgp neighbor 100.71.14.1 description 'provider mpls2'
+set protocols bgp neighbor 100.71.14.1 address-family ipv4-unicast prefix-list export WAN2-OUT
+set protocols bgp neighbor 100.71.14.1 address-family ipv4-unicast prefix-list import WAN2-IN
+set protocols bgp peer-group HUBS2 remote-as 65100
+set protocols bgp peer-group HUBS2 description 'the DMVPN hubs over the second cloud (backup)'
+set protocols bgp peer-group HUBS2 update-source 172.29.0.14
+set protocols bgp peer-group HUBS2 address-family ipv4-unicast soft-reconfiguration inbound
+set protocols bgp peer-group HUBS2 address-family ipv4-unicast route-map import OVERLAY2-IN
+set protocols bgp peer-group HUBS2 address-family ipv4-unicast route-map export OVERLAY-OUT
+set protocols bgp neighbor 172.29.0.1 peer-group HUBS2
+set protocols bgp neighbor 172.29.0.1 description 'DMVPN hub hub-east (cloud 2)'
+set protocols bgp neighbor 172.29.0.2 peer-group HUBS2
+set protocols bgp neighbor 172.29.0.2 description 'DMVPN hub hub-central (cloud 2)'
+set protocols bgp neighbor 172.29.0.3 peer-group HUBS2
+set protocols bgp neighbor 172.29.0.3 description 'DMVPN hub hub-west (cloud 2)'
+set protocols static route 172.29.0.0/24 next-hop 172.29.0.1 distance 250
+set protocols static route 172.29.0.0/24 next-hop 172.29.0.2 distance 250
+set protocols static route 172.29.0.0/24 next-hop 172.29.0.3 distance 250
+set interfaces tunnel tun1 encapsulation gre
+set interfaces tunnel tun1 source-address 100.71.14.2
+set interfaces tunnel tun1 address 172.29.0.14/32
+set interfaces tunnel tun1 mtu 1400
+set interfaces tunnel tun1 ip adjust-mss 1360
+set interfaces tunnel tun1 parameters ip key 200
+set interfaces tunnel tun1 parameters ip ttl 64
+set interfaces tunnel tun1 description 'DMVPN customer, cloud 2 (mGRE, phase 3) 172.29.0.0/24'
+set protocols nhrp tunnel tun1 network-id 2
+set protocols nhrp tunnel tun1 holdtime 60
+set protocols nhrp tunnel tun1 mtu 1400
+set protocols nhrp tunnel tun1 authentication c8dnhrp
+set protocols nhrp tunnel tun1 registration-no-unique
+set protocols nhrp tunnel tun1 shortcut
+set protocols nhrp tunnel tun1 nhs tunnel-ip 172.29.0.1 nbma 100.71.1.1
+set protocols nhrp tunnel tun1 nhs tunnel-ip 172.29.0.2 nbma 100.71.2.1
+set protocols nhrp tunnel tun1 nhs tunnel-ip 172.29.0.3 nbma 100.71.3.1
+#
 # IKEv2 / IPsec, matched to the hubs: AES-256 / SHA-256 / DH 14, ESP tunnel mode, no PFS
 set vpn ipsec ike-group DMVPN-IKE key-exchange ikev2
 set vpn ipsec ike-group DMVPN-IKE lifetime 28800
 set vpn ipsec ike-group DMVPN-IKE dead-peer-detection action clear
-set vpn ipsec ike-group DMVPN-IKE dead-peer-detection interval 30
-set vpn ipsec ike-group DMVPN-IKE dead-peer-detection timeout 150
+set vpn ipsec ike-group DMVPN-IKE dead-peer-detection interval 10
+set vpn ipsec ike-group DMVPN-IKE dead-peer-detection timeout 30
 set vpn ipsec ike-group DMVPN-IKE proposal 1 encryption aes256
 set vpn ipsec ike-group DMVPN-IKE proposal 1 hash sha256
 set vpn ipsec ike-group DMVPN-IKE proposal 1 dh-group 14
@@ -138,5 +188,6 @@ set vpn ipsec profile DMVPN-IPSEC authentication pre-shared-secret lab-dmvpn-psk
 set vpn ipsec profile DMVPN-IPSEC ike-group DMVPN-IKE
 set vpn ipsec profile DMVPN-IPSEC esp-group DMVPN-ESP
 set vpn ipsec profile DMVPN-IPSEC bind tunnel tun0
+set vpn ipsec profile DMVPN-IPSEC bind tunnel tun1
 set vpn ipsec disable-uniqreqids
 set vpn ipsec options disable-route-autoinstall

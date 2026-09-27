@@ -93,3 +93,29 @@ Customer Has Dynamic Peer
     [Arguments]    ${customer}    ${peer}
     ${dm}=    Show    ${customer}    show dmvpn | begin Interface
     Should Match Regexp    ${dm}    (?m)^\\s*\\d+\\s+${ROUTERS}[${peer}][nbma]\\s+${ROUTERS}[${peer}][tunnel]\\s+UP\\s+\\S+\\s+D
+
+The second cloud: every hub and every dual-homed customer runs Tunnel1, registered with every hub, IPsec up
+    [Documentation]    Cloud 2 (172.29.0.0/24, network-id 2, key 200) over the second provider: the backup path.
+    Skip If    not $DUAL_SPOKES    no customer is dual-homed
+    FOR    ${s}    IN    @{DUAL_C8K_SPOKES}
+        ${d}=    Show    ${s}    show dmvpn interface Tunnel1 | begin Peer
+        FOR    ${h}    IN    @{HUBS}
+            Should Match Regexp    ${d}    (?m)^\\s*\\d+\\s+${ROUTERS}[${h}][nbma2]\\s+${ROUTERS}[${h}][tunnel2]\\s+UP\\s+\\S+\\s+S\\s*$
+        END
+    END
+    FOR    ${s}    IN    @{DUAL_VYOS_SPOKES}
+        ${nhs}=    On VyOS    ${s}    sudo vtysh -c 'show ip nhrp nhs'
+        FOR    ${h}    IN    @{HUBS}
+            Should Match Regexp    ${nhs}    (?m)^tun1\\s+${ROUTERS}[${h}][nbma2]\\s+${ROUTERS}[${h}][nbma2]\\s+${ROUTERS}[${h}][tunnel2]\\s*$
+        END
+    END
+    FOR    ${h}    IN    @{DUAL_HUBS}
+        ${d}=    Show    ${h}    show dmvpn interface Tunnel1 | begin Peer
+        FOR    ${s}    IN    @{DUAL_SPOKES}
+            Should Match Regexp    ${d}    (?m)^\\s*\\d+\\s+${ROUTERS}[${s}][nbma2]\\s+${ROUTERS}[${s}][tunnel2]\\s+UP\\s+\\S+\\s+D\\s*$
+        END
+        ${cs}=    Show    ${h}    show crypto session brief
+        FOR    ${s}    IN    @{DUAL_SPOKES}
+            Should Match Regexp    ${cs}    (?m)^${ROUTERS}[${s}][nbma2]\\s+Tu1\\s+.*\\sUA\\s*$
+        END
+    END

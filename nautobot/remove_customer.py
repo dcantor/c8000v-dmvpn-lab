@@ -3,7 +3,8 @@
 its addresses, its WAN and LAN prefixes, its cables and the devices themselves. The other half of seed.py, which only
 ever adds and reconciles.
 
-Usage: NAUTOBOT_TOKEN=... remove_customer.py NAME [--host HOST] [--wan PREFIX] [--lan PREFIX] [--domain-prefix c8d-]"""
+Usage: NAUTOBOT_TOKEN=... remove_customer.py NAME [--host HOST] [--wan PREFIX]... [--lan PREFIX] [--domain-prefix c8d-]
+(--wan once per provider link: a dual-homed customer has two)"""
 import argparse
 import os
 
@@ -12,7 +13,7 @@ import pynautobot
 p = argparse.ArgumentParser()
 p.add_argument("name")
 p.add_argument("--host")
-p.add_argument("--wan")
+p.add_argument("--wan", action="append", default=[])
 p.add_argument("--lan")
 p.add_argument("--domain-prefix", default="c8d-")
 p.add_argument("--url", default=os.environ.get("NAUTOBOT_URL", "http://10.0.0.10:8080"))
@@ -51,15 +52,15 @@ for node in filter(None, (a.name, a.host)):
     d.delete()
     done.append(f"device {d.name}")
 
-if a.wan:   # the provider's end of the /30 is on the provider's (now unwired) port
+for wan in a.wan:   # the provider's end of the /30 is on the provider's (now unwired) port
     import ipaddress
-    net = ipaddress.ip_network(a.wan)
+    net = ipaddress.ip_network(wan)
     for host in net.hosts():
         ip = nb.ipam.ip_addresses.get(address=f"{host}/{net.prefixlen}", namespace=ns.id)
         if ip is not None:
             ip.delete()
             done.append(f"ip {ip.address}")
-for prefix in filter(None, (a.wan, a.lan)):
+for prefix in filter(None, (*a.wan, a.lan)):
     pf = nb.ipam.prefixes.get(prefix=prefix, namespace=ns.id)
     if pf is not None:
         pf.delete()

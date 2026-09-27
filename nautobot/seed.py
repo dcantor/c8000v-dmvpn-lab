@@ -39,6 +39,7 @@ a = p.parse_args()
 
 inv = json.loads(subprocess.run([str(LAB / "lab.sh"), "inventory"], capture_output=True, text=True, check=True).stdout)
 SVC, PROV, OOB = inv["service"], inv["provider"], inv["oob"]
+PROV2, CLOUD2 = inv.get("provider2"), SVC.get("cloud2")     # the second provider and its cloud, or None
 N = {n["name"]: n for n in inv["nodes"]}
 SITE = inv["lab"]
 QUERY_NAME = f"{SITE}-model"
@@ -248,6 +249,12 @@ ensure_prefix(SVC["overlay"], "dmvpn-overlay",
               location=site.id)
 ensure_prefix(PROV["wan_net"], "wan-p2p", f"the MPLS provider's access links (AS {PROV['as']}): one /30 per site, "
               "carried by eBGP", location=site.id, type="container")
+if PROV2:
+    ensure_prefix(PROV2["wan_net"], "wan-p2p", f"the second provider's access links (AS {PROV2['as']}): one /30 per "
+                  "hub and dual-homed customer, carried by eBGP", location=site.id, type="container")
+    ensure_prefix(CLOUD2["overlay"], "dmvpn-overlay",
+                  f"the second DMVPN cloud (backup): Tunnel1 on the hubs and the dual-homed customers, network-id "
+                  f"{CLOUD2['network_id']}, tunnel key {CLOUD2['tunnel_key']}", location=site.id)
 rid_block = str(ipaddress.ip_network(f"{N[SVC['hubs'][0]]['router_id']}/24", strict=False))
 ensure_prefix(rid_block, "router-id", "BGP router-ids (Loopback0) of the routers; the provider takes .254",
               location=site.id, type="container")
@@ -288,7 +295,7 @@ def ensure_ip(address, description, iface=None):
 COMMENTS = {
     "hub": "DMVPN hub (C8000v): NHRP server and iBGP route reflector; customers arrive on a BGP listen range",
     "spoke": "DMVPN customer: one mGRE tunnel registered with all three hubs, iBGP with all three",
-    "provider": "The simulated MPLS provider (VyOS): its own AS, eBGP with every site on a listen range with "
+    "provider": "A simulated provider (VyOS): its own AS, eBGP with every site on a listen range with "
                 "as-override. It carries the sites' WAN addresses and nothing else",
     "host": "Alpine LAN host (iperf3 / tcpdump / mtr) behind a customer router",
 }
@@ -337,6 +344,10 @@ for n in inv["nodes"]:
         tun = ensure_if("Tunnel0", "virtual", f"DMVPN {'hub' if n['role'] == 'hub' else 'customer'} (mGRE, phase 3), "
                                              f"sourced from GigabitEthernet2 {n['nbma']}")
         ensure_ip(f"{n['tunnel_ip']}/{ipaddress.ip_network(SVC['overlay']).prefixlen}", f"{n['name']} Tunnel0", tun)
+        if n.get("tunnel2_ip"):
+            tun1 = ensure_if("Tunnel1", "virtual", f"DMVPN {'hub' if n['role'] == 'hub' else 'customer'}, cloud 2 (mGRE, "
+                                                   f"phase 3), sourced from {n['wan2']['name']} {n['nbma2']}")
+            ensure_ip(f"{n['tunnel2_ip']}/{ipaddress.ip_network(CLOUD2['overlay']).prefixlen}", f"{n['name']} Tunnel1", tun1)
         if n["role"] == "hub":
             lan = ipaddress.ip_network(n["lan"])
             lo10 = ensure_if("Loopback10", "virtual", "hub LAN")
@@ -346,6 +357,9 @@ for n in inv["nodes"]:
         ensure_ip(f"{n['router_id']}/32", f"{n['name']} router-id", dum)
         tun = ensure_if("tun0", "virtual", f"DMVPN customer (mGRE, phase 3), sourced from {n['wan']['name']} {n['nbma']}")
         ensure_ip(f"{n['tunnel_ip']}/{ipaddress.ip_network(SVC['overlay']).prefixlen}", f"{n['name']} tun0", tun)
+        if n.get("tunnel2_ip"):
+            tun1 = ensure_if("tun1", "virtual", f"DMVPN customer, cloud 2 (mGRE, phase 3), sourced from {n['wan2']['name']} {n['nbma2']}")
+            ensure_ip(f"{n['tunnel2_ip']}/{ipaddress.ip_network(CLOUD2['overlay']).prefixlen}", f"{n['name']} tun1", tun1)
     elif k == "vyos":
         ensure_ip(f"{n['router_id']}/32", f"{n['name']} router-id")
 
@@ -390,6 +404,11 @@ AS = get_or_create(bgp.autonomous_systems, {"asn": SVC["as"]}, status=active.id,
 PAS = get_or_create(bgp.autonomous_systems, {"asn": PROV["as"]}, status=active.id, description="")
 ensure(AS, description=f"{SITE}: the DMVPN sites — eBGP to the provider underneath, iBGP over the overlay")
 ensure(PAS, description=f"{SITE}: the simulated MPLS provider")
+PAS2 = None
+if PROV2:
+    PAS2 = get_or_create(bgp.autonomous_systems, {"asn": PROV2["as"]}, status=active.id, description="")
+    ensure(PAS2, description=f"{SITE}: the second provider (the backup cloud's underlay)")
+second = lambda x: bool(PROV2) and x in PROV2["nodes"]   # noqa: E731
 ri = {}
 for n in inv["nodes"]:
     if n["role"] == "host":
@@ -400,17 +419,21 @@ for n in inv["nodes"]:
         ri[n["name"]] = None
         continue
     inst = bgp.routing_instances.get(device=devs[n["name"]].id)
-    own = PAS if n["role"] == "provider" else AS
+    own = (PAS2 if second(n["name"]) else PAS) if n["role"] == "provider" else AS
     extra = {"log_neighbor_changes": True, "keepalive": SVC["keepalive"], "holdtime": SVC["holdtime_bgp"]}
     if n["role"] == "provider":
-        extra.update({"as_override": True, "listen_range": PROV["wan_net"], "peer_group": "CE"})
+        extra.update({"as_override": True, "listen_range": (PROV2 if second(n["name"]) else PROV)["wan_net"], "peer_group": "CE"})
     elif n["role"] == "hub":
-        extra.update({"listen_range": SVC["overlay"], "peer_group": "CUSTOMERS"})
+        extra.update({"listen_range": SVC["overlay"], "peer_group": "CUSTOMERS", "next_hop_self": True})
+        if n.get("wan2"):
+            extra.update({"listen_range_2": CLOUD2["overlay"], "peer_group_2": "CUSTOMERS2"})
     elif n.get("prefer_hub"):
         extra["preferred_hub"] = n["prefer_hub"]            # local-preference 200 on that hub's routes (render.py)
     desc = {"hub": "hub: a route reflector for the customers, which arrive on a listen range; eBGP customer of the provider",
             "spoke": "customer: an iBGP client of all three hubs, and an eBGP customer of the provider",
             "provider": "the MPLS provider: eBGP with every site on a listen range, as-override"}[n["role"]]
+    if second(n["name"]):
+        desc = "the second provider: eBGP with the hubs and the dual-homed customers on a listen range, as-override"
     if inst is None:
         inst = bgp.routing_instances.create(device=devs[n["name"]].id, autonomous_system=own.id, router_id=rid.id,
                                             status=active.id, description=desc, extra_attributes=extra)
@@ -418,7 +441,8 @@ for n in inv["nodes"]:
     else:
         ensure(inst, autonomous_system=own.id, router_id=rid.id, description=desc, extra_attributes=extra)
     ri[n["name"]] = inst
-    want = {"carries": PROV["wan_net"]} if n["role"] == "provider" else {"networks": [n["lan"], n["wan"]["prefix"]]}
+    want = ({"carries": (PROV2 if second(n["name"]) else PROV)["wan_net"]} if n["role"] == "provider"
+            else {"networks": [n["lan"], n["wan"]["prefix"]] + ([n["wan2"]["prefix"]] if n.get("wan2") else [])})
     af = bgp.address_families.get(routing_instance=inst.id, afi_safi="ipv4_unicast")
     if af is None:
         bgp.address_families.create(routing_instance=inst.id, afi_safi="ipv4_unicast", extra_attributes=want)
@@ -468,6 +492,19 @@ for s in hubs + spokes:
     w = N[s]["wan"]
     ensure_peering(s, "customer", provider, "provider", "underlay", ip_obj(w["ip"]),
                    ip_obj(f"{w['peer_ip']}/{w['prefix'].split('/')[1]}"), AS, PAS)
+if PROV2:                       # the second cloud: over Tunnel1, between the hubs and with the dual-homed customers
+    plen2 = ipaddress.ip_network(CLOUD2["overlay"]).prefixlen
+    tun2 = lambda x: ip_obj(f"{N[x]['tunnel2_ip']}/{plen2}")   # noqa: E731
+    duals = [s for s in spokes if N[s].get("wan2")]
+    for i, h in enumerate(hubs):
+        for k in hubs[i + 1:]:
+            ensure_peering(h, "hub", k, "hub", "overlay 2", tun2(h), tun2(k), AS, AS)
+        for s in duals:
+            ensure_peering(h, "rr", s, "rr-client", "overlay 2", tun2(h), tun2(s), AS, AS)
+    for s in hubs + duals:
+        w = N[s]["wan2"]
+        ensure_peering(s, "customer", PROV2["nodes"][0], "provider", "underlay 2", ip_obj(w["ip"]),
+                       ip_obj(f"{w['peer_ip']}/{w['prefix'].split('/')[1]}"), AS, PAS2)
 
 # ---- customers: a tenant per company (customers.json), on the customer's router and its LAN host ------------------
 # The lab's own tenant group, so no other lab's clean-up of its customers can touch these, and these none of theirs.
@@ -583,7 +620,7 @@ for key in set(have) - want:
 CTX = {"lab": SITE, "domain_name": "lab.local", "mac_oui": MAC_OUI, "oob": OOB,
        "domain_prefix": inv["nodes"][0]["domain"][: -len(inv["nodes"][0]["name"])],
        "dmvpn": {k: v for k, v in SVC.items() if k not in ("psk", "nhrp_secret")},
-       "provider": PROV,
+       "provider": PROV, **({"provider2": PROV2} if PROV2 else {}),
        "ipsec": {"key_exchange": "ikev2", "mode": "tunnel", "ikev2_profile": "DMVPN-IKEV2", "ipsec_profile": "DMVPN-IPSEC",
                  "proposal": {"encryption": "aes-cbc-256", "integrity": "sha256", "dh_group": 14}}}
 ctx = nb.extras.config_contexts.get(name=SITE)

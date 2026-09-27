@@ -23,13 +23,16 @@ import time
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse, PlainTextResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from labportal import RunBase, RunRegistry, exposition, install_runs_api, metric_line, metrics_generated, run_metrics
 from pydantic import BaseModel, Field
 
 import customers as C
 import backup as B
+import changes as CH
+import cportal as CP
+import chaos as X
 import drift as D
 import sla as SLA
 from state import HOST_PASS, HOST_USER, State, _ssh, ios, vtysh, vyos_op, vyos_show
@@ -62,6 +65,7 @@ STEP_TITLES = {
     "mod_forget": "Terraform forgets the old router (its resources leave the state; the hubs are not touched)",
     "mod_router": "Rebuild the router: delete the old VM, boot the new one with the same identity, day-0",
     "mod_host": "Rebuild the LAN host on the new LAN",
+    "mod_rewire": "Re-wire the router's port 4 (the second provider): save, power off, redefine, boot",
     "mod_nautobot": "Nautobot source of truth: update the customer",
     "drift": "Compare every router's running configuration with the model (Nautobot, Network-as-Code, the renders)",
     "fixcli": "The CLI templates: undo lines the model does not have, and mark drifted templates to be written again",
@@ -70,6 +74,12 @@ STEP_TITLES = {
     "rs_files": "Put the backup's intent back (lab.conf, customers.json, applications.json) and re-render",
     "rs_build": "Build what the backup has and the lab does not: boot the VMs, day-0",
     "rs_nautobot": "Nautobot source of truth: seed from the restored intent",
+    "fo_prepare": "Check the lab is healthy; every host starts pinging every other host and every hub's LAN (5 per second)",
+    "fo_inject": "Put the fault in",
+    "fo_hold": "Hold the fault, watching the control plane",
+    "fo_restore": "Take the fault out",
+    "fo_recover": "Wait for the lab to be healthy again",
+    "fo_report": "Collect every flow's replies and measure the outages",
     "render": "Render the configuration from lab.conf",
     "plan": "terraform plan: what Network-as-Code would change",
     "check": "Compare Nautobot's rendering with lab.conf's",
@@ -78,7 +88,10 @@ TAGS = [{"name": "monitoring", "description": "Prometheus: /metrics and /api/sd,
         {"name": "state", "description": "The cloud, the model and the live state of every router."},
         {"name": "provisioning", "description": "Suggest, validate and plan a customer; plan a removal."},
         {"name": "runs", "description": "Pipeline runs: add, modify or remove a customer, deploy, plan, test, drift, restore."},
-        {"name": "backup", "description": "Back up the whole lab state as one download; upload one to restore it."}]
+        {"name": "backup", "description": "Back up the whole lab state as one download; upload one to restore it."},
+        {"name": "resilience", "description": "Simulated failures, and failover measured flow by flow."},
+        {"name": "change control", "description": "Change requests, four-eyes approval, change windows."},
+        {"name": "customer portal", "description": "A customer's own read-only view, behind a per-customer link."}]
 app = FastAPI(title="c8000v-dmvpn-lab Provisioning Portal API", version="1.0", openapi_tags=TAGS,
               docs_url="/docs", redoc_url="/redoc",
               description="REST API behind the C8000v DMVPN lab's portal. Every change goes **lab.conf → rendered "
@@ -110,6 +123,10 @@ class CustomerSpec(BaseModel):
     customer: dict = Field(default_factory=dict, description="the company: company, industry, address, phone, contact, email, account")
     platform: str = Field("c8000v", description="the customer router: c8000v (Catalyst 8000v) or vyos")
     prefer_hub: str | None = Field(None, description="the hub its traffic prefers (BGP local-preference 200), or none")
+    dual_homed: bool = Field(False, description="a second link, into the second provider (port 4), and a Tunnel1 in the second cloud")
+    provider2: str | None = None
+    provider2_port: str | None = None
+    wan2_prefix: str | None = None
 
 
 class CustomerChange(BaseModel):
@@ -118,6 +135,7 @@ class CustomerChange(BaseModel):
     lan: str | None = Field(None, examples=["192.168.81.0/24"])
     platform: str | None = Field(None, description="c8000v or vyos: a different one rebuilds the router")
     prefer_hub: str | None = Field(None, description="a hub's name, or empty for none")
+    dual_homed: bool | None = Field(None, description="true: add a link into the second provider; false: take it away")
     customer: dict | None = Field(None, description="company fields and/or `applications`")
 
 
@@ -126,6 +144,9 @@ class RunRequest(BaseModel):
     customer: CustomerSpec | None = None
     name: str | None = Field(None, description="remove / modify: the customer; restore: the uploaded backup's id")
     changes: CustomerChange | None = Field(None, description="modify: the new values")
+    fault: dict | None = Field(None, description="failover: {kind, target, hold (seconds)} — see GET /api/faults")
+    requested_by: str | None = Field(None, description="who asks for it (change control: an approver must be someone else)")
+    reason: str | None = Field(None, description="why (shown on the change request)")
     options: dict = Field(default_factory=dict, description="{test: bool (default true), suites: [..]}")
 
 
@@ -133,7 +154,7 @@ class Run(RunBase):
     LAB = "c8000v-dmvpn-lab"
     STEP_TITLES = STEP_TITLES
     EXTRA = {"customer": "customer", "spec": "spec", "removal": "removal", "modification": "modification", "drift": "drift",
-             "restore": "restore"}
+             "restore": "restore", "change": "change", "failover": "failover"}
 
     # the steps that read differently for a VyOS router (the defaults above describe a Catalyst 8000v)
     VYOS_TITLES = {
@@ -150,6 +171,8 @@ class Run(RunBase):
         self.customer = (spec or {}).get("name")
         self.modification = (resume_of or {}).get("modification")
         self.drift = None
+        self.change = (resume_of or {}).get("change")        # the change request that started it, if any
+        self.failover = (resume_of or {}).get("failover")
         self.restore = (resume_of or {}).get("restore")
         if mode == "restore" and not self.restore:
             man, files = B.load_upload(spec["name"])
@@ -193,6 +216,8 @@ class Run(RunBase):
             return ["plan", "check"]
         if self.mode == "drift":
             return ["drift"]
+        if self.mode == "failover":
+            return ["fo_prepare", "fo_inject", "fo_hold", "fo_restore", "fo_recover", "fo_report"]
         if self.mode == "restore":
             rp = self.restore["plan"]
             takes = rp["removed"] or any(c["rebuild"] or c["relan"] for c in rp["changed"])
@@ -213,6 +238,8 @@ class Run(RunBase):
                 steps += (["mod_forget"] if m["old"]["platform"] == "c8000v" else []) + ["mod_router"]
             if m["relan"]:
                 steps.append("mod_host")
+            if m.get("rewire"):
+                steps.append("mod_rewire")
             if m["routers"]:
                 steps += ["nac", "provider"]
             steps += ["mod_nautobot", "verify"]
@@ -224,6 +251,17 @@ class Run(RunBase):
 
     def after(self):
         state._cache.clear()
+        fo = self.failover or {}
+        if self.mode == "failover" and fo.get("fault_id") and any(x["id"] == fo["fault_id"] for x in X.active()):
+            try:                                   # a failed or interrupted experiment never leaves its fault in
+                X.restore(C.facts(), fo["fault_id"], reason=f"run {self.id} ended ({self.status})")
+            except Exception:                      # noqa: BLE001
+                pass
+        if self.change:
+            try:
+                CH.mark(self.change, "done" if self.status == "success" else "failed", f"run {self.id} {self.status}")
+            except Exception:                      # noqa: BLE001
+                pass
 
     # ---- add a customer ---------------------------------------------------------------------------------------
     def do_validate(self, s):
@@ -334,12 +372,112 @@ class Run(RunBase):
         self.sh([LAB / "lab.sh", "wait", host], timeout=1800)
         s["summary"] = f"{host} rebuilt on {self.modification['new']['lan']}"
 
+    def do_mod_rewire(self, s):
+        """The router is the second end of its link into the second provider (the provider anchors it), so wiring or
+        unwiring port 4 changes the router's own VM definition: its configuration is saved, it is powered off and
+        redefined from lab.conf, and it boots with the configuration it had."""
+        name = self.modification["name"]
+        self.sh([LAB / "lab.sh", "down", name])
+        self.sh([LAB / "lab.sh", "rebuild", name])
+        self.sh([LAB / "lab.sh", "up", name])
+        self.sh([LAB / "lab.sh", "wait", name], timeout=1800)
+        s["summary"] = f"{name} restarted with port 4 " + ("wired into " + self.modification["new"]["provider2"]
+                                                            if self.modification["new"]["dual_homed"] else "unwired")
+
     def do_mod_nautobot(self, s):
         m, o = self.modification, self.modification["old"]
-        if m["rebuild"] or m["relan"]:
-            self.sh([LAB / "lab.sh", "nautobot", "remove-customer", o["name"], "--host", o["host"], "--wan", o["wan_prefix"], "--lan", o["lan"]])
+        if m["rebuild"] or m["relan"] or m.get("rewire"):
+            self.sh([LAB / "lab.sh", "nautobot", "remove-customer", o["name"], "--host", o["host"], *_wans(o), "--lan", o["lan"]])
         self.sh([LAB / "lab.sh", "nautobot", "seed"])
-        s["summary"] = "re-modelled and seeded" if m["rebuild"] or m["relan"] else "seeded"
+        s["summary"] = "re-modelled and seeded" if m["rebuild"] or m["relan"] or m.get("rewire") else "seeded"
+
+    # ---- failover timing ---------------------------------------------------------------------------------------
+    RECOVER_S = 240
+
+    def do_fo_prepare(self, s):
+        fl = self.spec["fault"]
+        snap = state.get(refresh=True)
+        if not snap["health"]["ok"]:
+            raise RuntimeError("the lab is not healthy before the test — the numbers would mean nothing: "
+                               + "; ".join(snap["health"]["problems"][:4]))
+        if X.active():
+            raise RuntimeError("a simulated failure is already in: restore it first")
+        f = C.facts()
+        tag = self.id[-4:] + self.id[11:19].replace("-", "")
+        starts = X.start_pings(f, tag, fl["hold"] + self.RECOVER_S + 60)
+        self.failover = {"kind": fl["kind"], "title": X.KINDS[fl["kind"]]["title"], "target": fl["target"], "hold": fl["hold"],
+                         "tag": tag, "starts": starts, "flows": len(X.flows(f)), "timeline": []}
+        time.sleep(10)                              # a baseline before the fault
+        s["summary"] = f"{len(X.flows(f))} flows pinging from {len(starts)} hosts"
+
+    def _mark(self, what):
+        self.failover["timeline"].append({"t": time.time(), "what": what})
+        self.say(what)
+
+    def do_fo_inject(self, s):
+        fo = self.failover
+        item = X.apply(C.facts(), fo["kind"], fo["target"], by="failover run", note=self.id)
+        fo["fault_id"], fo["t_inject"] = item["id"], time.time()
+        state._cache.clear()
+        self._mark(f"fault in: {item['done']}")
+        s["summary"] = item["done"]
+
+    def do_fo_hold(self, s):
+        fo = self.failover
+        end = fo["t_inject"] + fo["hold"]
+        while time.time() < end:
+            snap = state.get(refresh=True)
+            probs = snap["health"]["problems"]
+            self._mark(f"+{time.time() - fo['t_inject']:.0f}s: {len(probs)} problem(s)" + (": " + "; ".join(probs[:3]) if probs else ""))
+            time.sleep(max(0, min(10, end - time.time())))
+        s["summary"] = f"held {fo['hold']} s"
+
+    def do_fo_restore(self, s):
+        fo = self.failover
+        rec = X.restore(C.facts(), fo["fault_id"], reason=f"failover run {self.id}")
+        fo["t_restore"] = time.time()
+        state._cache.clear()
+        self._mark(f"fault out: {rec['undone']}")
+        s["summary"] = rec["undone"]
+
+    def do_fo_recover(self, s):
+        fo = self.failover
+        deadline = time.time() + self.RECOVER_S
+        while True:
+            snap = state.get(refresh=True)
+            if snap["health"]["ok"]:
+                fo["t_healthy"] = time.time()
+                break
+            if time.time() > deadline:
+                raise RuntimeError("not healthy again after 4 minutes: " + "; ".join(snap["health"]["problems"][:4]))
+            self._mark(f"recovering: " + "; ".join(snap["health"]["problems"][:3]))
+            time.sleep(10)
+        self._mark(f"healthy again {fo['t_healthy'] - fo['t_restore']:.0f} s after the fault came out")
+        time.sleep(10)                              # the flows' tail
+        s["summary"] = f"healthy {fo['t_healthy'] - fo['t_restore']:.0f} s after the restore"
+
+    def do_fo_report(self, s):
+        fo = self.failover
+        f = C.facts()
+        t_end = time.time()
+        seqs = X.collect(f, fo["tag"])
+        res = X.analyse(f, seqs, fo["starts"], fo["t_inject"], fo["t_restore"], t_end)
+        summ = X.summary(res)
+        fo["summary"] = summ
+        rep = {"run": self.id, "kind": fo["kind"], "title": fo["title"], "target": fo["target"], "hold": fo["hold"],
+               "t_inject": fo["t_inject"], "t_restore": fo["t_restore"], "t_healthy": fo.get("t_healthy"),
+               "recovery_s": round(fo["t_healthy"] - fo["t_restore"], 1) if fo.get("t_healthy") else None,
+               "expect": X.KINDS[fo["kind"]]["expect"], "summary": summ, "timeline": fo["timeline"], "flows": res,
+               "dual_homed": [c for c in f["customers"] if f["nodes"][c].get("wan2")]}
+        X.save_result(rep)
+        v = summ["by_verdict"]
+        for r in res:
+            if r["verdict"] != "unaffected":
+                self.say(f"  {r['src']:>11} → {r['dst']:<11} {r['verdict']:<15} worst {r.get('worst', 0):5.1f} s"
+                         + (f", on restore {r['worst_restore']:.1f} s" if r.get("worst_restore") else ""))
+        s["summary"] = (f"{v.get('unaffected', 0)} unaffected, {v.get('failed over', 0)} failed over"
+                        + (f" (worst {summ['failover_worst']:.1f} s)" if summ["failover_worst"] is not None else "")
+                        + f", {v.get('cut off', 0)} cut off, {v.get('hit on restore', 0)} hit on restore; of {summ['flows']} flows")
 
     # ---- configuration drift -----------------------------------------------------------------------------------
     def do_fixcli(self, s):
@@ -352,17 +490,18 @@ class Run(RunBase):
         for name, r in sorted(rep["nodes"].items()):
             if r.get("platform") != "c8000v" or name not in nodes:
                 continue
-            tpl = {i["where"] for i in r["items"] if i.get("where", "").startswith(("tunnel0_", "bgp_hub_"))}
+            tpl = {i["where"] for i in r["items"] if i.get("where", "").startswith(("tunnel0_", "tunnel1_", "bgp_hub_"))}
             self._replace += [f'module.iosxe.iosxe_cli.cli_0["{name}/{t}"]' for t in sorted(tpl)]
-            extra = [i["line"] for i in r["items"] if i["kind"] == "extra" and i.get("where", "").startswith("tunnel0_")]
-            if extra:
-                from netmiko import ConnectHandler
-                c = ConnectHandler(device_type="cisco_xe", host=nodes[name]["mgmt_ip"], username="admin", password="admin", fast_cli=False)
-                try:
-                    self.say(c.send_config_set(["interface Tunnel0", *[f"no {l}" for l in extra]]))
-                finally:
-                    c.disconnect()
-                undone.append(f"{name}: {len(extra)} line(s) removed")
+            for tun in ("0", "1"):
+                extra = [i["line"] for i in r["items"] if i["kind"] == "extra" and i.get("where", "").startswith(f"tunnel{tun}_")]
+                if extra:
+                    from netmiko import ConnectHandler
+                    c = ConnectHandler(device_type="cisco_xe", host=nodes[name]["mgmt_ip"], username="admin", password="admin", fast_cli=False)
+                    try:
+                        self.say(c.send_config_set([f"interface Tunnel{tun}", *[f"no {l}" for l in extra]]))
+                    finally:
+                        c.disconnect()
+                    undone.append(f"{name} Tunnel{tun}: {len(extra)} line(s) removed")
         for a in self._replace:
             self.say(f"will write again: {a}")
         s["summary"] = "; ".join(undone + [f"{len(self._replace)} template(s) to write again"]) if (undone or self._replace) else "no template drift"
@@ -411,7 +550,7 @@ class Run(RunBase):
             self.sh([LAB / "lab.sh", "clean", c, cur["host"]])
             for n in (c, cur["host"]):
                 shutil.rmtree(LAB / "nodes" / n, ignore_errors=True)
-            self.sh([LAB / "lab.sh", "nautobot", "remove-customer", c, "--host", cur["host"], "--wan", cur["wan_prefix"], "--lan", cur["lan"]])
+            self.sh([LAB / "lab.sh", "nautobot", "remove-customer", c, "--host", cur["host"], *_wans(cur), "--lan", cur["lan"]])
             done.append(f"{c} removed")
         for ch in rp["changed"]:
             if not (ch["rebuild"] or ch["relan"]):
@@ -425,7 +564,7 @@ class Run(RunBase):
                     (LAB / "nodes" / c / f).unlink(missing_ok=True)
             if ch["relan"]:
                 self.sh([LAB / "lab.sh", "clean", cur["host"]])
-            self.sh([LAB / "lab.sh", "nautobot", "remove-customer", c, "--host", cur["host"], "--wan", cur["wan_prefix"], "--lan", cur["lan"]])
+            self.sh([LAB / "lab.sh", "nautobot", "remove-customer", c, "--host", cur["host"], *_wans(cur), "--lan", cur["lan"]])
             done.append(f"{c}: " + " and ".join(x for x, y in (("router taken down", ch["rebuild"]), ("host taken down", ch["relan"])) if y))
         s["summary"] = "; ".join(done) or "nothing"
 
@@ -513,16 +652,26 @@ class Run(RunBase):
         deleted and the port disabled. There is no route to withdraw by hand: the customer's address was learned
         over eBGP and went with the session."""
         self.sh([LAB / "lab.sh", "configure"])
-        s["summary"] = f"{self.removal['provider']} {self.removal['provider_port']} released"
+        r = self.removal
+        s["summary"] = f"{r['provider']} {r['provider_port']} released" + (
+            f"; {r['provider2']} {r['provider2_port']} released" if r.get("dual_homed") else "")
 
     def do_rm_nautobot(self, s):
         r = self.removal
-        self.sh([LAB / "lab.sh", "nautobot", "remove-customer", r["name"], "--host", r["host"], "--wan", r["wan_prefix"],
+        self.sh([LAB / "lab.sh", "nautobot", "remove-customer", r["name"], "--host", r["host"], *_wans(r),
                  "--lan", r["lan"]])
+        CP.forget(r["name"])                          # its customer-portal link dies with it
         s["summary"] = f"{r['name']} and {r['host']} removed from the model"
 
 
+def _wans(c):
+    """remove-customer's --wan arguments: the first provider's /30, and the second's for a dual-homed customer."""
+    return ["--wan", c["wan_prefix"]] + (["--wan", c["wan2_prefix"]] if c.get("wan2_prefix") else [])
+
+
 def resume_factory(rec):
+    if rec["mode"] == "failover":
+        raise RuntimeError("a failover measurement is an experiment: start a new one instead of resuming")
     return Run(rec["mode"], rec.get("spec"), rec.get("options", {}), resume_of=rec)
 
 
@@ -539,7 +688,8 @@ def index():
 
 @app.get("/api/state", tags=["state"], summary="The cloud: the model, and what every router in it is doing")
 def api_state(refresh: bool = False, live: bool = True):
-    return state.get(refresh=refresh, live=live)
+    snap = state.get(refresh=refresh, live=live)
+    return {**snap, "faults": X.active(), "changes_open": sum(1 for c in CH.all_requests(200) if c["status"] in ("pending", "scheduled"))}
 
 
 @app.get("/api/customers/suggest", tags=["provisioning"], summary="The next customer, every value allocated")
@@ -578,6 +728,210 @@ def api_modify_validate(name: str, changes: CustomerChange):
     if plan is None:
         raise HTTPException(404, problems[0])
     return {"problems": problems, "plan": plan}
+
+
+# ---- resilience: simulated failures, failover measurements ---------------------------------------------------------
+class FaultRequest(BaseModel):
+    kind: str = Field(examples=["hub-down"], description="hub-down | hub-wan | provider-down | site-wan | tunnel-down")
+    target: str = Field(examples=["hub-east"], description="a hub, a provider, a customer, or a customer link (cust1:wan / cust1:wan2)")
+    requested_by: str | None = None
+    reason: str | None = None
+
+
+@app.get("/api/faults", tags=["resilience"], summary="What can fail, what is failed now, and what failed before")
+def api_faults():
+    f = C.facts()
+    return {"catalog": X.catalog(f), "active": X.active(), "history": X.history(), "max_minutes": X.FAULT_MAX_MIN}
+
+
+@app.post("/api/faults", tags=["resilience"], summary="Simulate a failure (or file a change request for one)",
+          responses={202: {"description": "change control covers failures: a change request was filed"}})
+def api_fault(req: FaultRequest):
+    f = C.facts()
+    try:
+        X._describe(f, req.kind, req.target)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    if CH.covered("fault"):
+        try:
+            cr = CH.create("fault", {"kind": req.kind, "target": req.target}, f"simulate: {X.KINDS[req.kind]['title']} on {req.target}",
+                           req.requested_by, req.reason or "", _fault_affects(req.kind, req.target))
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        return JSONResponse({"change": cr}, status_code=202)
+    try:
+        item = X.apply(f, req.kind, req.target, by=req.requested_by or "operator", note=req.reason or "")
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+    except Exception as e:                                          # noqa: BLE001
+        raise HTTPException(502, f"{e.__class__.__name__}: {e}")
+    state._cache.clear()
+    return item
+
+
+@app.delete("/api/faults/{fid}", tags=["resilience"], summary="Take a simulated failure out (never needs approval)")
+def api_fault_restore(fid: str):
+    try:
+        rec = X.restore(C.facts(), fid)
+    except KeyError:
+        raise HTTPException(404, f"no active fault {fid}")
+    except Exception as e:                                          # noqa: BLE001
+        raise HTTPException(502, f"{e.__class__.__name__}: {e}")
+    state._cache.clear()
+    return rec
+
+
+@app.post("/api/faults/restore-all", tags=["resilience"], summary="Take every simulated failure out")
+def api_fault_restore_all():
+    out = X.restore_all(C.facts())
+    state._cache.clear()
+    return out
+
+
+@app.get("/api/failover", tags=["resilience"], summary="Failover measurements, newest first")
+def api_failover_list():
+    return X.results()
+
+
+@app.get("/api/failover/{run_id}", tags=["resilience"], summary="One failover measurement, flow by flow")
+def api_failover(run_id: str):
+    r = X.result(run_id)
+    if r is None:
+        raise HTTPException(404, "no such measurement")
+    return r
+
+
+# ---- change control --------------------------------------------------------------------------------------------------
+class Decision(BaseModel):
+    by: str = Field(description="who decides (must not be the requester when four-eyes is on)")
+    comment: str = ""
+    emergency: bool = Field(False, description="approve and start now, outside the change window (needs a comment)")
+
+
+@app.get("/api/changes", tags=["change control"], summary="Change requests, newest first")
+def api_changes():
+    return {"requests": CH.all_requests(), "policy": CH.policy(), "window_open": CH.window_open(), "next_window": CH.next_window()}
+
+
+@app.get("/api/changes/{cid}", tags=["change control"], summary="One change request")
+def api_change(cid: str):
+    cr = CH.get(cid)
+    if cr is None:
+        raise HTTPException(404, f"no change request {cid}")
+    return cr
+
+
+def _decide(cid, d: Decision, approve):
+    try:
+        cr = CH.decide(cid, d.by, approve, d.comment, d.emergency)
+    except KeyError:
+        raise HTTPException(404, f"no change request {cid}")
+    except PermissionError as e:
+        raise HTTPException(403, str(e))
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+    if cr["status"] == "approved":
+        cr = _start_change(cr)
+    return cr
+
+
+@app.post("/api/changes/{cid}/approve", tags=["change control"], summary="Approve: it starts now, or in the next change window")
+def api_change_approve(cid: str, d: Decision):
+    return _decide(cid, d, True)
+
+
+@app.post("/api/changes/{cid}/reject", tags=["change control"], summary="Reject a change request")
+def api_change_reject(cid: str, d: Decision):
+    return _decide(cid, d, False)
+
+
+@app.post("/api/changes/{cid}/cancel", tags=["change control"], summary="Withdraw a pending or scheduled change request")
+def api_change_cancel(cid: str, d: Decision):
+    try:
+        return CH.cancel(cid, d.by)
+    except KeyError:
+        raise HTTPException(404, f"no change request {cid}")
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+
+
+@app.get("/api/policy", tags=["change control"], summary="The change policy: what needs approval, the change windows")
+def api_policy():
+    return {**CH.policy(), "coverable": CH.COVERABLE, "window_open": CH.window_open(), "next_window": CH.next_window()}
+
+
+@app.put("/api/policy", tags=["change control"], summary="Change the change policy")
+def api_policy_put(p: dict):
+    keep = {k: p[k] for k in ("approval", "windows", "emergency", "expire_hours") if k in p}
+    merged = {**CH.policy(), **keep}
+    probs = CH.validate_policy(merged)
+    if probs:
+        raise HTTPException(400, "; ".join(probs))
+    CH.save_policy(merged)
+    return api_policy()
+
+
+def _changes_scheduler():
+    """Every half minute: start scheduled changes whose window has opened, expire requests nobody decided on, and put
+    back simulated failures that have been in too long."""
+    while True:
+        try:
+            ready, old = CH.due()
+            for cr in ready:
+                _start_change(cr)
+            for cr in old:
+                CH.mark(cr["id"], "expired", f"nobody decided within {CH.policy()['expire_hours']} h")
+            X.expire(C.facts())
+        except Exception:                                           # noqa: BLE001
+            pass
+        time.sleep(30)
+
+
+# ---- the customer portal -------------------------------------------------------------------------------------------
+@app.get("/api/customers/{name}/portal-link", tags=["customer portal"], summary="A customer's own read-only link (made on first use)")
+def api_portal_link(name: str):
+    if C.current(name) is None:
+        raise HTTPException(404, f"{name} is not a customer of this lab")
+    t = CP.token_for(name)
+    return {"customer": name, "path": f"/c/{t}", "url": f"http://{PUBLIC_HOST}:{WEBAPP_PORT}/c/{t}"}
+
+
+@app.post("/api/customers/{name}/portal-link/rotate", tags=["customer portal"], summary="Give a customer a new link; the old one stops working")
+def api_portal_rotate(name: str):
+    if C.current(name) is None:
+        raise HTTPException(404, f"{name} is not a customer of this lab")
+    t = CP.token_for(name, rotate=True)
+    return {"customer": name, "path": f"/c/{t}", "url": f"http://{PUBLIC_HOST}:{WEBAPP_PORT}/c/{t}"}
+
+
+def _cust(token):
+    c = CP.customer_of(token)
+    if c is None or C.current(c) is None:
+        raise HTTPException(404, "this link is not (or no longer) valid")
+    return c
+
+
+@app.get("/c/{token}", include_in_schema=False)
+def customer_page(token: str):
+    _cust(token)
+    return FileResponse(str(HERE / "static" / "index.html"), headers={"Cache-Control": "no-store", "X-Robots-Tag": "noindex"})
+
+
+@app.get("/api/c/{token}/state", tags=["customer portal"], summary="The service as one customer sees it")
+def api_c_state(token: str, refresh: bool = False):
+    c = _cust(token)
+    return CP.view(state.get(refresh=refresh), c, X.active(), CH.all_requests(200), X.KINDS)
+
+
+@app.get("/api/c/{token}/sla", tags=["customer portal"], summary="The customer's service levels")
+def api_c_sla(token: str, window: str = "30d"):
+    return api_customer_sla(_cust(token), window)
+
+
+@app.get("/api/c/{token}/map.pdf", tags=["customer portal"], summary="The customer's network view and monthly report, as a PDF",
+         response_class=Response, responses={200: {"content": {"application/pdf": {}}}})
+def api_c_pdf(token: str):
+    return api_customer_map_pdf(_cust(token))
 
 
 @app.get("/api/drift", tags=["state"], summary="The latest configuration drift report")
@@ -866,28 +1220,93 @@ def api_run_estimates():
             "samples": {k: len(v) for k, v in sorted(samples.items())}}
 
 
-@app.post("/api/runs", tags=["runs"], summary="Start a run")
-def api_run(req: RunRequest):
-    if req.mode not in ("customer", "remove", "modify", "deploy", "plan", "test", "drift", "fixdrift", "restore"):
+def _change_summary(req, run):
+    """One line for a change request, and the customers it touches ("all" for the whole cloud)."""
+    m = req.mode
+    if m == "modify":
+        md = run.modification
+        return (f"modify {md['name']}: " + "; ".join(f"{c['what']} {c['old']} → {c['new']}" for c in md["changes"]))[:300], [md["name"]]
+    if m == "remove":
+        n = C.facts()["nodes"].get(req.name) or {}
+        return f"remove {req.name} ({(n.get('customer') or {}).get('company', '')})", [req.name]
+    if m == "restore":
+        rp = run.restore["plan"]
+        return (f"restore the backup of {run.restore['manifest']['created_iso'][:16]}: remove {', '.join(rp['removed']) or 'nothing'}, "
+                f"build {', '.join(rp['added']) or 'nothing'}, change {', '.join(c['name'] for c in rp['changed']) or 'nothing'}"), ["all"]
+    if m == "failover":
+        fl = req.fault or {}
+        return f"measure failover: {X.KINDS[fl['kind']]['title']} on {fl['target']} for {fl.get('hold', 60)} s", _fault_affects(fl["kind"], fl["target"])
+    return {"deploy": "deploy the model to every router", "fixdrift": "put every router back to the model (fix drift)"}.get(m, m), ["all"]
+
+
+def _fault_affects(kind, target):
+    f = C.facts()
+    if kind in ("site-wan", "tunnel-down"):
+        return [target.partition(":")[0]]
+    if kind == "provider-down" and f.get("provider2") and target in f["provider2"]["nodes"]:
+        return [c for c in f["customers"] if f["nodes"][c].get("wan2")]
+    return ["all"]
+
+
+def _new_run(req: RunRequest):
+    """RunRequest -> Run (validated), not started."""
+    if req.mode not in ("customer", "remove", "modify", "deploy", "plan", "test", "drift", "fixdrift", "restore", "failover"):
         raise HTTPException(400, f"unknown mode {req.mode}")
     spec = req.customer.model_dump() if req.customer else ({"name": req.name} if req.name else None)
-    if req.mode == "modify":
-        if not req.name or not req.changes:
-            raise HTTPException(400, "mode modify needs a name and changes")
-        spec = {"name": req.name, "changes": req.changes.model_dump(exclude_none=True)}
-    if req.mode in ("modify", "restore"):
-        if not (spec or {}).get("name"):
-            raise HTTPException(400, f"mode {req.mode} needs a name")
-        try:
-            return registry.start(Run(req.mode, spec, req.options))
-        except ValueError as e:
-            raise HTTPException(400, str(e))
     if req.mode == "customer" and not spec:
         raise HTTPException(400, "mode customer needs a customer spec")
     if req.mode == "remove" and not (spec or {}).get("name"):
         raise HTTPException(400, "mode remove needs a name")
-    return registry.start(Run(req.mode, spec, req.options))
+    if req.mode == "modify":
+        if not req.name or not req.changes:
+            raise HTTPException(400, "mode modify needs a name and changes")
+        spec = {"name": req.name, "changes": req.changes.model_dump(exclude_none=True)}
+    if req.mode == "failover":
+        fl = req.fault or {}
+        try:
+            X._describe(C.facts(), fl.get("kind"), fl.get("target"))
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        spec = {"name": fl["target"], "fault": {"kind": fl["kind"], "target": fl["target"], "hold": max(20, min(int(fl.get("hold", 60)), 600))}}
+    if req.mode in ("modify", "restore") and not (spec or {}).get("name"):
+        raise HTTPException(400, f"mode {req.mode} needs a name")
+    try:
+        return Run(req.mode, spec, req.options)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
+
+def _start_change(cr):
+    """An approved change request: start what it asked for."""
+    try:
+        if cr["kind"] == "fault":
+            item = X.apply(C.facts(), cr["request"]["kind"], cr["request"]["target"], by=cr["requested_by"], note=cr["id"])
+            state._cache.clear()
+            return CH.mark(cr["id"], "started", f"fault {item['id']} applied", fault_id=item["id"])
+        run = _new_run(RunRequest(**cr["request"]))
+        run.change = cr["id"]
+        registry.start(run)
+        return CH.mark(cr["id"], "started", f"run {run.id} started", run_id=run.id)
+    except HTTPException as e:
+        return CH.mark(cr["id"], "failed", "could not start", error=str(e.detail))
+    except Exception as e:                                          # noqa: BLE001
+        return CH.mark(cr["id"], "failed", "could not start", error=f"{e.__class__.__name__}: {e}")
+
+
+@app.post("/api/runs", tags=["runs"], summary="Start a run (or file a change request, when change control covers it)",
+          responses={202: {"description": "change control covers this: a change request was filed instead"}})
+def api_run(req: RunRequest):
+    """A run the change policy covers (GET /api/policy) does not start: it becomes a change request, answered with 202
+    and `{"change": ...}`; it starts when someone else approves it (inside a change window)."""
+    run = _new_run(req)
+    if CH.covered(req.mode):
+        summary, affects = _change_summary(req, run)
+        try:
+            cr = CH.create(req.mode, req.model_dump(exclude_none=True), summary, req.requested_by, req.reason or "", affects)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        return JSONResponse({"change": cr}, status_code=202)
+    return registry.start(run)
 
 
 # ---- monitoring (Prometheus on the NMS: lab-portal/monitoring) ------------------------------------------------------
@@ -946,6 +1365,7 @@ def _start_refresher():
     threading.Thread(target=_refresher, daemon=True).start()
     threading.Thread(target=_drift_scheduler, daemon=True).start()
     threading.Thread(target=_sla_prober, daemon=True).start()
+    threading.Thread(target=_changes_scheduler, daemon=True).start()
 
 
 def _vm_states():
@@ -981,6 +1401,7 @@ def prometheus_metrics():
         out += _g("lab_dmvpn_nhs_expected", "Hubs a customer should be registered with")
         out += _g("lab_dmvpn_registrations", "Customers registered with the hub (NHRP dynamic entries up)")
         out += _g("lab_dmvpn_shortcuts", "Customer-to-customer shortcut tunnels NHRP has resolved (phase 3)")
+        out += _g("lab_dmvpn_nhs2_up", "Hubs a dual-homed customer is registered with over the second cloud")
         out += _g("lab_ipsec_sessions_up", "IPsec sessions on Tunnel0 that are UP-ACTIVE")
         out += _g("lab_bgp_overlay_up", "Overlay iBGP sessions Established")
         out += _g("lab_bgp_overlay_sessions", "Overlay iBGP sessions configured or dynamically accepted")
@@ -998,6 +1419,8 @@ def prometheus_metrics():
                 out.append(metric_line("lab_dmvpn_nhs_up", lab, len(st.get("nhs_up") or [])))
                 out.append(metric_line("lab_dmvpn_nhs_expected", lab, len(hubs)))
                 out.append(metric_line("lab_dmvpn_shortcuts", lab, len(st.get("shortcuts") or [])))
+                if (st.get("expect") or {}).get("nhs2"):
+                    out.append(metric_line("lab_dmvpn_nhs2_up", lab, len(st.get("nhs2_up") or [])))
             out.append(metric_line("lab_ipsec_sessions_up", lab, st.get("sa", 0)))
             out.append(metric_line("lab_bgp_overlay_up", lab, st.get("overlay_up", 0)))
             out.append(metric_line("lab_bgp_overlay_sessions", lab, st.get("overlay", 0)))
@@ -1008,7 +1431,8 @@ def prometheus_metrics():
         out += _g("lab_provider_customers_expected", "Sites the model attaches to the provider")
         for p_, st in (snap.get("provider_state") or {}).items():
             out.append(metric_line("lab_provider_customers_up", {"lab": L, "provider": p_}, st.get("customers_up", 0)))
-            out.append(metric_line("lab_provider_customers_expected", {"lab": L, "provider": p_}, len(hubs) + len(snap["customers"])))
+            out.append(metric_line("lab_provider_customers_expected", {"lab": L, "provider": p_},
+                                   (st.get("expect") or {}).get("customers", len(hubs) + len(snap["customers"]))))
         out += _g("lab_host_up", "1 if the LAN host answers SSH")
         out += [metric_line("lab_host_up", {"lab": L, "host": h}, int(ok)) for h, ok in (snap.get("hosts_up") or {}).items()]
         h = snap.get("health") or {}

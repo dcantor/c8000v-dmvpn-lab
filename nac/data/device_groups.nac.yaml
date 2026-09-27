@@ -32,9 +32,11 @@ iosxe:
                 authentication_local_pre_share: true
                 authentication_remote_pre_share: true
                 keyring_local: DMVPN-KEYRING
-                dpd_interval: 30
-                dpd_retry: 5
-                dpd_query: on-demand
+                # periodic dead-peer detection: a peer behind a failed provider is declared dead in ~10 + 3 x 3 s and its
+                # IPsec SAs (and the NHRP entries riding on them) cleared — on-demand DPD waited for traffic, 30 s x 5
+                dpd_interval: 10
+                dpd_retry: 3
+                dpd_query: periodic
           # tunnel mode: the nac-iosxe 0.1.0 transform-set model has no `mode transport`
           ipsec_transform_sets:
             - name: DMVPN-TS

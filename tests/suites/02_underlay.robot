@@ -50,3 +50,23 @@ The provider carries no customer LAN, router-id or overlay route
     Should Not Contain    ${rt}    192.168.
     Should Not Contain    ${rt}    172.28.
     Should Not Contain    ${rt}    10.255.5.
+
+The second provider has an established eBGP session with every hub and every dual-homed customer, and carries only its range
+    [Documentation]    mpls2: its own AS and listen range; the hubs anchor their links to it (they are .1), a dual-homed
+    ...                customer is .2. It offers every site the second range's access links and nothing else.
+    Skip If    not $PROVIDER2    this lab has one provider
+    ${sum}=    Vyos Command    ${PROVIDER2_HOST}    show ip bgp summary
+    Should Contain    ${sum}    local AS number ${PROVIDER2_ASN}
+    FOR    ${r}    IN    @{DUAL}
+        Should Match Regexp    ${sum}    (?m)^\\*?${ROUTERS}[${r}][nbma2]\\s+4\\s+${BGP_ASN}\\s+.*\\s1\\s+\\d+\\s+\\S+\\s*$
+    END
+    ${rt}=    Vyos Command    ${PROVIDER2_HOST}    show ip route bgp
+    Should Not Contain    ${rt}    192.168.
+    Should Not Contain    ${rt}    172.2
+    FOR    ${r}    IN    @{DUAL}
+        IF    '${PLATFORM}[${r}]' == 'c8000v'
+            ${nbr}=    Show    ${r}    show bgp ipv4 unicast neighbors ${ROUTERS}[${r}][wan2_peer] | include BGP state|remote AS
+            Should Contain    ${nbr}    remote AS ${PROVIDER2_ASN}
+            Should Contain    ${nbr}    BGP state = Established
+        END
+    END

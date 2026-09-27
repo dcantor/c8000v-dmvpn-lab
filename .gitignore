@@ -23,3 +23,7 @@ results/*
 __pycache__/
 webapp/drift/
 webapp/backups/
+webapp/faults/
+webapp/failover/
+webapp/changes/
+webapp/customer_portal/

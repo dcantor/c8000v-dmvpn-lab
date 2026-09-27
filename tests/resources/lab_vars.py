@@ -29,9 +29,12 @@ for name in DMVPN:
     n = NODES[name]
     lan = n["lan"]
     lan_ip = lan.rsplit(".", 1)[0] + ".1"
+    w2 = n.get("wan2") or {}
     ROUTERS[name] = {"role": n["role"], "host": n["mgmt_ip"], "nbma": n["nbma"], "tunnel": n["tunnel_ip"],
                      "router_id": n["router_id"], "lan": lan, "lan_ip": lan_ip, "region": n["region"], "t_idx": n["t_idx"],
-                     "wan_prefix": n["wan"]["prefix"], "wan_peer": n["wan"]["peer_ip"], "host_vm": n["host"] or ""}
+                     "wan_prefix": n["wan"]["prefix"], "wan_peer": n["wan"]["peer_ip"], "host_vm": n["host"] or "",
+                     "nbma2": n.get("nbma2") or "", "tunnel2": n.get("tunnel2_ip") or "", "wan2_prefix": w2.get("prefix", ""),
+                     "wan2_peer": w2.get("peer_ip", "")}
 COMPANIES = {c: NODES[c].get("customer") for c in SPOKES}
 PREFER = {c: NODES[c]["prefer_hub"] for c in SPOKES if NODES[c].get("prefer_hub")}   # customer -> its preferred hub
 PREFERRING = sorted(PREFER)
@@ -46,6 +49,19 @@ HOST_VMS = {h: {"host": NODES[h]["mgmt_ip"], "lan_ip": NODES[h]["lan_ip"].split(
 MGMT_IPS = {n: v["mgmt_ip"] for n, v in NODES.items()}
 PROVIDER_HOST = NODES[PROVIDER]["mgmt_ip"]
 PROVIDER_ROUTER_ID = NODES[PROVIDER]["router_id"]
+
+# the second provider and the second (backup) cloud; empty when the lab has one provider
+PROV2 = INV.get("provider2") or {}
+PROVIDER2 = (PROV2.get("nodes") or [""])[0]
+PROVIDER2_HOST = NODES[PROVIDER2]["mgmt_ip"] if PROVIDER2 else ""
+PROVIDER2_ASN = str(PROV2.get("as", ""))
+WAN2_NET = PROV2.get("wan_net", "")
+DUAL = [r for r in DMVPN if NODES[r].get("wan2")]                 # hubs and dual-homed customers
+DUAL_SPOKES = [s for s in SPOKES if NODES[s].get("wan2")]
+DUAL_C8K_SPOKES = [s for s in DUAL_SPOKES if PLATFORM[s] == "c8000v"]
+DUAL_VYOS_SPOKES = [s for s in DUAL_SPOKES if PLATFORM[s] == "vyos"]
+DUAL_HUBS = [h for h in HUBS if NODES[h].get("wan2")]
+HUB_TUNNELS_RE = "(?:" + "|".join(re.escape(NODES[h]["tunnel_ip"]) for h in HUBS) + ")"   # any hub's Tunnel0 address
 
 OOB_GATEWAY = INV["oob"]["gateway"]
 DOMAIN_NAME = "lab.local"

@@ -6,21 +6,21 @@ iosxe:
   - name: tunnel0_hub-east
     type: cli
     content: "interface Tunnel0\n description DMVPN hub (mGRE, phase 3)\n ip address 172.28.0.1 255.255.255.0\n no ip redirects\n\
-      \ ip mtu 1400\n ip tcp adjust-mss 1360\n ip nhrp authentication c8dnhrp\n ip nhrp network-id 1\n ip nhrp holdtime 300\n\
+      \ ip mtu 1400\n ip tcp adjust-mss 1360\n ip nhrp authentication c8dnhrp\n ip nhrp network-id 1\n ip nhrp holdtime 60\n\
       \ ip nhrp map multicast dynamic\n ip nhrp map 172.28.0.2 100.70.2.2\n ip nhrp map multicast 100.70.2.2\n ip nhrp map\
       \ 172.28.0.3 100.70.3.2\n ip nhrp map multicast 100.70.3.2\n ip nhrp redirect\n tunnel source GigabitEthernet2\n tunnel\
       \ mode gre multipoint\n tunnel key 100\n tunnel protection ipsec profile DMVPN-IPSEC\n"
   - name: tunnel0_hub-central
     type: cli
     content: "interface Tunnel0\n description DMVPN hub (mGRE, phase 3)\n ip address 172.28.0.2 255.255.255.0\n no ip redirects\n\
-      \ ip mtu 1400\n ip tcp adjust-mss 1360\n ip nhrp authentication c8dnhrp\n ip nhrp network-id 1\n ip nhrp holdtime 300\n\
+      \ ip mtu 1400\n ip tcp adjust-mss 1360\n ip nhrp authentication c8dnhrp\n ip nhrp network-id 1\n ip nhrp holdtime 60\n\
       \ ip nhrp map multicast dynamic\n ip nhrp map 172.28.0.1 100.70.1.2\n ip nhrp map multicast 100.70.1.2\n ip nhrp map\
       \ 172.28.0.3 100.70.3.2\n ip nhrp map multicast 100.70.3.2\n ip nhrp redirect\n tunnel source GigabitEthernet2\n tunnel\
       \ mode gre multipoint\n tunnel key 100\n tunnel protection ipsec profile DMVPN-IPSEC\n"
   - name: tunnel0_hub-west
     type: cli
     content: "interface Tunnel0\n description DMVPN hub (mGRE, phase 3)\n ip address 172.28.0.3 255.255.255.0\n no ip redirects\n\
-      \ ip mtu 1400\n ip tcp adjust-mss 1360\n ip nhrp authentication c8dnhrp\n ip nhrp network-id 1\n ip nhrp holdtime 300\n\
+      \ ip mtu 1400\n ip tcp adjust-mss 1360\n ip nhrp authentication c8dnhrp\n ip nhrp network-id 1\n ip nhrp holdtime 60\n\
       \ ip nhrp map multicast dynamic\n ip nhrp map 172.28.0.1 100.70.1.2\n ip nhrp map multicast 100.70.1.2\n ip nhrp map\
       \ 172.28.0.2 100.70.2.2\n ip nhrp map multicast 100.70.2.2\n ip nhrp redirect\n tunnel source GigabitEthernet2\n tunnel\
       \ mode gre multipoint\n tunnel key 100\n tunnel protection ipsec profile DMVPN-IPSEC\n"
@@ -28,34 +28,77 @@ iosxe:
     type: cli
     content: "interface Tunnel0\n description DMVPN customer (mGRE, phase 3)\n ip address 172.28.0.11 255.255.255.0\n no ip\
       \ redirects\n ip mtu 1400\n ip tcp adjust-mss 1360\n ip nhrp authentication c8dnhrp\n ip nhrp network-id 1\n ip nhrp\
-      \ holdtime 300\n ip nhrp nhs 172.28.0.1 nbma 100.70.1.2 multicast\n ip nhrp nhs 172.28.0.2 nbma 100.70.2.2 multicast\n\
+      \ holdtime 60\n ip nhrp nhs 172.28.0.1 nbma 100.70.1.2 multicast\n ip nhrp nhs 172.28.0.2 nbma 100.70.2.2 multicast\n\
       \ ip nhrp nhs 172.28.0.3 nbma 100.70.3.2 multicast\n ip nhrp shortcut\n tunnel source GigabitEthernet2\n tunnel mode\
       \ gre multipoint\n tunnel key 100\n tunnel protection ipsec profile DMVPN-IPSEC\n"
   - name: tunnel0_cust2
     type: cli
     content: "interface Tunnel0\n description DMVPN customer (mGRE, phase 3)\n ip address 172.28.0.12 255.255.255.0\n no ip\
       \ redirects\n ip mtu 1400\n ip tcp adjust-mss 1360\n ip nhrp authentication c8dnhrp\n ip nhrp network-id 1\n ip nhrp\
-      \ holdtime 300\n ip nhrp nhs 172.28.0.1 nbma 100.70.1.2 multicast\n ip nhrp nhs 172.28.0.2 nbma 100.70.2.2 multicast\n\
+      \ holdtime 60\n ip nhrp nhs 172.28.0.1 nbma 100.70.1.2 multicast\n ip nhrp nhs 172.28.0.2 nbma 100.70.2.2 multicast\n\
       \ ip nhrp nhs 172.28.0.3 nbma 100.70.3.2 multicast\n ip nhrp shortcut\n tunnel source GigabitEthernet2\n tunnel mode\
       \ gre multipoint\n tunnel key 100\n tunnel protection ipsec profile DMVPN-IPSEC\n"
+  - name: tunnel1_hub-east
+    type: cli
+    content: "interface Tunnel1\n description DMVPN hub, cloud 2 (backup) (mGRE, phase 3)\n ip address 172.29.0.1 255.255.255.0\n\
+      \ no ip redirects\n ip mtu 1400\n ip tcp adjust-mss 1360\n ip nhrp authentication c8dnhrp\n ip nhrp network-id 2\n ip\
+      \ nhrp holdtime 60\n ip nhrp map multicast dynamic\n ip nhrp map 172.29.0.2 100.71.2.1\n ip nhrp map multicast 100.71.2.1\n\
+      \ ip nhrp map 172.29.0.3 100.71.3.1\n ip nhrp map multicast 100.71.3.1\n ip nhrp redirect\n tunnel source GigabitEthernet4\n\
+      \ tunnel mode gre multipoint\n tunnel key 200\n tunnel protection ipsec profile DMVPN-IPSEC\n"
+  - name: tunnel1_hub-central
+    type: cli
+    content: "interface Tunnel1\n description DMVPN hub, cloud 2 (backup) (mGRE, phase 3)\n ip address 172.29.0.2 255.255.255.0\n\
+      \ no ip redirects\n ip mtu 1400\n ip tcp adjust-mss 1360\n ip nhrp authentication c8dnhrp\n ip nhrp network-id 2\n ip\
+      \ nhrp holdtime 60\n ip nhrp map multicast dynamic\n ip nhrp map 172.29.0.1 100.71.1.1\n ip nhrp map multicast 100.71.1.1\n\
+      \ ip nhrp map 172.29.0.3 100.71.3.1\n ip nhrp map multicast 100.71.3.1\n ip nhrp redirect\n tunnel source GigabitEthernet4\n\
+      \ tunnel mode gre multipoint\n tunnel key 200\n tunnel protection ipsec profile DMVPN-IPSEC\n"
+  - name: tunnel1_hub-west
+    type: cli
+    content: "interface Tunnel1\n description DMVPN hub, cloud 2 (backup) (mGRE, phase 3)\n ip address 172.29.0.3 255.255.255.0\n\
+      \ no ip redirects\n ip mtu 1400\n ip tcp adjust-mss 1360\n ip nhrp authentication c8dnhrp\n ip nhrp network-id 2\n ip\
+      \ nhrp holdtime 60\n ip nhrp map multicast dynamic\n ip nhrp map 172.29.0.1 100.71.1.1\n ip nhrp map multicast 100.71.1.1\n\
+      \ ip nhrp map 172.29.0.2 100.71.2.1\n ip nhrp map multicast 100.71.2.1\n ip nhrp redirect\n tunnel source GigabitEthernet4\n\
+      \ tunnel mode gre multipoint\n tunnel key 200\n tunnel protection ipsec profile DMVPN-IPSEC\n"
+  - name: tunnel1_cust1
+    type: cli
+    content: "interface Tunnel1\n description DMVPN customer, cloud 2 (backup) (mGRE, phase 3)\n ip address 172.29.0.11 255.255.255.0\n\
+      \ no ip redirects\n ip mtu 1400\n ip tcp adjust-mss 1360\n ip nhrp authentication c8dnhrp\n ip nhrp network-id 2\n ip\
+      \ nhrp holdtime 60\n ip nhrp nhs 172.29.0.1 nbma 100.71.1.1 multicast\n ip nhrp nhs 172.29.0.2 nbma 100.71.2.1 multicast\n\
+      \ ip nhrp nhs 172.29.0.3 nbma 100.71.3.1 multicast\n ip nhrp shortcut\n tunnel source GigabitEthernet4\n tunnel mode\
+      \ gre multipoint\n tunnel key 200\n tunnel protection ipsec profile DMVPN-IPSEC\n"
   - name: bgp_hub_hub-east
     type: cli
     content: "router bgp 65100\n neighbor CUSTOMERS peer-group\n neighbor CUSTOMERS remote-as 65100\n neighbor CUSTOMERS description\
       \ DMVPN customers (dynamic, listen range)\n neighbor CUSTOMERS timers 3 9\n bgp listen limit 64\n bgp listen range 172.28.0.0/24\
       \ peer-group CUSTOMERS\n address-family ipv4\n  neighbor CUSTOMERS activate\n  neighbor CUSTOMERS route-reflector-client\n\
-      \  neighbor CUSTOMERS route-map OVERLAY in\n  neighbor CUSTOMERS route-map OVERLAY out\n exit-address-family\n"
+      \  neighbor CUSTOMERS route-map OVERLAY in\n  neighbor CUSTOMERS route-map OVERLAY out\n  neighbor CUSTOMERS next-hop-self\
+      \ all\n exit-address-family\n neighbor CUSTOMERS2 peer-group\n neighbor CUSTOMERS2 remote-as 65100\n neighbor CUSTOMERS2\
+      \ description DMVPN customers over cloud 2 (dynamic, listen range)\n neighbor CUSTOMERS2 timers 3 9\n bgp listen range\
+      \ 172.29.0.0/24 peer-group CUSTOMERS2\n address-family ipv4\n  neighbor CUSTOMERS2 activate\n  neighbor CUSTOMERS2 route-reflector-client\n\
+      \  neighbor CUSTOMERS2 route-map OVERLAY2-IN in\n  neighbor CUSTOMERS2 route-map OVERLAY out\n  neighbor CUSTOMERS2\
+      \ next-hop-self all\n exit-address-family\n"
   - name: bgp_hub_hub-central
     type: cli
     content: "router bgp 65100\n neighbor CUSTOMERS peer-group\n neighbor CUSTOMERS remote-as 65100\n neighbor CUSTOMERS description\
       \ DMVPN customers (dynamic, listen range)\n neighbor CUSTOMERS timers 3 9\n bgp listen limit 64\n bgp listen range 172.28.0.0/24\
       \ peer-group CUSTOMERS\n address-family ipv4\n  neighbor CUSTOMERS activate\n  neighbor CUSTOMERS route-reflector-client\n\
-      \  neighbor CUSTOMERS route-map OVERLAY in\n  neighbor CUSTOMERS route-map OVERLAY out\n exit-address-family\n"
+      \  neighbor CUSTOMERS route-map OVERLAY in\n  neighbor CUSTOMERS route-map OVERLAY out\n  neighbor CUSTOMERS next-hop-self\
+      \ all\n exit-address-family\n neighbor CUSTOMERS2 peer-group\n neighbor CUSTOMERS2 remote-as 65100\n neighbor CUSTOMERS2\
+      \ description DMVPN customers over cloud 2 (dynamic, listen range)\n neighbor CUSTOMERS2 timers 3 9\n bgp listen range\
+      \ 172.29.0.0/24 peer-group CUSTOMERS2\n address-family ipv4\n  neighbor CUSTOMERS2 activate\n  neighbor CUSTOMERS2 route-reflector-client\n\
+      \  neighbor CUSTOMERS2 route-map OVERLAY2-IN in\n  neighbor CUSTOMERS2 route-map OVERLAY out\n  neighbor CUSTOMERS2\
+      \ next-hop-self all\n exit-address-family\n"
   - name: bgp_hub_hub-west
     type: cli
     content: "router bgp 65100\n neighbor CUSTOMERS peer-group\n neighbor CUSTOMERS remote-as 65100\n neighbor CUSTOMERS description\
       \ DMVPN customers (dynamic, listen range)\n neighbor CUSTOMERS timers 3 9\n bgp listen limit 64\n bgp listen range 172.28.0.0/24\
       \ peer-group CUSTOMERS\n address-family ipv4\n  neighbor CUSTOMERS activate\n  neighbor CUSTOMERS route-reflector-client\n\
-      \  neighbor CUSTOMERS route-map OVERLAY in\n  neighbor CUSTOMERS route-map OVERLAY out\n exit-address-family\n"
+      \  neighbor CUSTOMERS route-map OVERLAY in\n  neighbor CUSTOMERS route-map OVERLAY out\n  neighbor CUSTOMERS next-hop-self\
+      \ all\n exit-address-family\n neighbor CUSTOMERS2 peer-group\n neighbor CUSTOMERS2 remote-as 65100\n neighbor CUSTOMERS2\
+      \ description DMVPN customers over cloud 2 (dynamic, listen range)\n neighbor CUSTOMERS2 timers 3 9\n bgp listen range\
+      \ 172.29.0.0/24 peer-group CUSTOMERS2\n address-family ipv4\n  neighbor CUSTOMERS2 activate\n  neighbor CUSTOMERS2 route-reflector-client\n\
+      \  neighbor CUSTOMERS2 route-map OVERLAY2-IN in\n  neighbor CUSTOMERS2 route-map OVERLAY out\n  neighbor CUSTOMERS2\
+      \ next-hop-self all\n exit-address-family\n"
   devices:
   - name: hub-east
     host: 10.5.0.11
@@ -65,6 +108,7 @@ iosxe:
     - DMVPN_HUB
     templates:
     - tunnel0_hub-east
+    - tunnel1_hub-east
     - bgp_hub_hub-east
     variables:
       router_id: 10.255.5.1
@@ -84,6 +128,13 @@ iosxe:
           shutdown: false
           ipv4:
             address: 100.70.1.2
+            address_mask: 255.255.255.252
+        - type: GigabitEthernet
+          id: '4'
+          description: 'WAN 2: mpls2 eth1 (provider AS 65010)'
+          shutdown: false
+          ipv4:
+            address: 100.71.1.1
             address_mask: 255.255.255.252
         loopbacks:
         - id: 0
@@ -122,6 +173,19 @@ iosxe:
           action: permit
           prefix: 10.255.5.0/24
           greater_equal: 32
+      - name: WAN2-OUT
+        description: offer the second provider our own access link to it and nothing else
+        seqs:
+        - seq: 10
+          action: permit
+          prefix: 100.71.1.0/30
+      - name: WAN2-IN
+        description: accept only the second provider's access-link range
+        seqs:
+        - seq: 10
+          action: permit
+          prefix: 100.71.0.0/16
+          less_equal: 32
       route_maps:
       - name: WAN-OUT
         entries:
@@ -144,6 +208,29 @@ iosxe:
           match:
             ipv4_address_prefix_lists:
             - OVERLAY-ROUTES
+      - name: WAN2-OUT
+        entries:
+        - seq: 10
+          operation: permit
+          match:
+            ipv4_address_prefix_lists:
+            - WAN2-OUT
+      - name: WAN2-IN
+        entries:
+        - seq: 10
+          operation: permit
+          match:
+            ipv4_address_prefix_lists:
+            - WAN2-IN
+      - name: OVERLAY2-IN
+        entries:
+        - seq: 10
+          operation: permit
+          match:
+            ipv4_address_prefix_lists:
+            - OVERLAY-ROUTES
+          set:
+            local_preference: 50
       routing:
         bgp:
           as_number: 65100
@@ -165,6 +252,21 @@ iosxe:
             description: DMVPN hub hub-west
             timers_keepalive: 3
             timers_holdtime: 9
+          - ip: 100.71.1.2
+            remote_as: 65010
+            description: provider mpls2
+            timers_keepalive: 3
+            timers_holdtime: 9
+          - ip: 172.29.0.2
+            remote_as: 65100
+            description: DMVPN hub hub-central (cloud 2)
+            timers_keepalive: 3
+            timers_holdtime: 9
+          - ip: 172.29.0.3
+            remote_as: 65100
+            description: DMVPN hub hub-west (cloud 2)
+            timers_keepalive: 3
+            timers_holdtime: 9
           address_family:
             ipv4_unicast:
               neighbors:
@@ -175,6 +277,27 @@ iosxe:
                   name: WAN-IN
                 - direction: out
                   name: WAN-OUT
+              - ip: 100.71.1.2
+                activate: true
+                route_maps:
+                - direction: in
+                  name: WAN2-IN
+                - direction: out
+                  name: WAN2-OUT
+              - ip: 172.29.0.2
+                activate: true
+                route_maps:
+                - direction: in
+                  name: OVERLAY2-IN
+                - direction: out
+                  name: OVERLAY
+              - ip: 172.29.0.3
+                activate: true
+                route_maps:
+                - direction: in
+                  name: OVERLAY2-IN
+                - direction: out
+                  name: OVERLAY
               - ip: 172.28.0.2
                 activate: true
                 route_maps:
@@ -195,6 +318,8 @@ iosxe:
               - network: 192.168.71.0
               - network: 100.70.1.0
                 mask: 255.255.255.252
+              - network: 100.71.1.0
+                mask: 255.255.255.252
   - name: hub-central
     host: 10.5.0.12
     protocol: restconf
@@ -203,6 +328,7 @@ iosxe:
     - DMVPN_HUB
     templates:
     - tunnel0_hub-central
+    - tunnel1_hub-central
     - bgp_hub_hub-central
     variables:
       router_id: 10.255.5.2
@@ -222,6 +348,13 @@ iosxe:
           shutdown: false
           ipv4:
             address: 100.70.2.2
+            address_mask: 255.255.255.252
+        - type: GigabitEthernet
+          id: '4'
+          description: 'WAN 2: mpls2 eth2 (provider AS 65010)'
+          shutdown: false
+          ipv4:
+            address: 100.71.2.1
             address_mask: 255.255.255.252
         loopbacks:
         - id: 0
@@ -260,6 +393,19 @@ iosxe:
           action: permit
           prefix: 10.255.5.0/24
           greater_equal: 32
+      - name: WAN2-OUT
+        description: offer the second provider our own access link to it and nothing else
+        seqs:
+        - seq: 10
+          action: permit
+          prefix: 100.71.2.0/30
+      - name: WAN2-IN
+        description: accept only the second provider's access-link range
+        seqs:
+        - seq: 10
+          action: permit
+          prefix: 100.71.0.0/16
+          less_equal: 32
       route_maps:
       - name: WAN-OUT
         entries:
@@ -282,6 +428,29 @@ iosxe:
           match:
             ipv4_address_prefix_lists:
             - OVERLAY-ROUTES
+      - name: WAN2-OUT
+        entries:
+        - seq: 10
+          operation: permit
+          match:
+            ipv4_address_prefix_lists:
+            - WAN2-OUT
+      - name: WAN2-IN
+        entries:
+        - seq: 10
+          operation: permit
+          match:
+            ipv4_address_prefix_lists:
+            - WAN2-IN
+      - name: OVERLAY2-IN
+        entries:
+        - seq: 10
+          operation: permit
+          match:
+            ipv4_address_prefix_lists:
+            - OVERLAY-ROUTES
+          set:
+            local_preference: 50
       routing:
         bgp:
           as_number: 65100
@@ -303,6 +472,21 @@ iosxe:
             description: DMVPN hub hub-west
             timers_keepalive: 3
             timers_holdtime: 9
+          - ip: 100.71.2.2
+            remote_as: 65010
+            description: provider mpls2
+            timers_keepalive: 3
+            timers_holdtime: 9
+          - ip: 172.29.0.1
+            remote_as: 65100
+            description: DMVPN hub hub-east (cloud 2)
+            timers_keepalive: 3
+            timers_holdtime: 9
+          - ip: 172.29.0.3
+            remote_as: 65100
+            description: DMVPN hub hub-west (cloud 2)
+            timers_keepalive: 3
+            timers_holdtime: 9
           address_family:
             ipv4_unicast:
               neighbors:
@@ -313,6 +497,27 @@ iosxe:
                   name: WAN-IN
                 - direction: out
                   name: WAN-OUT
+              - ip: 100.71.2.2
+                activate: true
+                route_maps:
+                - direction: in
+                  name: WAN2-IN
+                - direction: out
+                  name: WAN2-OUT
+              - ip: 172.29.0.1
+                activate: true
+                route_maps:
+                - direction: in
+                  name: OVERLAY2-IN
+                - direction: out
+                  name: OVERLAY
+              - ip: 172.29.0.3
+                activate: true
+                route_maps:
+                - direction: in
+                  name: OVERLAY2-IN
+                - direction: out
+                  name: OVERLAY
               - ip: 172.28.0.1
                 activate: true
                 route_maps:
@@ -333,6 +538,8 @@ iosxe:
               - network: 192.168.72.0
               - network: 100.70.2.0
                 mask: 255.255.255.252
+              - network: 100.71.2.0
+                mask: 255.255.255.252
   - name: hub-west
     host: 10.5.0.13
     protocol: restconf
@@ -341,6 +548,7 @@ iosxe:
     - DMVPN_HUB
     templates:
     - tunnel0_hub-west
+    - tunnel1_hub-west
     - bgp_hub_hub-west
     variables:
       router_id: 10.255.5.3
@@ -360,6 +568,13 @@ iosxe:
           shutdown: false
           ipv4:
             address: 100.70.3.2
+            address_mask: 255.255.255.252
+        - type: GigabitEthernet
+          id: '4'
+          description: 'WAN 2: mpls2 eth3 (provider AS 65010)'
+          shutdown: false
+          ipv4:
+            address: 100.71.3.1
             address_mask: 255.255.255.252
         loopbacks:
         - id: 0
@@ -398,6 +613,19 @@ iosxe:
           action: permit
           prefix: 10.255.5.0/24
           greater_equal: 32
+      - name: WAN2-OUT
+        description: offer the second provider our own access link to it and nothing else
+        seqs:
+        - seq: 10
+          action: permit
+          prefix: 100.71.3.0/30
+      - name: WAN2-IN
+        description: accept only the second provider's access-link range
+        seqs:
+        - seq: 10
+          action: permit
+          prefix: 100.71.0.0/16
+          less_equal: 32
       route_maps:
       - name: WAN-OUT
         entries:
@@ -420,6 +648,29 @@ iosxe:
           match:
             ipv4_address_prefix_lists:
             - OVERLAY-ROUTES
+      - name: WAN2-OUT
+        entries:
+        - seq: 10
+          operation: permit
+          match:
+            ipv4_address_prefix_lists:
+            - WAN2-OUT
+      - name: WAN2-IN
+        entries:
+        - seq: 10
+          operation: permit
+          match:
+            ipv4_address_prefix_lists:
+            - WAN2-IN
+      - name: OVERLAY2-IN
+        entries:
+        - seq: 10
+          operation: permit
+          match:
+            ipv4_address_prefix_lists:
+            - OVERLAY-ROUTES
+          set:
+            local_preference: 50
       routing:
         bgp:
           as_number: 65100
@@ -441,6 +692,21 @@ iosxe:
             description: DMVPN hub hub-central
             timers_keepalive: 3
             timers_holdtime: 9
+          - ip: 100.71.3.2
+            remote_as: 65010
+            description: provider mpls2
+            timers_keepalive: 3
+            timers_holdtime: 9
+          - ip: 172.29.0.1
+            remote_as: 65100
+            description: DMVPN hub hub-east (cloud 2)
+            timers_keepalive: 3
+            timers_holdtime: 9
+          - ip: 172.29.0.2
+            remote_as: 65100
+            description: DMVPN hub hub-central (cloud 2)
+            timers_keepalive: 3
+            timers_holdtime: 9
           address_family:
             ipv4_unicast:
               neighbors:
@@ -451,6 +717,27 @@ iosxe:
                   name: WAN-IN
                 - direction: out
                   name: WAN-OUT
+              - ip: 100.71.3.2
+                activate: true
+                route_maps:
+                - direction: in
+                  name: WAN2-IN
+                - direction: out
+                  name: WAN2-OUT
+              - ip: 172.29.0.1
+                activate: true
+                route_maps:
+                - direction: in
+                  name: OVERLAY2-IN
+                - direction: out
+                  name: OVERLAY
+              - ip: 172.29.0.2
+                activate: true
+                route_maps:
+                - direction: in
+                  name: OVERLAY2-IN
+                - direction: out
+                  name: OVERLAY
               - ip: 172.28.0.1
                 activate: true
                 route_maps:
@@ -471,6 +758,8 @@ iosxe:
               - network: 192.168.73.0
               - network: 100.70.3.0
                 mask: 255.255.255.252
+              - network: 100.71.3.0
+                mask: 255.255.255.252
   - name: cust1
     host: 10.5.0.21
     protocol: restconf
@@ -479,6 +768,7 @@ iosxe:
     - DMVPN_CUSTOMER
     templates:
     - tunnel0_cust1
+    - tunnel1_cust1
     variables:
       router_id: 10.255.5.11
       nbma: 100.70.11.2
@@ -497,6 +787,13 @@ iosxe:
           shutdown: false
           ipv4:
             address: 100.70.11.2
+            address_mask: 255.255.255.252
+        - type: GigabitEthernet
+          id: '4'
+          description: 'WAN 2: mpls2 eth5 (provider AS 65010)'
+          shutdown: false
+          ipv4:
+            address: 100.71.11.2
             address_mask: 255.255.255.252
         - type: GigabitEthernet
           id: '3'
@@ -558,6 +855,19 @@ iosxe:
         - seq: 35
           action: permit
           prefix: 10.255.5.3/32
+      - name: WAN2-OUT
+        description: offer the second provider our own access link to it and nothing else
+        seqs:
+        - seq: 10
+          action: permit
+          prefix: 100.71.11.0/30
+      - name: WAN2-IN
+        description: accept only the second provider's access-link range
+        seqs:
+        - seq: 10
+          action: permit
+          prefix: 100.71.0.0/16
+          less_equal: 32
       route_maps:
       - name: WAN-OUT
         entries:
@@ -628,6 +938,29 @@ iosxe:
             ipv4_next_hop_addresses:
             - 172.28.0.3
             local_preference: 200
+      - name: WAN2-OUT
+        entries:
+        - seq: 10
+          operation: permit
+          match:
+            ipv4_address_prefix_lists:
+            - WAN2-OUT
+      - name: WAN2-IN
+        entries:
+        - seq: 10
+          operation: permit
+          match:
+            ipv4_address_prefix_lists:
+            - WAN2-IN
+      - name: OVERLAY2-IN
+        entries:
+        - seq: 10
+          operation: permit
+          match:
+            ipv4_address_prefix_lists:
+            - OVERLAY-ROUTES
+          set:
+            local_preference: 50
       routing:
         bgp:
           as_number: 65100
@@ -654,6 +987,26 @@ iosxe:
             description: DMVPN hub hub-west
             timers_keepalive: 3
             timers_holdtime: 9
+          - ip: 100.71.11.1
+            remote_as: 65010
+            description: provider mpls2
+            timers_keepalive: 3
+            timers_holdtime: 9
+          - ip: 172.29.0.1
+            remote_as: 65100
+            description: DMVPN hub hub-east (cloud 2)
+            timers_keepalive: 3
+            timers_holdtime: 9
+          - ip: 172.29.0.2
+            remote_as: 65100
+            description: DMVPN hub hub-central (cloud 2)
+            timers_keepalive: 3
+            timers_holdtime: 9
+          - ip: 172.29.0.3
+            remote_as: 65100
+            description: DMVPN hub hub-west (cloud 2)
+            timers_keepalive: 3
+            timers_holdtime: 9
           address_family:
             ipv4_unicast:
               neighbors:
@@ -664,6 +1017,34 @@ iosxe:
                   name: WAN-IN
                 - direction: out
                   name: WAN-OUT
+              - ip: 100.71.11.1
+                activate: true
+                route_maps:
+                - direction: in
+                  name: WAN2-IN
+                - direction: out
+                  name: WAN2-OUT
+              - ip: 172.29.0.1
+                activate: true
+                route_maps:
+                - direction: in
+                  name: OVERLAY2-IN
+                - direction: out
+                  name: OVERLAY
+              - ip: 172.29.0.2
+                activate: true
+                route_maps:
+                - direction: in
+                  name: OVERLAY2-IN
+                - direction: out
+                  name: OVERLAY
+              - ip: 172.29.0.3
+                activate: true
+                route_maps:
+                - direction: in
+                  name: OVERLAY2-IN
+                - direction: out
+                  name: OVERLAY
               - ip: 172.28.0.1
                 activate: true
                 route_maps:
@@ -690,6 +1071,8 @@ iosxe:
                 mask: 255.255.255.255
               - network: 192.168.61.0
               - network: 100.70.11.0
+                mask: 255.255.255.252
+              - network: 100.71.11.0
                 mask: 255.255.255.252
   - name: cust2
     host: 10.5.0.22

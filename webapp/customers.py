@@ -49,7 +49,7 @@ def facts(inv=None):
     inv = inv or inventory()
     n = {x["name"]: x for x in inv["nodes"]}
     ports = [p for x in inv["nodes"] for p in x["ports"] if p.get("prefix")]
-    return {"inv": inv, "nodes": n, "service": inv["service"], "provider": inv["provider"],
+    return {"inv": inv, "nodes": n, "service": inv["service"], "provider": inv["provider"], "provider2": inv.get("provider2"),
             "hubs": list(inv["service"]["hubs"]), "customers": sorted(inv["service"]["spokes"], key=_num),
             "used_idx": {x["idx"] for x in inv["nodes"]},
             "used_console": {x["console"] for x in inv["nodes"]},
@@ -64,12 +64,22 @@ def _num(name):
     return int(m[1]) if m else 0
 
 
-def _free_provider_port(f):
-    prov = f["nodes"][f["provider"]["nodes"][0]]
+def _free_provider_port(f, which="provider"):
+    prov = f["nodes"][f[which]["nodes"][0]]
     free = [p["name"] for p in prov["ports"] if not p.get("peer") and 4 <= p["num"] <= 11]
     if not free:
         raise ValueError(f"{prov['name']} has no free customer port (eth4-eth11)")
     return prov["name"], free[0]
+
+
+def dual_link(f, t, provider2=None, port=None):
+    """A second-provider link for a customer with index t: the port (next free unless given) and the /30."""
+    if not f.get("provider2"):
+        raise ValueError("this lab has no second provider")
+    if provider2 is None or port is None:
+        provider2, port = _free_provider_port(f, "provider2")
+    net = f["provider2"]["wan_net"]
+    return {"provider2": provider2, "provider2_port": port, "wan2_prefix": f"{'.'.join(net.split('.')[:2])}.{t}.0/30"}
 
 
 def suggest(f=None, region=None):
@@ -89,8 +99,17 @@ def suggest(f=None, region=None):
             "router_id": f"{rid_net}.{t}", "lan": f"192.168.{60 + n}.0/24", "lan_port": "GigabitEthernet3",
             "provider": prov, "provider_port": pport, "wan_prefix": wan,
             "idx": 10 + n, "console": 5510 + n, "host_idx": 30 + n, "host_console": 5530 + n,
-            "platform": "c8000v", "prefer_hub": None,
+            "platform": "c8000v", "prefer_hub": None, "dual_homed": False,
+            **({"provider2": None, "provider2_port": None, "wan2_prefix": None} if not f.get("provider2") else
+               {k: v for k, v in _try(lambda: dual_link(f, t)).items()}),
             "customer": {**fake_company(n), "applications": ["APP-1002", "APP-1010"]}}   # email + SSO: what everyone takes
+
+
+def _try(fn):
+    try:
+        return fn()
+    except ValueError:
+        return {"provider2": None, "provider2_port": None, "wan2_prefix": None}
 
 
 def validate(spec, f=None):
@@ -149,12 +168,42 @@ def validate(spec, f=None):
         p.append(f"router type {spec.get('platform')!r} is not one of {', '.join(PLATFORMS)}")
     if spec.get("prefer_hub") and spec["prefer_hub"] not in f["hubs"]:
         p.append(f"preferred hub {spec['prefer_hub']!r} is not a hub of this lab ({', '.join(f['hubs'])})")
+    if spec.get("dual_homed"):
+        p += _check_dual(spec, f)
     known = {a["id"] for a in f["inv"].get("applications") or []}
     for aid in cu.get("applications") or []:
         if aid not in known:
             p.append(f"{aid} is not an application of this lab")
     if cu.get("company") and any(v.get("company", "").lower() == cu["company"].strip().lower() for v in companies().values()):
         p.append(f"{cu['company']} is already a customer of this lab")
+    return p
+
+
+def _check_dual(spec, f, own=None):
+    """A second-provider link: the provider, a free port on it, a /30 inside its range that overlaps nothing."""
+    p = []
+    if not f.get("provider2"):
+        return ["this lab has no second provider — a customer cannot be dual-homed"]
+    prov = f["nodes"].get(spec.get("provider2") or "")
+    if not prov or prov["name"] not in f["provider2"]["nodes"]:
+        return [f"{spec.get('provider2')} is not the second provider"]
+    port = next((x for x in prov["ports"] if x["name"] == spec.get("provider2_port")), None)
+    if not port:
+        p.append(f"{prov['name']} has no port {spec.get('provider2_port')}")
+    elif port.get("peer") and port.get("peer") != own:
+        p.append(f"{prov['name']} {port['name']} is already wired to {port['peer']}")
+    try:
+        net = ipaddress.ip_network(spec.get("wan2_prefix") or "")
+        if net.prefixlen != 30:
+            p.append(f"{net} is not a /30")
+        if not net.subnet_of(ipaddress.ip_network(f["provider2"]["wan_net"])):
+            p.append(f"{net} is outside the second provider's range {f['provider2']['wan_net']}")
+        mine = {(f["nodes"][own].get("wan2") or {}).get("prefix")} if own else set()
+        for other in f["used_prefix"] - mine:
+            if net.overlaps(ipaddress.ip_network(other)):
+                p.append(f"{net} overlaps {other}")
+    except ValueError as e:
+        p.append(f"second provider link: {e}")
     return p
 
 
@@ -173,14 +222,16 @@ def plan(spec, f=None):
             "platform": spec.get("platform", "c8000v"),
             "company": f"{spec['customer']['company']} ({spec['customer']['industry']})" if spec.get("customer") else "",
             "cloud": f"Tunnel0 {spec['tunnel_ip']} sourced from {spec['nbma']}, registered with " + ", ".join(f["hubs"]),
-            "wan": f"GigabitEthernet2 into {spec['provider']} {spec['provider_port']} on {spec['wan_prefix']}",
+            "wan": f"GigabitEthernet2 into {spec['provider']} {spec['provider_port']} on {spec['wan_prefix']}"
+                   + (f"; and port 4 into {spec['provider2']} {spec['provider2_port']} on {spec['wan2_prefix']} "
+                      "(dual-homed: Tunnel1 in the second cloud, the backup path)" if spec.get("dual_homed") else ""),
             "lan": f"{spec['lan']} on {spec['lan_port']}, with {spec['host']} behind it",
             "prefer": (f"prefers {spec['prefer_hub']}: its routes to the other customers go through {spec['prefer_hub']} "
                        "(local-preference 200) until the shortcut forms" if spec.get("prefer_hub") else
                        "no preferred hub: any of the hubs"),
             "untouched": "the hubs: a customer registers with NHRP and arrives on their BGP listen range, so no hub "
                          "configuration changes — Terraform adds resources on the new router only",
-            "changed": [spec["provider"]]}
+            "changed": [spec["provider"]] + ([spec["provider2"]] if spec.get("dual_homed") else [])}
 
 
 def removal_plan(name, f=None):
@@ -197,6 +248,8 @@ def removal_plan(name, f=None):
                 "host_mgmt": h["mgmt_ip"] if h else None, "t_idx": n["t_idx"], "tunnel_ip": n["tunnel_ip"],
                 "nbma": n["nbma"], "router_id": n["router_id"], "lan": n["lan"],
                 "provider": n["wan"]["peer"], "provider_port": n["wan"]["peer_port"], "wan_prefix": n["wan"]["prefix"],
+                "dual_homed": bool(n.get("wan2")), "provider2": (n.get("wan2") or {}).get("peer"),
+                "provider2_port": (n.get("wan2") or {}).get("peer_port"), "wan2_prefix": (n.get("wan2") or {}).get("prefix"),
                 "idx": n["idx"], "console": n["console"],
                 "host_idx": h["idx"] if h else None, "host_console": h["console"] if h else None}
 
@@ -220,7 +273,7 @@ def remove_from_labconf(spec):
 
 
 # ---- modify a customer -----------------------------------------------------------------------------------------
-MODIFIABLE = ("region", "lan", "platform", "prefer_hub")
+MODIFIABLE = ("region", "lan", "platform", "prefer_hub", "dual_homed")
 
 
 def current(name, f=None):
@@ -235,7 +288,10 @@ def current(name, f=None):
     return {"name": name, "host": n.get("host"), "region": n.get("region"), "lan": n["lan"], "platform": n.get("platform", "c8000v"),
             "prefer_hub": n.get("prefer_hub"), "mgmt_ip": n["mgmt_ip"], "host_mgmt": h.get("mgmt_ip"), "t_idx": n["t_idx"],
             "tunnel_ip": n["tunnel_ip"], "nbma": n["nbma"], "wan_prefix": n["wan"]["prefix"], "provider": n["wan"]["peer"],
-            "provider_port": n["wan"]["peer_port"], "customer": cu}
+            "provider_port": n["wan"]["peer_port"], "customer": cu,
+            "dual_homed": bool(n.get("wan2")), "provider2": (n.get("wan2") or {}).get("peer"),
+            "provider2_port": (n.get("wan2") or {}).get("peer_port"), "wan2_prefix": (n.get("wan2") or {}).get("prefix"),
+            "has_provider2": bool(f.get("provider2"))}
 
 
 def modify_plan(name, want, f=None):
@@ -249,6 +305,14 @@ def modify_plan(name, want, f=None):
         return [f"{name} is not a customer of this lab"], None
     new = {**old, **{k: want[k] for k in MODIFIABLE if k in want}}
     new["prefer_hub"] = new.get("prefer_hub") or None
+    new["dual_homed"] = bool(new.get("dual_homed"))
+    if new["dual_homed"] and not old["dual_homed"]:
+        try:
+            new.update(dual_link(f, old["t_idx"]))
+        except ValueError as e:
+            return [str(e)], None
+    elif not new["dual_homed"]:
+        new.update({"provider2": None, "provider2_port": None, "wan2_prefix": None})
     new["customer"] = {**old["customer"], **{k: v for k, v in (want.get("customer") or {}).items() if k in COMPANY_FIELDS + ("applications",)}}
     new["customer"]["applications"] = sorted(set(new["customer"].get("applications") or []))
     p = []
@@ -280,9 +344,14 @@ def modify_plan(name, want, f=None):
     p += [f"{aid} is not an application of this lab" for aid in new["customer"]["applications"] if aid not in known]
 
     changes = []
-    for k, what in (("region", "region"), ("lan", "site LAN"), ("platform", "router type"), ("prefer_hub", "preferred hub")):
+    if new["dual_homed"] and not old["dual_homed"]:
+        p += _check_dual(new, f)
+    for k, what in (("region", "region"), ("lan", "site LAN"), ("platform", "router type"), ("prefer_hub", "preferred hub"),
+                    ("dual_homed", "second provider")):
         if new[k] != old[k]:
-            fmt = (lambda v: PLATFORMS.get(v, v)) if k == "platform" else (lambda v: v or "none")
+            fmt = ((lambda v: PLATFORMS.get(v, v)) if k == "platform" else
+                   (lambda v, _n=new: f"dual-homed ({_n['provider2']} {_n['provider2_port']}, {_n['wan2_prefix']})" if v else "single-homed")
+                   if k == "dual_homed" else (lambda v: v or "none"))
             changes.append({"field": k, "what": what, "old": fmt(old[k]), "new": fmt(new[k])})
     for k in COMPANY_FIELDS:
         if str(new["customer"].get(k) or "").strip() != str(old["customer"].get(k) or "").strip():
@@ -295,19 +364,24 @@ def modify_plan(name, want, f=None):
         p.append("nothing to change")
     rebuild = new["platform"] != old["platform"]
     relan = new["lan"] != old["lan"]
-    routers = rebuild or relan or new["prefer_hub"] != old["prefer_hub"] or new["region"] != old["region"]
+    rewire = new["dual_homed"] != old["dual_homed"] and not rebuild      # a rebuilt router is wired from scratch anyway
+    routers = rebuild or relan or rewire or new["prefer_hub"] != old["prefer_hub"] or new["region"] != old["region"]
     what = []
     if rebuild:
         what.append(f"{name} is rebuilt as a {PLATFORMS.get(new['platform'], new['platform'])} router with the same identity (addresses, index, "
                     f"ports): the old VM is deleted, the new one boots ({'~10 min' if new['platform'] == 'c8000v' else '~2 min'}) and gets its day-0")
     if relan:
         what.append(f"{name}'s LAN becomes {new['lan']} (gateway .1); {old['host']} is rebuilt on it (.2) — its old address goes")
+    if rewire:
+        what.append(f"{name} is restarted with its port 4 " + (f"wired into {new['provider2']} {new['provider2_port']}" if new["dual_homed"]
+                    else "unwired") + " (its configuration is saved first; a C8000v is back in ~5 min, a VyOS in ~1); "
+                    + ("then Tunnel1 registers with every hub in the second cloud" if new["dual_homed"] else "its second cloud goes"))
     if new["prefer_hub"] != old["prefer_hub"] and not rebuild:
         what.append(f"{name}'s BGP policy is re-applied: " + (f"routes through {new['prefer_hub']} rank first" if new["prefer_hub"] else "no hub preferred"))
     if routers:
         what.append("Network-as-Code applied (C8000v) and the VyOS routers re-pushed; the hubs do not change")
-    what.append("Nautobot " + ("re-modelled: the customer is taken out and seeded again" if rebuild or relan else "updated (seed)"))
-    return p, {"name": name, "old": old, "new": new, "changes": changes, "rebuild": rebuild, "relan": relan,
+    what.append("Nautobot " + ("re-modelled: the customer is taken out and seeded again" if rebuild or relan or rewire else "updated (seed)"))
+    return p, {"name": name, "old": old, "new": new, "changes": changes, "rebuild": rebuild, "relan": relan, "rewire": rewire,
                "routers": routers, "what": what}
 
 

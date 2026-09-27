@@ -231,3 +231,60 @@ A backup holds the whole lab state, and uploading it back plans no change
     Should Be Empty    ${u.json()}[plan][added]
     Should Be Empty    ${u.json()}[plan][changed]
     ${bad}=    POST On Session    portal    /api/backups    data=not a backup    headers=${{{"content-type": "application/gzip"}}}    expected_status=400
+
+Change control: a covered change waits for someone else's approval, and a simulated failure goes in and comes out
+    [Documentation]    The policy covers simulated failures (a lab default): filing one answers 202 with a change request;
+    ...                the requester cannot approve it (four eyes); another name can, and the fault goes in. Restoring
+    ...                never needs approval. The failure is harmless: a dual-homed customer's backup circuit.
+    ${p}=    GET On Session    portal    /api/policy
+    Skip If    not ($p.json()['approval']['enabled'] and 'fault' in $p.json()['approval']['covers'])    the policy does not cover failures
+    Skip If    not $DUAL_SPOKES    no dual-homed customer: no harmless failure to simulate
+    ${target}=    Set Variable    ${DUAL_SPOKES}[0]:wan2
+    ${r}=    POST On Session    portal    /api/faults    json=${{{"kind": "site-wan", "target": $target, "requested_by": "robot", "reason": "suite 07"}}}    expected_status=202
+    ${cr}=    Set Variable    ${r.json()}[change][id]
+    Should Be Equal    ${r.json()}[change][status]    pending
+    POST On Session    portal    /api/changes/${cr}/approve    json=${{{"by": "robot"}}}    expected_status=403
+    ${ok}=    POST On Session    portal    /api/changes/${cr}/approve    json=${{{"by": "robot-approver", "comment": "suite 07"}}}
+    Should Be Equal    ${ok.json()}[status]    started    msg=${ok.json()}
+    ${fid}=    Set Variable    ${ok.json()}[fault_id]
+    ${f}=    GET On Session    portal    /api/faults
+    Should Be Equal    ${f.json()}[active][0][id]    ${fid}
+    ${st}=    GET On Session    portal    /api/state
+    Length Should Be    ${st.json()}[faults]    1
+    ${back}=    DELETE On Session    portal    /api/faults/${fid}
+    Should Contain    ${back.json()}[undone]    delete
+    ${f}=    GET On Session    portal    /api/faults
+    Should Be Empty    ${f.json()}[active]
+    ${again}=    POST On Session    portal    /api/changes/${cr}/approve    json=${{{"by": "someone-else"}}}    expected_status=409
+
+The failure catalogue offers every kind of failure, and the failover measurements are listed
+    ${f}=    GET On Session    portal    /api/faults
+    ${kinds}=    Evaluate    sorted(k['kind'] for k in $f.json()['catalog'])
+    Lists Should Be Equal    ${kinds}    ${{sorted(["hub-down", "hub-wan", "provider-down", "site-wan", "tunnel-down"])}}
+    ${hubs}=    Evaluate    [o['id'] for k in $f.json()['catalog'] if k['kind'] == 'hub-down' for o in k['options']]
+    Lists Should Be Equal    ${hubs}    ${HUBS}
+    ${m}=    GET On Session    portal    /api/failover
+    FOR    ${x}    IN    @{m.json()}
+        Should Contain Any    ${x}[kind]    hub-down    hub-wan    provider-down    site-wan    tunnel-down
+        Dictionary Should Contain Key    ${x}[summary]    by_verdict
+    END
+
+A customer's own link shows its service and nothing of any other customer
+    ${c}=    Set Variable    ${SPOKES}[0]
+    ${l}=    GET On Session    portal    /api/customers/${c}/portal-link
+    ${page}=    GET On Session    portal    ${l.json()}[path]
+    Should Contain    ${page.text}    customerMode
+    ${token}=    Evaluate    $l.json()['path'].split('/')[-1]
+    ${v}=    GET On Session    portal    /api/c/${token}/state
+    Lists Should Be Equal    ${v.json()}[customers]    ${{[$c]}}
+    Should Be Equal    ${v.json()}[customer]    ${c}
+    FOR    ${o}    IN    @{SPOKES}
+        Continue For Loop If    '${o}' == '${c}'
+        Should Not Contain    ${v.text}    "${o}"    msg=${o} leaks into ${c}'s view
+        Should Not Contain    ${v.text}    ${COMPANIES}[${o}][company]
+        Should Not Contain    ${v.text}    ${ROUTERS}[${o}][lan]
+    END
+    ${s}=    GET On Session    portal    /api/c/${token}/sla    params=window=24h
+    Should Be Equal    ${s.json()}[customer]    ${c}
+    GET On Session    portal    /api/c/not-a-token/state    expected_status=404
+    GET On Session    portal    /c/not-a-token    expected_status=404

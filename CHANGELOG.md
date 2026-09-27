@@ -11,6 +11,79 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 While the version is 0.x, the lab's interfaces are still settling. The current version is in [`VERSION`](VERSION), in
 the portal's header, and in git as a `v<version>` tag.
 
+## [0.19.0] — 2026-09-27
+
+### Added
+- **A second provider, and dual-homed customers.**
+  - A second VyOS router, `mpls2` (AS 65010, `100.71.0.0/16`), plays another carrier. Every hub has a link into it
+    (Gi4) and a second tunnel, Tunnel1, in a second DMVPN cloud (`172.29.0.0/24`, NHRP network-id 2, key 200).
+  - A customer can be dual-homed from Add a customer or Modify, on either platform: a link from its port 4 into
+    mpls2 and a Tunnel1 of its own. Toggling dual-homing restarts only that customer's router.
+  - The second cloud is the backup: its routes carry local-preference 50.
+  - The hubs anchor their links into mpls2, so none of them restarted.
+  - Also covered: lab.conf, the inventory, the renderer (C8000v NAC model and templates, VyOS), Nautobot (seed and
+    `render --check`, including a second peer-group on the hubs), the live state and health, the map (a second
+    provider, cloud 2 tunnels and access links, a layer toggle), the tables and dialogs, and `lab.sh verify`.
+- **Resilience: failure simulation.** A new Resilience view, with markers on the map and a banner with Restore.
+  - Five reversible failures: a hub fails (VM frozen), a hub loses its first provider, a provider fails, a customer
+    circuit is cut, a customer tunnel goes down.
+  - Nothing is saved on a router, and a failure left in is put back after 30 minutes.
+  - Endpoints: `GET/POST /api/faults`, `DELETE /api/faults/{id}`, `POST /api/faults/restore-all`.
+- **Failover timing.** A `failover` run measures one failure as an experiment:
+  - every LAN host pings every other host and every hub's LAN five times a second, measured flow by flow (35 flows
+    here);
+  - the fault goes in, is held, comes out, and the run waits for the lab to be healthy again.
+  - Each flow gets its outage and a verdict: unaffected, failed over, cut off, or hit on restore. There are
+    per-flow timelines and a control-plane timeline (`/api/failover`).
+  - A failed or interrupted experiment never leaves its fault in.
+- **Change control.** Removing, modifying or restoring customers, deploying, fixing drift, simulating a failure and
+  measuring a failover now file a change request (CR-0001 …, HTTP 202) instead of starting.
+  - Someone other than the requester approves it (four eyes) or rejects it.
+  - With change windows on, an approved change is scheduled for the next window, unless it's an emergency with a
+    reason.
+  - Unanswered requests expire after 72 h.
+  - A policy editor on Runs, your name in the header, and a "changes waiting" badge.
+  - Endpoints: `/api/changes`, `/api/policy`.
+  - Names are typed, not authenticated.
+- **Customer portal.** A per-customer read-only link, `/c/<token>` (made, copied and rotated from the customer's
+  details; dropped when the customer is removed).
+  - It shows the customer's service status, its own view of the map, its applications, service levels and monthly
+    report, planned maintenance (change requests that touch it) and incidents (failures that touch it).
+  - Its API (`/api/c/<token>/…`) answers only about that customer: no other customer's name, company, addresses or
+    shortcuts.
+- **Tests:**
+  - `02_underlay`: the second provider's sessions and what it carries.
+  - `03_dmvpn`: the second cloud — Tunnel1 registrations and IPsec on both sides.
+  - `04_routing`: next hop through a hub, the hubs' next-hop-self, cloud 2 ranked below cloud 1.
+  - `07_portal`: change control with four eyes and a fault in and out, the failure catalogue, the customer portal's
+    isolation.
+
+### Changed
+- **The hubs send themselves as next hop to their customers** (`neighbor CUSTOMERS next-hop-self all`).
+  - A C8000v customer now reaches another site through a hub until phase 3's shortcut forms, as the VyOS customers
+    already did.
+  - A route never points at an address the customer cannot reach.
+  - Needed for dual-homing: otherwise a single-homed customer would get another site's second-cloud address as next
+    hop.
+- **Timers, from the failover measurements.**
+  - NHRP holdtime 300 → 60 s.
+  - IKEv2 dead-peer detection 30 s × 5 on-demand → 10 s × 3 periodic (VyOS: 30/150 s → 10/30 s).
+  - With the old timers, traffic between dual-homed customers stayed on a phase 3 shortcut over the failed provider
+    and was cut off for about 2 minutes. Now it fails over in 43–49 s.
+
+### Lab state
+- **mpls2** was added. **cust1** (C8000v) and **cust4** (VyOS) are dual-homed.
+- **cust1's applications** are now APP-1002, APP-1007 and APP-1010, changed through Modify a customer at 12:37 before this
+  release (they were APP-1001, 1002, 1005, 1008 and 1010).
+- **Change requests** CR-0001 to CR-0006 were filed by "claude" and approved as "claude (test approver)". That name
+  was a test of the four-eyes flow, not a second person. The test suite files its own ("robot", approved as
+  "robot-approver").
+- **Failover measurements:**
+  - hub-east fails: 29/35 flows unaffected.
+  - mpls fails, old timers: dual-homed site-to-site traffic cut off.
+  - mpls fails, new timers: failed over in 43–49 s.
+- **Tests:** 65 of 65.
+
 ## [0.18.0] — 2026-09-27
 
 ### Added
@@ -303,6 +376,7 @@ the portal's header, and in git as a `v<version>` tag.
   - `nac/`, Network-as-Code for the C8000vs.
   - Robot suites, the README, and the first Nautobot seed.
 
+[0.19.0]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.15.1...v0.16.0

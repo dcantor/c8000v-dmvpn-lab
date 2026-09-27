@@ -1,0 +1,84 @@
+# mpls2: the second provider — day-0 pushed over the serial console by lab.sh bootstrap; rendered by tools/render.py
+set system host-name mpls2
+set system login user vyos authentication plaintext-password vyos
+set system time-zone UTC
+set service ssh
+set service lldp interface all
+set interfaces ethernet eth0 address 10.5.0.32/24
+set interfaces ethernet eth0 description 'OOB management'
+set interfaces ethernet eth0 hw-id 52:54:00:c9:16:00
+set service https api rest
+set service https api keys id lab key c8000v-dmvpn-lab
+set service https allow-client address 10.5.0.1
+#
+# monitoring: exporters on the OOB address, scraped from the NMS (the portal's /api/sd lists them);
+# Telegraf pushes host / FRR / service metrics to VictoriaMetrics, syslog goes to VictoriaLogs
+set service monitoring prometheus node-exporter listen-address 10.5.0.32
+set service monitoring prometheus frr-exporter listen-address 10.5.0.32
+set service monitoring telegraf influxdb url http://10.5.0.10
+set service monitoring telegraf influxdb port 8428
+set service monitoring telegraf influxdb bucket c8000v-dmvpn-lab
+set service monitoring telegraf influxdb authentication organization lab
+set service monitoring telegraf influxdb authentication token c8dlab-telegraf_______________________________________________________________________==
+set service monitoring telegraf global-tag lab value c8000v-dmvpn-lab
+set service monitoring telegraf global-tag role value provider
+set service monitoring telegraf global-tag dc value provider
+set system syslog remote 10.5.0.10 port 5514
+set system syslog remote 10.5.0.10 protocol udp
+set system syslog remote 10.5.0.10 facility all level info
+#
+# access links: one /30 per site; the provider is .1 on a customer's, .2 on a hub's (the hub anchors it)
+set interfaces ethernet eth1 hw-id 52:54:00:c9:16:01
+set interfaces ethernet eth1 address 100.71.1.2/30
+set interfaces ethernet eth1 description 'hub: hub-east GigabitEthernet4'
+set interfaces ethernet eth2 hw-id 52:54:00:c9:16:02
+set interfaces ethernet eth2 address 100.71.2.2/30
+set interfaces ethernet eth2 description 'hub: hub-central GigabitEthernet4'
+set interfaces ethernet eth3 hw-id 52:54:00:c9:16:03
+set interfaces ethernet eth3 address 100.71.3.2/30
+set interfaces ethernet eth3 description 'hub: hub-west GigabitEthernet4'
+set interfaces ethernet eth4 hw-id 52:54:00:c9:16:04
+set interfaces ethernet eth4 address 100.71.14.1/30
+set interfaces ethernet eth4 description 'spoke: cust4 eth4'
+set interfaces ethernet eth5 hw-id 52:54:00:c9:16:05
+set interfaces ethernet eth5 address 100.71.11.1/30
+set interfaces ethernet eth5 description 'spoke: cust1 GigabitEthernet4'
+set interfaces ethernet eth6 hw-id 52:54:00:c9:16:06
+set interfaces ethernet eth6 description 'unwired'
+set interfaces ethernet eth6 disable
+set interfaces ethernet eth7 hw-id 52:54:00:c9:16:07
+set interfaces ethernet eth7 description 'unwired'
+set interfaces ethernet eth7 disable
+set interfaces ethernet eth8 hw-id 52:54:00:c9:16:08
+set interfaces ethernet eth8 description 'unwired'
+set interfaces ethernet eth8 disable
+set interfaces ethernet eth9 hw-id 52:54:00:c9:16:09
+set interfaces ethernet eth9 description 'unwired'
+set interfaces ethernet eth9 disable
+set interfaces ethernet eth10 hw-id 52:54:00:c9:16:0a
+set interfaces ethernet eth10 description 'unwired'
+set interfaces ethernet eth10 disable
+set interfaces ethernet eth11 hw-id 52:54:00:c9:16:0b
+set interfaces ethernet eth11 description 'unwired'
+set interfaces ethernet eth11 disable
+set interfaces ethernet eth12 hw-id 52:54:00:c9:16:0c
+set interfaces ethernet eth12 description 'unwired'
+set interfaces ethernet eth12 disable
+#
+# mpls2: its own AS, eBGP with every site through a listen range; it carries the sites' WAN addresses and nothing else
+set policy prefix-list WAN-ADDRESSES description 'the access links, and nothing else'
+set policy prefix-list WAN-ADDRESSES rule 10 action permit
+set policy prefix-list WAN-ADDRESSES rule 10 prefix 100.71.0.0/16
+set policy prefix-list WAN-ADDRESSES rule 10 le 32
+set protocols bgp system-as 65010
+set protocols bgp parameters router-id 10.255.5.253
+set protocols bgp parameters log-neighbor-changes
+set protocols bgp timers keepalive 3
+set protocols bgp timers holdtime 9
+set protocols bgp peer-group CE remote-as 65100
+set protocols bgp peer-group CE description 'the customer sites (AS 65100)'
+set protocols bgp peer-group CE address-family ipv4-unicast as-override
+set protocols bgp peer-group CE address-family ipv4-unicast prefix-list export WAN-ADDRESSES
+set protocols bgp peer-group CE address-family ipv4-unicast prefix-list import WAN-ADDRESSES
+set protocols bgp listen limit 64
+set protocols bgp listen range 100.71.0.0/16 peer-group CE

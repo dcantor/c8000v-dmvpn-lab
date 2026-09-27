@@ -38,17 +38,50 @@ Every customer peers with all three hubs, and only with them in the overlay
         Should Be Equal As Integers    ${n}    3    msg=${s} must peer with the three hubs only
     END
 
-Every router has every other LAN and router-id with the originating router as next hop
-    [Documentation]    A customer that prefers a hub has the other customers' prefixes through that hub instead (`%`: a
-    ...                live shortcut overrides the next hop); the hubs' own prefixes keep the originating hub.
+Every router has every other LAN and router-id: a hub from the originating router, a customer through a hub
+    [Documentation]    The hubs reflect to their customers with themselves as next hop (next-hop-self all), so a customer
+    ...                reaches another site through a hub until phase 3 overrides the next hop with the shortcut (`%`);
+    ...                a customer that prefers a hub goes through that one. A hub has every prefix from its originator.
     FOR    ${r}    IN    @{C8K}
         ${rt}=    Show    ${r}    show ip route bgp
         FOR    ${o}    IN    @{DMVPN}
             Continue For Loop If    '${r}' == '${o}'
-            ${via}=    Evaluate    $ROUTERS[$PREFER[$r]]['tunnel'] if $r in $PREFER and $o in $SPOKES else $ROUTERS[$o]['tunnel']
-            Should Match Regexp    ${rt}    (?m)^B\\s+(%\\s+)?${ROUTERS}[${o}][lan] \\[200/0\\] via ${via}
-            Should Match Regexp    ${rt}    (?m)^B\\s+(%\\s+)?${ROUTERS}[${o}][router_id](/32)? \\[200/0\\] via ${via}
+            IF    '${ROUTERS}[${r}][role]' == 'hub'
+                ${via}=    Evaluate    __import__('re').escape($ROUTERS[$o]['tunnel'])
+            ELSE IF    $r in $PREFER and $o in $SPOKES
+                ${via}=    Evaluate    __import__('re').escape($ROUTERS[$PREFER[$r]]['tunnel'])
+            ELSE
+                ${via}=    Set Variable    ${HUB_TUNNELS_RE}
+            END
+            Should Match Regexp    ${rt}    (?m)^B\\s+(%\\s+)?${ROUTERS}[${o}][lan] \\[200/0\\] via ${via}\\b
+            Should Match Regexp    ${rt}    (?m)^B\\s+(%\\s+)?${ROUTERS}[${o}][router_id](/32)? \\[200/0\\] via ${via}\\b
         END
+    END
+
+The hubs send themselves as next hop to their customers, over both clouds
+    FOR    ${h}    IN    @{HUBS}
+        ${b}=    Show    ${h}    show running-config | section router bgp
+        Should Contain    ${b}    neighbor CUSTOMERS next-hop-self all
+        IF    $h in $DUAL_HUBS
+            Should Contain    ${b}    bgp listen range 172.29.0.0/24 peer-group CUSTOMERS2
+            Should Contain    ${b}    neighbor CUSTOMERS2 next-hop-self all
+        END
+    END
+
+A dual-homed customer has every other site over both clouds, the second one ranked below the first
+    [Documentation]    Cloud 2's routes carry local-preference 50: they are the backup, used when the first provider fails.
+    Skip If    not $DUAL_SPOKES    no customer is dual-homed
+    FOR    ${c}    IN    @{DUAL_SPOKES}
+        ${other}=    Evaluate    [s for s in $SPOKES if s != $c][0]
+        IF    '${PLATFORM}[${c}]' == 'vyos'
+            ${out}=    On VyOS    ${c}    sudo vtysh -c 'show ip bgp ${ROUTERS}[${other}][lan]'
+        ELSE
+            ${out}=    Show    ${c}    show ip bgp ${ROUTERS}[${other}][lan]
+        END
+        Should Contain    ${out}    localpref 50
+        ${best}=    Evaluate    [b for b in __import__('re').split(r'\\n(?=\\s{2}(?:Local|Refresh))', $out) if ', best' in b]
+        Should Not Be Empty    ${best}
+        Should Not Contain    ${best}[0]    localpref 50    msg=${c} prefers the backup cloud for ${ROUTERS}[${other}][lan]
     END
 
 No provider route enters the overlay and no overlay route resolves through it

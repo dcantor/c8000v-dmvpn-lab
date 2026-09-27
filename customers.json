@@ -9,10 +9,8 @@
   "email": "it@harborview-dental.example",
   "account": "C8D-10421",
   "applications": [
-   "APP-1001",
    "APP-1002",
-   "APP-1005",
-   "APP-1008",
+   "APP-1007",
    "APP-1010"
   ]
  },

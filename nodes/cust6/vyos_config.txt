@@ -110,7 +110,7 @@ set interfaces tunnel tun0 description 'DMVPN customer (mGRE, phase 3) 172.28.0.
 #
 # NHRP: registered with every hub, shortcuts on (the hubs send redirects)
 set protocols nhrp tunnel tun0 network-id 1
-set protocols nhrp tunnel tun0 holdtime 300
+set protocols nhrp tunnel tun0 holdtime 60
 set protocols nhrp tunnel tun0 mtu 1400
 set protocols nhrp tunnel tun0 authentication c8dnhrp
 set protocols nhrp tunnel tun0 registration-no-unique
@@ -123,8 +123,8 @@ set protocols nhrp tunnel tun0 nhs tunnel-ip 172.28.0.3 nbma 100.70.3.2
 set vpn ipsec ike-group DMVPN-IKE key-exchange ikev2
 set vpn ipsec ike-group DMVPN-IKE lifetime 28800
 set vpn ipsec ike-group DMVPN-IKE dead-peer-detection action clear
-set vpn ipsec ike-group DMVPN-IKE dead-peer-detection interval 30
-set vpn ipsec ike-group DMVPN-IKE dead-peer-detection timeout 150
+set vpn ipsec ike-group DMVPN-IKE dead-peer-detection interval 10
+set vpn ipsec ike-group DMVPN-IKE dead-peer-detection timeout 30
 set vpn ipsec ike-group DMVPN-IKE proposal 1 encryption aes256
 set vpn ipsec ike-group DMVPN-IKE proposal 1 hash sha256
 set vpn ipsec ike-group DMVPN-IKE proposal 1 dh-group 14

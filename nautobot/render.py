@@ -68,6 +68,8 @@ def inventory_from_nautobot():
     overlay = ipaddress.ip_network(ctx["dmvpn"]["overlay"])
     addr1 = lambda i: (i["ip_addresses"] or [{"address": None}])[0]["address"]   # noqa: E731
 
+    P1 = ctx["provider"]["nodes"][0]
+    P2 = (ctx.get("provider2") or {}).get("nodes", [None])[0]          # the second provider, if the lab has one
     nodes = []
     for x in sorted(d["devices"], key=lambda x: x["name"]):
         name, role = short(x["name"]), ROLE[x["role"]["name"]]
@@ -96,8 +98,11 @@ def inventory_from_nautobot():
                 "region": loc.split("-", 1)[1].capitalize() if loc.startswith("c8d-") else None,
                 "mgmt_ip": x["primary_ip4"]["address"].split("/")[0], "idx": idx, "ports": ports}
         if c8k:
-            wan = next(p for p in ports if p.get("peer_role") == "provider")
+            wan = next(p for p in ports if p.get("peer") == P1)
+            wan2 = next((p for p in ports if p.get("peer") == P2), None) if P2 else None
             tun = addr1(ifaces.get("Tunnel0") or ifaces["tun0"]).split("/")[0]
+            t1 = ifaces.get("Tunnel1") or ifaces.get("tun1")
+            tun2 = addr1(t1).split("/")[0] if wan2 and t1 else None
             lan_port = next((p for p in ports if p["num"] == SECRETS["lan_port"] and p["ip"]), None)
             lan = (lan_port["prefix"] if lan_port else
                    str(ipaddress.ip_interface(addr1(ifaces["Loopback10"])).network))
@@ -106,14 +111,15 @@ def inventory_from_nautobot():
             node.update({"t_idx": int(ipaddress.ip_address(tun)) - int(overlay.network_address),
                          "router_id": ri["router_id"]["address"].split("/")[0], "tunnel_ip": tun,
                          "nbma": wan["ip"].split("/")[0], "wan": wan, "lan": lan,
-                         "host": lan_port["peer"] if lan_port else None, "lan_port": lan_port})
+                         "host": lan_port["peer"] if lan_port else None, "lan_port": lan_port,
+                         "wan2": wan2, "nbma2": wan2["ip"].split("/")[0] if wan2 else None, "tunnel2_ip": tun2})
         elif role == "provider":
             node["router_id"] = ri["router_id"]["address"].split("/")[0]
         nodes.append(node)
 
     svc = {**ctx["dmvpn"], "psk": SECRETS["psk"], "nhrp_secret": SECRETS["nhrp_secret"]}
     return {"lab": ctx["lab"], "oob": ctx["oob"], "mac_oui": ctx["mac_oui"], "service": svc,
-            "provider": ctx["provider"], "nodes": nodes}
+            "provider": ctx["provider"], "provider2": ctx.get("provider2"), "nodes": nodes}
 
 
 inv = inventory_from_nautobot()

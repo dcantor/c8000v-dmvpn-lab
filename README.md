@@ -1,8 +1,10 @@
-# c8000v-dmvpn-lab — DMVPN on Catalyst 8000v over a simulated MPLS provider
+# c8000v-dmvpn-lab — DMVPN on Catalyst 8000v over two simulated providers
 
 Three Catalyst 8000v **hubs** (East, Central, West) and three C8000v **customer** routers form one DMVPN phase 3
 cloud. Underneath, a VyOS router plays the **MPLS provider**: every hub and customer peers eBGP with it, and it
-carries their WAN addresses — nothing else. Behind every customer router sits a small Alpine **host**, and every host
+carries their WAN addresses — nothing else. A second VyOS router, **mpls2**, is a second provider: every hub and any
+**dual-homed** customer also connects to it and runs a second, backup DMVPN cloud over it (see *The second provider and
+dual-homed customers*). Behind every customer router sits a small Alpine **host**, and every host
 pings every other one across the overlay. Built and configured as code: libvirt VMs (`lab.sh`), one renderer
 (`tools/render.py`), Cisco Network-as-Code / Terraform for the C8000vs (`nac/`), and Robot Framework validation
 (`tests/`).
@@ -26,7 +28,9 @@ pings every other one across the overlay. Built and configured as code: libvirt 
 
    overlay: mGRE Tunnel0 172.28.0.0/24 · NHRP phase 3 (hubs redirect, customers shortcut) · IKEv2 PSK + IPsec
    routing: eBGP AS 65100 <-> AS 65000 on Gi2 (underlay) · iBGP AS 65100 over Tunnel0, hubs = route reflectors
+   provider 2: mpls2 (AS 65010, 100.71.0.0/16) on every hub's Gi4 and a dual-homed customer's port 4 · Tunnel1 172.29.0.0/24
 ```
+The drawing shows the original three customers; the portal's Network map draws the lab as it is now.
 
 Version and changes: [`VERSION`](VERSION) and [`CHANGELOG.md`](CHANGELOG.md), which uses semantic versioning. Each release is tagged `v<version>`.
 
@@ -56,7 +60,7 @@ Version and changes: [`VERSION`](VERSION) and [`CHANGELOG.md`](CHANGELOG.md), wh
 | `tools/console.py`, `vyos_console.py`, `vyos_push.py`, `vyos_ssh.py`, `ios_cmd.py`, `vyos_cmd.py`, `host_cmd.py` | serial-console day-0, day-N over SSH, op-mode reads, the host ping matrix |
 | `tests/suites/` | `01_management`, `02_underlay`, `03_dmvpn`, `04_routing`, `05_nac_compliance`, `06_nautobot`, `07_portal`, `08_vyos_customers` |
 | `nautobot/` | `seed.py` (lab.conf → Nautobot), `render.py` (Nautobot → the same renderer, `--check`), `remove_customer.py`, the saved GraphQL query |
-| `webapp/` | the portal: `app.py` (the runs), `customers.py` (allocate, validate, plan, modify), `labconf.py` (edit `lab.conf`), `state.py` (what the routers are doing), `drift.py` (configuration drift), `sla.py` (probes and SLA reports), `backup.py` (backup / restore), `static/index.html` |
+| `webapp/` | the portal: `app.py` (the runs), `customers.py` (allocate, validate, plan, modify), `labconf.py` (edit `lab.conf`), `state.py` (what the routers are doing), `drift.py` (configuration drift), `sla.py` (probes and SLA reports), `backup.py` (backup / restore), `chaos.py` (simulated failures, failover timing), `changes.py` (change control), `cportal.py` (the customer portal), `static/index.html` |
 | `results/` | one folder per test run: `configs/pre-run`, `configs/post-run`, the diff, Robot report / log |
 
 ## Customer router type: Catalyst 8000v or VyOS
@@ -182,8 +186,10 @@ on drift. The pre-shared key and NHRP secret are deliberately not in Nautobot; t
 |---|---|
 | The cloud | every C8000v with what it is *actually* doing: NHRP registrations (hub) or NHS (customer), IPsec sessions, overlay BGP, the provider session, live customer-to-customer shortcuts; the provider's eBGP customers; a health line |
 | Network map | the topology drawn from the routers' live state. Hubs across the top, the provider as the MPLS band, the customers and their hosts below. Toggle layers for provider links (coloured by eBGP), DMVPN tunnels (per customer per hub, coloured by NHRP registration), the hubs' static mesh, live phase 3 shortcuts, hosts and labels. Click a node for its addresses and live state, a **show configuration** button next to the show commands (a C8000v's `show running-config`, the provider's `show configuration commands`, a host's network set-up; `GET /api/config/{node}`, with Copy and Download), one-click `show dmvpn`, `show crypto session brief`, `show ip bgp summary`, … on a router, or, on a host, one **ping all hosts** button that pings every other LAN host at once and reports each result and an `n / n reachable` summary (`GET /api/hosts/{host}/ping?target=`, one call per target). Also on a host, **trace path** to another host draws the real path on the map (`GET /api/hosts/{host}/traceroute?target=`), and **watch the shortcut form** first clears the two routers' shortcut (`POST /api/hosts/{host}/path/reset`), then traces until phase 3 has rebuilt it: the path through a hub in amber, then the direct shortcut in violet. The output opens in a full-width box under the map. **Export** downloads the map as drawn (layers, customer view) as SVG or PNG, in the light or the dark theme. A router whose running configuration differs from the model carries a **≠** badge, with the differences in its details. On a customer: **Show only its view**, which drops the other customers and colours the hubs and provider by what that customer sees; its live shortcuts become labelled stubs. Also **Download PDF**: the portal's headless Chrome (Playwright, system `google-chrome`) prints that view with the customer's details (`GET /api/customers/{name}/map.pdf`): page one the map and the company, page two its applications, page three this month's service report |
+| Resilience | **simulate a failure** — a hub fails, a hub loses its first provider, a provider fails, a customer's circuit is cut, a customer's tunnel goes down — see it on the map (⚡, a red banner with Restore) and put it back; **measure failover**: a run that pings every host and hub LAN from every host five times a second, puts the fault in, holds it, takes it out, and reports every flow's outage (unaffected / failed over / cut off / hit on restore) with a timeline (`/api/faults`, `/api/failover`) |
 | SLA | per customer, over the last 24 h / 7 d / 30 d or this month: availability (registered with at least one hub), registration with every hub, latency to each hub (average, 95th percentile, worst) and loss, against the lab's targets, with charts (`GET /api/customers/{name}/sla?window=`) |
 | Provision | add a customer, **modify** one, remove one, deploy the model, dry run (terraform plan + Nautobot check), **check for drift**, **fix drift**, **back up the lab**, **restore from a backup**, run the tests |
+| Runs (change requests) | **Change requests** above the runs: what change control is holding — approve (four eyes), reject, emergency-approve outside the window, withdraw — and the **change policy** editor |
 | Runs | every run with a progress bar (steps finished out of all steps, the current one counting half; striped while running, green on success, red on failure), how long it has taken and — from the median of each step in earlier runs of the same kind and router type (`GET /api/runs/estimates`) — about how long is left and when it should be done; its steps, log and test report; a failed run resumes from the step that failed |
 | The cloud (drift) | a **Configuration drift** card: the latest check, per router, with Check now and Fix drift |
 | Lab Tools | every tool of the lab with its link and login (portal, API, lab hub, GitHub, Nautobot with deep links, Grafana, Prometheus, VictoriaMetrics, VictoriaLogs), how to reach the management network, and a searchable table of every node: VM, management IP, SSH command, credentials, serial console, addresses, RESTCONF / NETCONF / VyOS API / exporters (`GET /api/lab-tools`) |
@@ -278,6 +284,73 @@ bootstraps what is new, applies NAC, pushes the provider and VyOS routers, seeds
 verifies. Nautobot is not written from the export: the seed re-creates it, which `render --check` then proves. A
 backup with different hubs or provider is refused.
 
+### The second provider and dual-homed customers
+
+A second VyOS router, `mpls2` (AS 65010, `100.71.0.0/16`), plays another carrier. Every hub has a link into it (Gi4)
+and a second mGRE tunnel, **Tunnel1**, in a second DMVPN cloud (`172.29.0.0/24`, NHRP network-id 2, tunnel key 200).
+A customer can be **dual-homed** — Add a customer or Modify: *Second provider → dual-homed* — and gets a link from its
+port 4 into mpls2 and a Tunnel1 of its own, registered with every hub.
+
+- **The second cloud is the backup.** Everything learned over it carries BGP local-preference 50 (a hub's
+  `CUSTOMERS2` peer-group and a customer's `OVERLAY2-IN`), so traffic moves to it only when the first provider — or a
+  site's circuit into it — fails.
+- **The hubs send themselves as next hop** (`neighbor CUSTOMERS / CUSTOMERS2 next-hop-self all`): a customer reaches
+  another site through a hub until phase 3's redirect builds the shortcut, and a route never points at an address the
+  customer cannot reach — another site's second-cloud tunnel while its first is down.
+- **Wiring without restarts.** The first end of a link anchors its UDP socket pair, so the hubs anchor their links into
+  mpls2 (the hub is .1) and never had to restart; mpls2 anchors a customer's link (mpls2 .1), so dual-homing an
+  existing customer restarts that customer's router once (Modify: save, power off, redefine, boot).
+- **Timers.** NHRP holdtime 60 s (was 300) and periodic IKE dead-peer detection (10 s, 3 retries; VyOS 10 s / 30 s):
+  the first failover measurements showed dual-homed site-to-site traffic stuck for two minutes on a phase 3 shortcut
+  over the failed provider; with the shorter timers it moves in about 45 s.
+
+### Resilience: simulated failures and failover timing
+
+**Resilience** takes part of the lab down on purpose. Every failure is reversible and never saved on a router (a
+reboot, a Deploy or Fix drift also undoes it), shows on the map, and is put back automatically after 30 minutes:
+
+| Failure | How | What the design should do |
+|---|---|---|
+| Hub fails | the hub's VM is frozen (`virsh suspend`) | customers keep two hubs; live shortcuts need no hub |
+| Hub loses its first provider | the hub's Gi2 is shut | the other hubs carry the first cloud |
+| Provider fails | the provider's VM is frozen | single-homed customers are cut off; dual-homed ones move to cloud 2 |
+| Customer circuit cut | the provider's port to the customer is disabled | single-homed: cut off; dual-homed: moves to its other provider |
+| Customer tunnel down | the customer's Tunnel0 / tun0 is shut | as a cut circuit, for the overlay |
+
+**Measure failover** runs one of them as an experiment and reports every flow: from every LAN host to every other
+host and to every hub's LAN, five pings a second, the outage in seconds and when it began, and a verdict — unaffected,
+failed over (back while the fault was still in), cut off (back only after the fault came out), hit on restore. First
+measurements (27 Sep 2026, cust1 and cust4 dual-homed, cust2, cust5, cust6 single-homed):
+
+| Failure | Result |
+|---|---|
+| hub-east fails (45 s) | 29 of 35 flows unaffected; only hub-east's own LAN unreachable; healthy 56 s after it came back |
+| mpls fails (60 s), timers 300 s / DPD 30 s on-demand | dual-homed → hubs failed over in 4–7 s; cust1 ↔ cust4 **cut off** (stale shortcuts over the failed provider) |
+| mpls fails (60 s), timers 60 s / DPD 10 s periodic | dual-homed → hubs 9 s; cust1 ↔ cust4 **failed over in 43–49 s**; single-homed customers cut off, as designed |
+
+After a provider returns, the C8000v customers re-register within about 20 s; the VyOS customers take two to two and
+a half minutes (FRR nhrpd's registration back-off once their IPsec was cleared).
+
+### Change control
+
+Disruptive work needs a second person: removing, modifying or restoring customers, deploying, fixing drift, simulating
+a failure and measuring a failover (the default policy; adding a customer, dry runs, tests and drift checks are never
+held). Such a request answers `202` with a **change request** (CR-0001 …) instead of starting. Someone other than the
+requester approves it — four eyes — or rejects it; with **change windows** on, an approved change is scheduled and the
+portal starts it when the next window opens, unless the approver declares an **emergency** (with a reason). Requests
+nobody decides on expire after 72 h. Names are typed in the header, not authenticated: the portal has no logins, so
+this keeps the process honest, not secure. `GET/PUT /api/policy`, `/api/changes`, `POST /api/changes/{id}/approve|reject|cancel`.
+
+### The customer portal
+
+**Customer portal link** on a customer's details gives that customer a read-only page of its own, `/c/<token>` — a
+random token per customer, kept on the lab host (`webapp/customer_portal/`, not in git), rotated from the same button,
+and dropped when the customer is removed. The page shows its service status, its site on the map with the hubs and
+providers as its service sees them, its applications, its service levels, its monthly report (PDF), **planned
+maintenance** (change requests that touch it) and **incidents** (simulated failures that touch it). Everything it reads
+comes from `/api/c/<token>/…`, which answers only about that customer: no other customer's name, company, addresses or
+shortcuts.
+
 ## Monitoring
 
 The shared stack on the NMS (`lab-portal/monitoring`: Prometheus, VictoriaMetrics, VictoriaLogs, vmalert, Grafana) covers
@@ -329,9 +402,11 @@ this lab. The NMS sits on `c8d-oob` as **10.5.0.10**; that sixth NIC is in the `
 | Purpose | Block |
 |---|---|
 | OOB management (`c8d-oob`, host 10.5.0.1) | `10.5.0.0/24`: hubs .11–.13, customers .21–.23, mpls .31, hosts .41–.43 |
-| Router ↔ provider | `100.70.<idx>.0/30`: provider .1, router .2 (the NBMA address) — idx 1–3 hubs, 11–13 customers |
+| Router ↔ provider | `100.70.<idx>.0/30`: provider .1, router .2 (the NBMA address) — idx 1–3 hubs, 11–16 customers |
+| Router ↔ second provider (`mpls2`, 10.5.0.32) | `100.71.<idx>.0/30`: a hub is .1 (it anchors the link), mpls2 .2; a dual-homed customer is .2, mpls2 .1 |
 | DMVPN overlay (Tunnel0) | `172.28.0.0/24`: `.<idx>` |
-| Router-ids (Loopback0) | `10.255.5.<idx>`; the provider `10.255.5.254` |
+| Second cloud (Tunnel1) | `172.29.0.0/24`: `.<idx>` — the hubs and the dual-homed customers |
+| Router-ids (Loopback0) | `10.255.5.<idx>`; the provider `10.255.5.254`, the second provider `.253` |
 | Site LANs | customers `192.168.61/62/63.0/24` (Gi3 .1, host .2); hubs `192.168.71/72/73.0/24` on Loopback10 |
 
 Kept clear of the other labs on this host: consoles `55xx`, MACs `52:54:00:c9:<idx>:<port>`, UDP base `46000`.

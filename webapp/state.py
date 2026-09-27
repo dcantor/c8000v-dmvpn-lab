@@ -70,11 +70,31 @@ class State:
     def model(self):
         f = C.facts()
         inv = f["inv"]
-        return {"service": inv["service"], "provider": inv["provider"], "oob": inv["oob"], "hubs": f["hubs"],
+        return {"service": inv["service"], "provider": inv["provider"], "provider2": inv.get("provider2"), "oob": inv["oob"], "hubs": f["hubs"],
                 "customers": f["customers"], "nodes": {n["name"]: n for n in inv["nodes"]},
                 "applications": inv.get("applications") or []}
 
     # ---- per router --------------------------------------------------------------------------------------------
+    @staticmethod
+    def _maps(m):
+        """hub tunnel address -> hub, any tunnel address -> router, and address -> cloud (1 or 2)."""
+        hub_tun, by_tun, cloud = {}, {}, {}
+        for name, x in m["nodes"].items():
+            for key, c in (("tunnel_ip", 1), ("tunnel2_ip", 2)):
+                if x.get(key):
+                    by_tun[x[key]] = name
+                    cloud[x[key]] = c
+                    if x["role"] == "hub":
+                        hub_tun[x[key]] = name
+        return hub_tun, by_tun, cloud
+
+    @staticmethod
+    def _overlays(m):
+        nets = [ipaddress.ip_network(m["service"]["overlay"])]
+        if m["service"].get("cloud2"):
+            nets.append(ipaddress.ip_network(m["service"]["cloud2"]["overlay"]))
+        return nets
+
     def vyos_router_state(self, node, n, m):
         """A VyOS customer, from FRR (nhrpd, bgpd) and strongSwan: the same fields the IOS parser produces."""
         out = {"name": node, "role": n["role"], "platform": "vyos", "error": None, "tunnel_ip": n["tunnel_ip"], "nbma": n["nbma"]}
@@ -84,14 +104,17 @@ class State:
         except Exception as e:                                    # noqa: BLE001
             out["error"] = e.__class__.__name__
             return out
-        hub_tun = {m["nodes"][h]["tunnel_ip"]: h for h in m["hubs"]}
-        by_tun = {x["tunnel_ip"]: name for name, x in m["nodes"].items() if x.get("tunnel_ip")}
+        hub_tun, by_tun, cloud = self._maps(m)
         # Iface  Type  Protocol  NBMA  Claimed-NBMA  Flags  Identity
         cache = re.findall(r"^\S+\s+(nhs|dynamic|static|local|cached)\s+(\d+\.\d+\.\d+\.\d+)(?:/\d+)?\s+(\S+)\s+\S+\s*(\S*)", text, re.M)
-        out["nhrp"] = [{"type": t, "tunnel": ip, "nbma": nb, "flags": fl, "peer": by_tun.get(ip, ip)} for t, ip, nb, fl in cache]
-        out["nhs_up"] = sorted({hub_tun[ip] for t, ip, nb, fl in cache if t == "nhs" and ip in hub_tun and nb not in ("-", "0.0.0.0")})
+        out["nhrp"] = [{"type": t, "tunnel": ip, "nbma": nb, "flags": fl, "peer": by_tun.get(ip, ip), "cloud": cloud.get(ip, 1)}
+                       for t, ip, nb, fl in cache]
+        up = [(ip, cloud.get(ip)) for t, ip, nb, fl in cache if t == "nhs" and ip in hub_tun and nb not in ("-", "0.0.0.0")]
+        out["nhs_up"] = sorted({hub_tun[ip] for ip, c in up if c == 1})
+        out["nhs2_up"] = sorted({hub_tun[ip] for ip, c in up if c == 2})
+        own = {n["tunnel_ip"], n.get("tunnel2_ip")}
         out["shortcuts"] = sorted({by_tun[ip] for t, ip, nb, fl in cache
-                                   if t == "dynamic" and ip in by_tun and ip not in hub_tun and ip != n["tunnel_ip"]})
+                                   if t == "dynamic" and ip in by_tun and ip not in hub_tun and ip not in own})
         # strongSwan: every installed CHILD_SA is a protected GRE flow to one peer
         peers = re.findall(r"ESTABLISHED.*?\n\s+local.*?\n\s+remote\s+'?[^']*'?\s*@\s*(\d+\.\d+\.\d+\.\d+)", sas)
         out["sa_peers"] = sorted(set(peers))
@@ -99,10 +122,11 @@ class State:
         load = re.search(r"^(\d+\.\d+) (\d+\.\d+)", sas, re.M)
         out["cpu_5s"] = out["cpu_1m"] = None
         out["load_1m"] = float(load[2]) if load else None
-        overlay = ipaddress.ip_network(m["service"]["overlay"])
+        overlays = self._overlays(m)
+        inov = lambda p: any(ipaddress.ip_address(p) in o for o in overlays)   # noqa: E731
         sess = [{"peer": p, "as": int(a), "state": st} for p, a, st in FRR_ROW.findall(text)]
-        ov = [x for x in sess if ipaddress.ip_address(x["peer"]) in overlay]
-        un = [x for x in sess if ipaddress.ip_address(x["peer"]) not in overlay]
+        ov = [x for x in sess if inov(x["peer"])]
+        un = [x for x in sess if not inov(x["peer"])]
         out["overlay_up"] = sum(1 for x in ov if x["state"].isdigit())
         out["overlay"] = len(ov)
         out["underlay_up"] = sum(1 for x in un if x["state"].isdigit())
@@ -119,28 +143,31 @@ class State:
         except Exception as e:                                    # noqa: BLE001
             out["error"] = e.__class__.__name__
             return out
-        hub_tun = {m["nodes"][h]["tunnel_ip"]: h for h in m["hubs"]}
-        by_tun = {x["tunnel_ip"]: name for name, x in m["nodes"].items() if x.get("tunnel_ip")}
+        hub_tun, by_tun, cloud = self._maps(m)
         rows = [{"nbma": x[0], "tunnel": x[1], "state": x[2], "uptime": x[3], "attr": x[4],
-                 "peer": by_tun.get(x[1], x[1])} for x in DMVPN_ROW.findall(r["show dmvpn"])]
+                 "peer": by_tun.get(x[1], x[1]), "cloud": cloud.get(x[1], 1)} for x in DMVPN_ROW.findall(r["show dmvpn"])]
         out["nhrp"] = rows
         if n["role"] == "hub":
-            out["registered"] = sorted(x["peer"] for x in rows if x["state"] == "UP" and "D" in x["attr"])
+            out["registered"] = sorted({x["peer"] for x in rows if x["state"] == "UP" and "D" in x["attr"] and x["cloud"] == 1})
+            out["registered2"] = sorted({x["peer"] for x in rows if x["state"] == "UP" and "D" in x["attr"] and x["cloud"] == 2})
         else:
-            out["nhs_up"] = sorted(hub_tun[x["tunnel"]] for x in rows
-                                   if x["tunnel"] in hub_tun and x["state"] == "UP" and "S" in x["attr"])
+            nhs = [(hub_tun[x["tunnel"]], x["cloud"]) for x in rows
+                   if x["tunnel"] in hub_tun and x["state"] == "UP" and "S" in x["attr"]]
+            out["nhs_up"] = sorted({h for h, c in nhs if c == 1})
+            out["nhs2_up"] = sorted({h for h, c in nhs if c == 2})
             # a dynamic entry for another customer is a phase 3 shortcut: that pair talks directly
-            out["shortcuts"] = sorted(x["peer"] for x in rows
-                                      if x["tunnel"] not in hub_tun and x["state"] == "UP" and "D" in x["attr"])
-        sa = re.findall(r"^(\d+\.\d+\.\d+\.\d+)\s+Tu0\s+.*\s(\S+)\s*$", r["show crypto session brief"], re.M)
+            out["shortcuts"] = sorted({x["peer"] for x in rows
+                                       if x["tunnel"] not in hub_tun and x["state"] == "UP" and "D" in x["attr"]})
+        sa = re.findall(r"^(\d+\.\d+\.\d+\.\d+)\s+Tu\d+\s+.*\s(\S+)\s*$", r["show crypto session brief"], re.M)
         out["sa"] = sum(1 for _, st in sa if st == "UA")
         out["sa_peers"] = sorted(p for p, st in sa if st == "UA")
         cpu = re.search(r"five seconds: (\d+)%.*one minute: (\d+)%", r["show processes cpu | include CPU utilization"])
         out["cpu_5s"], out["cpu_1m"] = (int(cpu[1]), int(cpu[2])) if cpu else (None, None)
-        overlay = ipaddress.ip_network(m["service"]["overlay"])
+        overlays = self._overlays(m)
+        inov = lambda p: any(ipaddress.ip_address(p) in o for o in overlays)   # noqa: E731
         sess = [{"peer": p, "as": int(a), "state": s} for p, a, s in BGP_ROW.findall(r["show ip bgp summary"])]
-        ov = [s for s in sess if ipaddress.ip_address(s["peer"]) in overlay]
-        un = [s for s in sess if ipaddress.ip_address(s["peer"]) not in overlay]
+        ov = [s for s in sess if inov(s["peer"])]
+        un = [s for s in sess if not inov(s["peer"])]
         out["overlay_up"] = sum(1 for s in ov if s["state"].isdigit())
         out["overlay"] = len(ov)
         out["underlay_up"] = sum(1 for s in un if s["state"].isdigit())
@@ -181,7 +208,7 @@ class State:
         snap = {**m, "live": live, "generated": time.time()}
         if live:
             routers = m["hubs"] + m["customers"]
-            provs = m["provider"]["nodes"]
+            provs = m["provider"]["nodes"] + ((m.get("provider2") or {}).get("nodes") or [])
             hosts = [h for h in m["nodes"] if m["nodes"][h]["role"] == "host"]
             with ThreadPoolExecutor(max_workers=12) as ex:
                 states = dict(zip(routers, ex.map(lambda x: self.router_state(x, m["nodes"][x], m), routers)))
@@ -192,34 +219,70 @@ class State:
             self._cache[bool(live)] = snap
         return snap
 
+    @staticmethod
+    def expectations(m):
+        """What each router and provider should show: sessions and registrations, over one cloud or both."""
+        hubs, custs = m["hubs"], m["customers"]
+        duals = [c for c in custs if m["nodes"][c].get("wan2")]
+        c2 = bool(m.get("provider2"))
+        exp = {}
+        for r in hubs + custs:
+            dual = bool(m["nodes"][r].get("wan2"))
+            if m["nodes"][r]["role"] == "hub":
+                want = len(hubs) - 1 + len(custs) + ((len(hubs) - 1 + len(duals)) if dual else 0)
+                exp[r] = {"overlay": want, "sa": want, "underlay": 1 + dual, "registered": len(custs),
+                          "registered2": len(duals) if dual else 0}
+            else:
+                want = len(hubs) * (1 + dual)
+                exp[r] = {"overlay": want, "sa": want, "underlay": 1 + dual, "nhs": len(hubs), "nhs2": len(hubs) if dual else 0}
+        for p in m["provider"]["nodes"]:
+            exp[p] = {"customers": len(hubs) + len(custs)}
+        if c2:
+            for p in m["provider2"]["nodes"]:
+                exp[p] = {"customers": sum(1 for r in hubs + custs if m["nodes"][r].get("wan2"))}
+        return exp
+
     def _health(self, m, states, prov, hosts_up):
         hubs, custs = m["hubs"], m["customers"]
+        duals = [c for c in custs if m["nodes"][c].get("wan2")]
+        exp = self.expectations(m)
         problems = []
         for r in hubs + custs:
             s = states.get(r) or {}
+            e = exp[r]
+            s["expect"] = e
             if s.get("error"):
                 problems.append(f"{r}: unreachable ({s['error']})")
                 continue
             if s.get("underlay_up", 0) < 1:
                 problems.append(f"{r}: no eBGP session with the provider — its NBMA address is not being carried")
+            elif s.get("underlay_up", 0) < e["underlay"]:
+                problems.append(f"{r}: {s.get('underlay_up', 0)} of {e['underlay']} provider sessions up")
             if s["role"] == "hub":
                 missing = sorted(set(custs) - set(s.get("registered") or []))
                 if missing:
                     problems.append(f"{r}: no registration from {', '.join(missing)}")
-                want = len(hubs) - 1 + len(custs)
+                if e["registered2"]:
+                    missing2 = sorted(set(duals) - set(s.get("registered2") or []))
+                    if missing2:
+                        problems.append(f"{r}: no cloud-2 registration from {', '.join(missing2)}")
             else:
                 if len(s.get("nhs_up") or []) < len(hubs):
                     problems.append(f"{r}: registered with {len(s.get('nhs_up') or [])} of {len(hubs)} hubs")
-                want = len(hubs)
+                if e["nhs2"] and len(s.get("nhs2_up") or []) < e["nhs2"]:
+                    problems.append(f"{r}: registered with {len(s.get('nhs2_up') or [])} of {e['nhs2']} hubs over cloud 2")
+            want = e["overlay"]
             if s.get("overlay_up", 0) < want:
                 problems.append(f"{r}: {s.get('overlay_up', 0)} of {want} overlay BGP sessions up")
             if s.get("sa", 0) < want:
                 problems.append(f"{r}: {s.get('sa', 0)} of at least {want} IPsec sessions up")
         for p, s in prov.items():
+            want = exp[p]["customers"]
+            s["expect"] = exp[p]
             if s.get("error"):
                 problems.append(f"{p}: unreachable ({s['error']})")
-            elif s.get("customers_up", 0) < len(hubs) + len(custs):
-                problems.append(f"{p}: {s.get('customers_up', 0)} of {len(hubs) + len(custs)} sites peering with it")
+            elif s.get("customers_up", 0) < want:
+                problems.append(f"{p}: {s.get('customers_up', 0)} of {want} sites peering with it")
         down = [h for h, ok in hosts_up.items() if not ok]
         if down:
             problems.append("hosts not answering: " + ", ".join(sorted(down)))
