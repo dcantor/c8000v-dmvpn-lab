@@ -578,9 +578,8 @@ function renderInfo(n, fresh) {
         <div class="vip">VIP ${esc(a.vips[n])} · ${esc(a.protocol.toUpperCase())}/${esc(a.port)}</div>
         <div class="hint">subscribers: ${who(a).map(c => esc(c) + ' (' + esc(((ST.nodes[c] || {}).customer || {}).company || '') + ')').join(', ') || 'none'}</div></div>`).join('') : '<p class="hint">hosts no application</p>'}</div>`;
   }
-  const cfgBtn = `<button data-config class="primary" style="float:right;font-size:12px;padding:3px 9px" title="read the configuration live from ${esc(n)}">Show configuration</button>`;
-  $('mapinfo').innerHTML = `<h2>${esc(n)} ${cfgBtn}</h2>${company}${apps}<dl>${rows.join('')}</dl>${view}
-    ${cmds.length ? `<div class="cmds">${cmds.map(x => `<button data-cmd="${esc(x)}">${esc(x)}</button>`).join('')}</div>` : ''}
+  $('mapinfo').innerHTML = `<h2>${esc(n)}</h2>${company}${apps}<dl>${rows.join('')}</dl>${view}
+    <div class="cmds">${cmds.map(x => `<button data-cmd="${esc(x)}">${esc(x)}</button>`).join('')}<button data-config title="read the configuration live from ${esc(n)}">show configuration</button></div>
     ${pings.length ? `<div class="cmds">${pings.map(x => `<button data-ping="${esc(x)}" title="ping ${esc(ST.nodes[x].lan_ip.split('/')[0])} from ${esc(n)}">ping ${esc(x)}</button>`).join('')}</div>` : ''}`;
   $('mapinfo').querySelectorAll('[data-cmd]').forEach(b => b.onclick = () => runMapCommand(n, b.dataset.cmd));
   $('mapinfo').querySelectorAll('[data-config]').forEach(b => b.onclick = () => runMapConfig(n));
