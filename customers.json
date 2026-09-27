@@ -48,5 +48,31 @@
    "APP-1009",
    "APP-1010"
   ]
+ },
+ "cust4": {
+  "company": "Redwood Coast Brewing Co.",
+  "industry": "Food & beverage — brewery",
+  "address": "300 Harbor Way, Eureka, CA 95501",
+  "phone": "+1 (707) 555-0168",
+  "contact": "Casey Lindqvist, Operations IT",
+  "email": "it@redwoodcoast.example",
+  "account": "C8D-10692",
+  "applications": [
+   "APP-1005",
+   "APP-1010"
+  ]
+ },
+ "cust5": {
+  "company": "Summit Ridge Property Management",
+  "industry": "Real estate — property management",
+  "address": "1600 Broadway, Suite 900, Denver, CO 80202",
+  "phone": "+1 (303) 555-0185",
+  "contact": "Morgan Patel, IT Coordinator",
+  "email": "it@summitridge.example",
+  "account": "C8D-10765",
+  "applications": [
+   "APP-1008",
+   "APP-1009"
+  ]
  }
 }

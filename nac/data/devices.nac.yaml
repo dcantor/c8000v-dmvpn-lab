@@ -45,6 +45,13 @@ iosxe:
       \ holdtime 300\n ip nhrp nhs 172.28.0.1 nbma 100.70.1.2 multicast\n ip nhrp nhs 172.28.0.2 nbma 100.70.2.2 multicast\n\
       \ ip nhrp nhs 172.28.0.3 nbma 100.70.3.2 multicast\n ip nhrp shortcut\n tunnel source GigabitEthernet2\n tunnel mode\
       \ gre multipoint\n tunnel key 100\n tunnel protection ipsec profile DMVPN-IPSEC\n"
+  - name: tunnel0_cust5
+    type: cli
+    content: "interface Tunnel0\n description DMVPN customer (mGRE, phase 3)\n ip address 172.28.0.15 255.255.255.0\n no ip\
+      \ redirects\n ip mtu 1400\n ip tcp adjust-mss 1360\n ip nhrp authentication c8dnhrp\n ip nhrp network-id 1\n ip nhrp\
+      \ holdtime 300\n ip nhrp nhs 172.28.0.1 nbma 100.70.1.2 multicast\n ip nhrp nhs 172.28.0.2 nbma 100.70.2.2 multicast\n\
+      \ ip nhrp nhs 172.28.0.3 nbma 100.70.3.2 multicast\n ip nhrp shortcut\n tunnel source GigabitEthernet2\n tunnel mode\
+      \ gre multipoint\n tunnel key 100\n tunnel protection ipsec profile DMVPN-IPSEC\n"
   - name: bgp_hub_hub-east
     type: cli
     content: "router bgp 65100\n neighbor CUSTOMERS peer-group\n neighbor CUSTOMERS remote-as 65100\n neighbor CUSTOMERS description\
@@ -930,4 +937,155 @@ iosxe:
                 mask: 255.255.255.255
               - network: 192.168.63.0
               - network: 100.70.13.0
+                mask: 255.255.255.252
+  - name: cust5
+    host: 10.5.0.25
+    protocol: restconf
+    device_groups:
+    - DMVPN
+    - DMVPN_CUSTOMER
+    templates:
+    - tunnel0_cust5
+    variables:
+      router_id: 10.255.5.15
+      nbma: 100.70.15.2
+      tunnel_ip: 172.28.0.15
+      lan: 192.168.65.0/24
+      region: Central
+      dmvpn_psk: lab-dmvpn-psk-do-not-use-outside-this-lab
+    configuration:
+      system:
+        hostname: cust5
+      interfaces:
+        ethernets:
+        - type: GigabitEthernet
+          id: '2'
+          description: 'WAN: mpls eth8 (provider AS 65000)'
+          shutdown: false
+          ipv4:
+            address: 100.70.15.2
+            address_mask: 255.255.255.252
+        - type: GigabitEthernet
+          id: '3'
+          description: 'site LAN: host-cust5'
+          shutdown: false
+          ipv4:
+            address: 192.168.65.1
+            address_mask: 255.255.255.0
+        loopbacks:
+        - id: 0
+          description: router-id
+          ipv4:
+            address: 10.255.5.15
+            address_mask: 255.255.255.255
+      prefix_lists:
+      - name: WAN-OUT
+        description: offer the provider our own access link and nothing else
+        seqs:
+        - seq: 10
+          action: permit
+          prefix: 100.70.15.0/30
+      - name: WAN-IN
+        description: accept only the provider's access-link range
+        seqs:
+        - seq: 10
+          action: permit
+          prefix: 100.70.0.0/16
+          less_equal: 32
+      - name: OVERLAY-ROUTES
+        description: 'site LANs and router-ids: all the overlay carries'
+        seqs:
+        - seq: 10
+          action: permit
+          prefix: 192.168.0.0/16
+          greater_equal: 24
+          less_equal: 24
+        - seq: 20
+          action: permit
+          prefix: 10.255.5.0/24
+          greater_equal: 32
+      route_maps:
+      - name: WAN-OUT
+        entries:
+        - seq: 10
+          operation: permit
+          match:
+            ipv4_address_prefix_lists:
+            - WAN-OUT
+      - name: WAN-IN
+        entries:
+        - seq: 10
+          operation: permit
+          match:
+            ipv4_address_prefix_lists:
+            - WAN-IN
+      - name: OVERLAY
+        entries:
+        - seq: 10
+          operation: permit
+          match:
+            ipv4_address_prefix_lists:
+            - OVERLAY-ROUTES
+      routing:
+        bgp:
+          as_number: 65100
+          router_id: 10.255.5.15
+          log_neighbor_changes: true
+          neighbors:
+          - ip: 100.70.15.1
+            remote_as: 65000
+            description: provider mpls
+            timers_keepalive: 3
+            timers_holdtime: 9
+          - ip: 172.28.0.1
+            remote_as: 65100
+            description: DMVPN hub hub-east
+            timers_keepalive: 3
+            timers_holdtime: 9
+          - ip: 172.28.0.2
+            remote_as: 65100
+            description: DMVPN hub hub-central
+            timers_keepalive: 3
+            timers_holdtime: 9
+          - ip: 172.28.0.3
+            remote_as: 65100
+            description: DMVPN hub hub-west
+            timers_keepalive: 3
+            timers_holdtime: 9
+          address_family:
+            ipv4_unicast:
+              neighbors:
+              - ip: 100.70.15.1
+                activate: true
+                route_maps:
+                - direction: in
+                  name: WAN-IN
+                - direction: out
+                  name: WAN-OUT
+              - ip: 172.28.0.1
+                activate: true
+                route_maps:
+                - direction: in
+                  name: OVERLAY
+                - direction: out
+                  name: OVERLAY
+              - ip: 172.28.0.2
+                activate: true
+                route_maps:
+                - direction: in
+                  name: OVERLAY
+                - direction: out
+                  name: OVERLAY
+              - ip: 172.28.0.3
+                activate: true
+                route_maps:
+                - direction: in
+                  name: OVERLAY
+                - direction: out
+                  name: OVERLAY
+              networks:
+              - network: 10.255.5.15
+                mask: 255.255.255.255
+              - network: 192.168.65.0
+              - network: 100.70.15.0
                 mask: 255.255.255.252

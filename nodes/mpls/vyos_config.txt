@@ -47,11 +47,11 @@ set interfaces ethernet eth6 hw-id 52:54:00:c9:15:06
 set interfaces ethernet eth6 address 100.70.13.1/30
 set interfaces ethernet eth6 description 'spoke: cust3 GigabitEthernet2'
 set interfaces ethernet eth7 hw-id 52:54:00:c9:15:07
-set interfaces ethernet eth7 description 'unwired'
-set interfaces ethernet eth7 disable
+set interfaces ethernet eth7 address 100.70.14.1/30
+set interfaces ethernet eth7 description 'spoke: cust4 eth2'
 set interfaces ethernet eth8 hw-id 52:54:00:c9:15:08
-set interfaces ethernet eth8 description 'unwired'
-set interfaces ethernet eth8 disable
+set interfaces ethernet eth8 address 100.70.15.1/30
+set interfaces ethernet eth8 description 'spoke: cust5 GigabitEthernet2'
 set interfaces ethernet eth9 hw-id 52:54:00:c9:15:09
 set interfaces ethernet eth9 description 'unwired'
 set interfaces ethernet eth9 disable

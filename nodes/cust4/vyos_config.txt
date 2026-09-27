@@ -1,0 +1,142 @@
+# cust4: DMVPN customer on VyOS (East) — day-0 pushed over the serial console by lab.sh bootstrap; rendered by tools/render.py
+set system host-name cust4
+set system login user vyos authentication plaintext-password vyos
+set system time-zone UTC
+set service ssh
+set service lldp interface all
+set interfaces ethernet eth0 address 10.5.0.24/24
+set interfaces ethernet eth0 description 'OOB management'
+set interfaces ethernet eth0 hw-id 52:54:00:c9:0e:00
+set service https api rest
+set service https api keys id lab key c8000v-dmvpn-lab
+set service https allow-client address 10.5.0.1
+#
+# monitoring: exporters on the OOB address, scraped from the NMS (the portal's /api/sd lists them);
+# Telegraf pushes host / FRR / service metrics to VictoriaMetrics, syslog goes to VictoriaLogs
+set service monitoring prometheus node-exporter listen-address 10.5.0.24
+set service monitoring prometheus frr-exporter listen-address 10.5.0.24
+set service monitoring telegraf influxdb url http://10.5.0.10
+set service monitoring telegraf influxdb port 8428
+set service monitoring telegraf influxdb bucket c8000v-dmvpn-lab
+set service monitoring telegraf influxdb authentication organization lab
+set service monitoring telegraf influxdb authentication token c8dlab-telegraf_______________________________________________________________________==
+set service monitoring telegraf global-tag lab value c8000v-dmvpn-lab
+set service monitoring telegraf global-tag role value spoke
+set service monitoring telegraf global-tag dc value East
+set system syslog remote 10.5.0.10 port 5514
+set system syslog remote 10.5.0.10 protocol udp
+set system syslog remote 10.5.0.10 facility all level info
+#
+# ports: eth2 to the provider, eth3 the site LAN (eth1, eth4 spare) — cabled like a C8000v customer
+set interfaces ethernet eth1 hw-id 52:54:00:c9:0e:01
+set interfaces ethernet eth1 description 'unwired'
+set interfaces ethernet eth1 disable
+set interfaces ethernet eth2 hw-id 52:54:00:c9:0e:02
+set interfaces ethernet eth2 address 100.70.14.2/30
+set interfaces ethernet eth2 description 'provider: mpls eth7'
+set interfaces ethernet eth3 hw-id 52:54:00:c9:0e:03
+set interfaces ethernet eth3 address 192.168.64.1/24
+set interfaces ethernet eth3 description 'host: host-cust4 eth1'
+set interfaces ethernet eth4 hw-id 52:54:00:c9:0e:04
+set interfaces ethernet eth4 description 'unwired'
+set interfaces ethernet eth4 disable
+#
+# the router-id
+set interfaces dummy dum0 address 10.255.5.14/32
+set interfaces dummy dum0 description 'router-id'
+#
+# filters: the provider gets our access link and nothing else; the overlay carries LANs and router-ids
+set policy prefix-list WAN-OUT description 'offer the provider our own access link and nothing else'
+set policy prefix-list WAN-OUT rule 10 action permit
+set policy prefix-list WAN-OUT rule 10 prefix 100.70.14.0/30
+set policy prefix-list WAN-IN description 'accept only the provider access-link range'
+set policy prefix-list WAN-IN rule 10 action permit
+set policy prefix-list WAN-IN rule 10 prefix 100.70.0.0/16
+set policy prefix-list WAN-IN rule 10 le 32
+set policy prefix-list OVERLAY-ROUTES description 'site LANs and router-ids: all the overlay carries'
+set policy prefix-list OVERLAY-ROUTES rule 10 action permit
+set policy prefix-list OVERLAY-ROUTES rule 10 prefix 192.168.0.0/16
+set policy prefix-list OVERLAY-ROUTES rule 10 ge 24
+set policy prefix-list OVERLAY-ROUTES rule 10 le 24
+set policy prefix-list OVERLAY-ROUTES rule 20 action permit
+set policy prefix-list OVERLAY-ROUTES rule 20 prefix 10.255.5.0/24
+set policy prefix-list OVERLAY-ROUTES rule 20 ge 32
+set policy route-map OVERLAY-IN rule 10 action permit
+set policy route-map OVERLAY-IN rule 10 match ip address prefix-list OVERLAY-ROUTES
+set policy route-map OVERLAY-IN rule 10 set ip-next-hop peer-address
+set policy route-map OVERLAY-OUT rule 10 action permit
+set policy route-map OVERLAY-OUT rule 10 match ip address prefix-list OVERLAY-ROUTES
+#
+# BGP AS 65100: eBGP to the provider (AS 65000) underneath, iBGP with every hub over the tunnel
+set protocols bgp system-as 65100
+set protocols bgp parameters router-id 10.255.5.14
+set protocols bgp parameters log-neighbor-changes
+set protocols bgp timers keepalive 3
+set protocols bgp timers holdtime 9
+set protocols bgp address-family ipv4-unicast network 192.168.64.0/24
+set protocols bgp address-family ipv4-unicast network 10.255.5.14/32
+set protocols bgp address-family ipv4-unicast network 100.70.14.0/30
+set protocols bgp neighbor 100.70.14.1 remote-as 65000
+set protocols bgp neighbor 100.70.14.1 description 'provider mpls'
+set protocols bgp neighbor 100.70.14.1 address-family ipv4-unicast prefix-list export WAN-OUT
+set protocols bgp neighbor 100.70.14.1 address-family ipv4-unicast prefix-list import WAN-IN
+set protocols bgp peer-group HUBS remote-as 65100
+set protocols bgp peer-group HUBS description 'the DMVPN hubs (route reflectors)'
+set protocols bgp peer-group HUBS update-source 172.28.0.14
+set protocols bgp peer-group HUBS address-family ipv4-unicast soft-reconfiguration inbound
+set protocols bgp peer-group HUBS address-family ipv4-unicast route-map import OVERLAY-IN
+set protocols bgp peer-group HUBS address-family ipv4-unicast route-map export OVERLAY-OUT
+set protocols bgp neighbor 172.28.0.1 peer-group HUBS
+set protocols bgp neighbor 172.28.0.1 description 'DMVPN hub hub-east'
+set protocols bgp neighbor 172.28.0.2 peer-group HUBS
+set protocols bgp neighbor 172.28.0.2 description 'DMVPN hub hub-central'
+set protocols bgp neighbor 172.28.0.3 peer-group HUBS
+set protocols bgp neighbor 172.28.0.3 description 'DMVPN hub hub-west'
+#
+# the overlay through the hubs, below any shortcut: lets nhrpd answer resolution requests
+set protocols static route 172.28.0.0/24 next-hop 172.28.0.1 distance 250
+set protocols static route 172.28.0.0/24 next-hop 172.28.0.2 distance 250
+set protocols static route 172.28.0.0/24 next-hop 172.28.0.3 distance 250
+#
+# the DMVPN tunnel: mGRE (no remote), a /32 as NHRP on VyOS requires, the hubs' GRE key
+set interfaces tunnel tun0 encapsulation gre
+set interfaces tunnel tun0 source-address 100.70.14.2
+set interfaces tunnel tun0 address 172.28.0.14/32
+set interfaces tunnel tun0 mtu 1400
+set interfaces tunnel tun0 ip adjust-mss 1360
+set interfaces tunnel tun0 parameters ip key 100
+set interfaces tunnel tun0 parameters ip ttl 64
+set interfaces tunnel tun0 description 'DMVPN customer (mGRE, phase 3) 172.28.0.0/24'
+#
+# NHRP: registered with every hub, shortcuts on (the hubs send redirects)
+set protocols nhrp tunnel tun0 network-id 1
+set protocols nhrp tunnel tun0 holdtime 300
+set protocols nhrp tunnel tun0 mtu 1400
+set protocols nhrp tunnel tun0 authentication c8dnhrp
+set protocols nhrp tunnel tun0 registration-no-unique
+set protocols nhrp tunnel tun0 shortcut
+set protocols nhrp tunnel tun0 nhs tunnel-ip 172.28.0.1 nbma 100.70.1.2
+set protocols nhrp tunnel tun0 nhs tunnel-ip 172.28.0.2 nbma 100.70.2.2
+set protocols nhrp tunnel tun0 nhs tunnel-ip 172.28.0.3 nbma 100.70.3.2
+#
+# IKEv2 / IPsec, matched to the hubs: AES-256 / SHA-256 / DH 14, ESP tunnel mode, no PFS
+set vpn ipsec ike-group DMVPN-IKE key-exchange ikev2
+set vpn ipsec ike-group DMVPN-IKE lifetime 28800
+set vpn ipsec ike-group DMVPN-IKE dead-peer-detection action clear
+set vpn ipsec ike-group DMVPN-IKE dead-peer-detection interval 30
+set vpn ipsec ike-group DMVPN-IKE dead-peer-detection timeout 150
+set vpn ipsec ike-group DMVPN-IKE proposal 1 encryption aes256
+set vpn ipsec ike-group DMVPN-IKE proposal 1 hash sha256
+set vpn ipsec ike-group DMVPN-IKE proposal 1 dh-group 14
+set vpn ipsec esp-group DMVPN-ESP mode tunnel
+set vpn ipsec esp-group DMVPN-ESP lifetime 3600
+set vpn ipsec esp-group DMVPN-ESP pfs disable
+set vpn ipsec esp-group DMVPN-ESP proposal 1 encryption aes256
+set vpn ipsec esp-group DMVPN-ESP proposal 1 hash sha256
+set vpn ipsec profile DMVPN-IPSEC authentication mode pre-shared-secret
+set vpn ipsec profile DMVPN-IPSEC authentication pre-shared-secret lab-dmvpn-psk-do-not-use-outside-this-lab
+set vpn ipsec profile DMVPN-IPSEC ike-group DMVPN-IKE
+set vpn ipsec profile DMVPN-IPSEC esp-group DMVPN-ESP
+set vpn ipsec profile DMVPN-IPSEC bind tunnel tun0
+set vpn ipsec disable-uniqreqids
+set vpn ipsec options disable-route-autoinstall
