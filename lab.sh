@@ -25,8 +25,10 @@ running() { [[ "$(V domstate "$(dom "$1")" 2>/dev/null)" == "running" ]]; }
 state() { V domstate "$(dom "$1")" 2>/dev/null || echo undefined; }
 nodes_or_all() { local n; if [[ $# -gt 0 ]]; then for n in "$@"; do known "$n"; done; echo "$*"; else echo "${ALL_NODES[*]}"; fi; }
 is_host() { [[ "${ROLE[$1]}" == "host" ]]; }
-is_vyos() { [[ "${ROLE[$1]}" == "provider" ]]; }
-is_c8k()  { [[ "${ROLE[$1]}" == "hub" || "${ROLE[$1]}" == "spoke" ]]; }
+platform() { case "${ROLE[$1]}" in hub|spoke) echo "${PLATFORM[$1]:-c8000v}";; provider) echo vyos;; host) echo alpine;; esac; }
+is_dmvpn() { [[ "${ROLE[$1]}" == "hub" || "${ROLE[$1]}" == "spoke" ]]; }   # carries a tunnel: hub or customer, any platform
+is_c8k()  { [[ "$(platform "$1")" == "c8000v" ]]; }
+is_vyos() { [[ "$(platform "$1")" == "vyos" ]]; }                          # the provider, and any VyOS customer
 only() {   # only <predicate> [node..] -> the given (or all) nodes the predicate holds for
   local pred="$1" n out=(); shift
   for n in $(nodes_or_all "$@"); do "$pred" "$n" && out+=("$n"); done
@@ -48,7 +50,7 @@ ensure_networks() {
 # ---- point-to-point links (UDP socket pairs between VMs) ------------------
 port_local() { echo $(( UDP_BASE + NODE_IDX[$1]*100 + $2 )); }           # UDP port a node's NIC listens on when it anchors a link
 port_far()   { echo $(( UDP_BASE + 10000 + NODE_IDX[$1]*100 + $2 )); }   # ...and the port it sends to (the other end listens there)
-node_ports() { case "${ROLE[$1]}" in hub|spoke) seq 2 $((1 + C8000V_PORTS));; provider) seq 1 "$PROVIDER_PORTS";; host) seq 1 "$HOST_PORTS";; esac; }
+node_ports() { case "${ROLE[$1]}" in hub|spoke) if is_c8k "$1"; then seq 2 $((1 + C8000V_PORTS)); else seq 1 $((1 + C8000V_PORTS)); fi;; provider) seq 1 "$PROVIDER_PORTS";; host) seq 1 "$HOST_PORTS";; esac; }
 port_name()  { if is_c8k "$1"; then echo "GigabitEthernet$2"; else echo "eth$2"; fi; }
 mac()        { printf '%s:%02x:%02x' "$MAC_OUI" "${NODE_IDX[$1]}" "$2"; }
 link_peer() {   # node port -> "peer_node peer_port prefix end(1|2)" or "" if unwired
@@ -172,9 +174,9 @@ X
   domain_tail_xml "$n"
 }
 
-vyos_xml() {       # VyOS provider: virtio disk, eth0 = OOB, eth1.. = the sites' access links
+vyos_xml() {       # VyOS (the provider, or a customer): virtio disk, eth0 = OOB, eth1.. = its links
   local n="$1" d p; d="$(node_dir "$n")"
-  domain_head_xml "$n" "VyOS MPLS provider ($n)" "$VYOS_RAM_MIB" "$VYOS_VCPU"
+  domain_head_xml "$n" "VyOS $([[ "${ROLE[$n]}" == provider ]] && echo "MPLS provider" || echo "${ROLE[$n]}") ($n${REGION[$n]:+, ${REGION[$n]}})" "$VYOS_RAM_MIB" "$VYOS_VCPU"
   cat <<X
     <disk type='file' device='disk'>
       <driver name='qemu' type='qcow2'/>
@@ -317,6 +319,8 @@ bootstrap_vyos() {   # VyOS day-0 over the serial console (nodes/<n>/vyos_config
     python3 "$LAB_DIR/tools/vyos_console.py" push 127.0.0.1 "${CONSOLE_PORT[$n]}" "$d/vyos_config.txt"
     for _ in $(seq 30); do ssh_ready "$n" && break; sleep 5; done
     ssh_ready "$n" && echo "[$n] ready: ssh vyos@${MGMT_IP[$n]} (vyos)" || echo "[$n] warning: SSH not answering yet"
+    # a VyOS customer talks IKEv2 to the Catalyst hubs: install the post-commit hook that keeps its IKE proposal IOS-compatible
+    if [[ "${ROLE[$n]}" == spoke ]]; then "$PY" "$LAB_DIR/tools/vyos_hooks.py" "${MGMT_IP[$n]}" || echo "[$n] warning: hooks not installed"; fi
   } > "$d/bootstrap.log" 2>&1
 }
 
@@ -380,6 +384,7 @@ cmd_down() {       # C8000v: save the config, then power off; VyOS / hosts: ACPI
 
 cmd_bootstrap() {  # day-0 over the serial consoles, every node in parallel; each logs to nodes/<n>/bootstrap.log
   local n pids=() rc=0 p log
+  need_python
   for n in $(nodes_or_all "$@"); do
     if is_c8k "$n"; then bootstrap_c8k "$n" & pids+=($!)
     elif is_vyos "$n"; then bootstrap_vyos "$n" & pids+=($!); fi
@@ -406,6 +411,7 @@ cmd_configure() {  # (re)apply the rendered provider config over SSH — idempot
   local n
   for n in $(only is_vyos "$@"); do
     "$PY" "$LAB_DIR/tools/vyos_push.py" "${MGMT_IP[$n]}" "$(node_dir "$n")/vyos_config.txt" | sed "s/^/[$n] /"
+    if [[ "${ROLE[$n]}" == spoke ]]; then "$PY" "$LAB_DIR/tools/vyos_hooks.py" "${MGMT_IP[$n]}" | sed "s/^/[$n] /"; fi
   done
 }
 
@@ -463,6 +469,7 @@ cmd_inventory() {  # the lab as JSON — the one contract the renderer, the test
                ROUTER_ID_NET LAN_PORT MAC_OUI; do
       printf 'scalar\t%s\t%s\n' "$var" "${!var}"
     done
+    for n in "${ALL_NODES[@]}"; do printf 'map\tPLATFORM\t%s\t%s\n' "$n" "$(platform "$n")"; done
     for var in ROLE REGION MGMT_IP T_IDX LAN HOST_OF CONSOLE_PORT NODE_IDX; do
       declare -n A="$var"
       for k in "${!A[@]}"; do printf 'map\t%s\t%s\t%s\n' "$var" "$k" "${A[$k]}"; done
@@ -499,7 +506,7 @@ cmd_nac() {        # terraform in nac/ with the router credentials in the enviro
   local rc=0 n
   ( cd "$LAB_DIR/nac" && IOSXE_USERNAME="${IOSXE_USERNAME:-admin}" IOSXE_PASSWORD="${IOSXE_PASSWORD:-admin}" terraform "$@" ) || rc=$?
   if [[ $rc -eq 0 && "${1:-}" == "apply" ]]; then
-    for n in "${C8000V_NODES[@]}"; do save_config "$n" && echo "[$n] running-config saved" || echo "[$n] warning: save failed" >&2; done
+    for n in $(only is_c8k "${DMVPN_ROUTERS[@]}"); do save_config "$n" && echo "[$n] running-config saved" || echo "[$n] warning: save failed" >&2; done
   fi
   return $rc
 }
@@ -511,9 +518,10 @@ cmd_verify() {     # a quick look at every layer, bottom up
   local n
   echo "== provider: eBGP sessions on mpls =="; vy mpls "show ip bgp summary" | sed 's/^/  /'
   echo; echo "== each router: underlay eBGP, NHRP, IPsec, overlay iBGP =="
-  for n in "${C8000V_NODES[@]}"; do
-    echo "[$n]"
-    ios "$n" "show ip bgp summary | begin Neighbor" "show dmvpn | begin Peer" "show crypto session brief" | sed 's/^/  /'
+  for n in "${DMVPN_ROUTERS[@]}"; do
+    echo "[$n] ($(platform "$n"))"
+    if is_c8k "$n"; then ios "$n" "show ip bgp summary | begin Neighbor" "show dmvpn | begin Peer" "show crypto session brief" | sed 's/^/  /'
+    else vy "$n" "sudo vtysh -c 'show ip bgp summary'" "sudo vtysh -c 'show ip nhrp nhs'" "show vpn ipsec sa" | sed 's/^/  /'; fi
   done
   echo; echo "== LAN to LAN =="; need_python; "$PY" "$LAB_DIR/tools/host_cmd.py" matrix
 }

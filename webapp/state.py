@@ -44,6 +44,17 @@ def ios(ip, *commands):
         c.disconnect()
 
 
+def vyos_show(ip, command):
+    """A `show` command on a VyOS router: NHRP, BGP and routes live in FRR (vtysh), IPsec and the rest in op-mode."""
+    if command.startswith("show vpn") or command.startswith("show interfaces") or command.startswith("show configuration"):
+        c = ConnectHandler(device_type="vyos", host=ip, username=VYOS_USER, password=VYOS_PASS)
+        try:
+            return c.send_command(command, read_timeout=60)
+        finally:
+            c.disconnect()
+    return vtysh(ip, command)
+
+
 def vtysh(ip, *commands):
     return _ssh(ip, " ; ".join(f"sudo vtysh -c '{c}'" for c in commands), VYOS_USER, VYOS_PASS)
 
@@ -61,7 +72,43 @@ class State:
                 "applications": inv.get("applications") or []}
 
     # ---- per router --------------------------------------------------------------------------------------------
+    def vyos_router_state(self, node, n, m):
+        """A VyOS customer, from FRR (nhrpd, bgpd) and strongSwan: the same fields the IOS parser produces."""
+        out = {"name": node, "role": n["role"], "platform": "vyos", "error": None, "tunnel_ip": n["tunnel_ip"], "nbma": n["nbma"]}
+        try:
+            text = vtysh(n["mgmt_ip"], "show ip nhrp cache", "show ip bgp summary")
+            sas = _ssh(n["mgmt_ip"], "sudo swanctl --list-sas; cat /proc/loadavg", VYOS_USER, VYOS_PASS, timeout=45)
+        except Exception as e:                                    # noqa: BLE001
+            out["error"] = e.__class__.__name__
+            return out
+        hub_tun = {m["nodes"][h]["tunnel_ip"]: h for h in m["hubs"]}
+        by_tun = {x["tunnel_ip"]: name for name, x in m["nodes"].items() if x.get("tunnel_ip")}
+        # Iface  Type  Protocol  NBMA  Claimed-NBMA  Flags  Identity
+        cache = re.findall(r"^\S+\s+(nhs|dynamic|static|local|cached)\s+(\d+\.\d+\.\d+\.\d+)(?:/\d+)?\s+(\S+)\s+\S+\s*(\S*)", text, re.M)
+        out["nhrp"] = [{"type": t, "tunnel": ip, "nbma": nb, "flags": fl, "peer": by_tun.get(ip, ip)} for t, ip, nb, fl in cache]
+        out["nhs_up"] = sorted({hub_tun[ip] for t, ip, nb, fl in cache if t == "nhs" and ip in hub_tun and nb not in ("-", "0.0.0.0")})
+        out["shortcuts"] = sorted({by_tun[ip] for t, ip, nb, fl in cache
+                                   if t == "dynamic" and ip in by_tun and ip not in hub_tun and ip != n["tunnel_ip"]})
+        # strongSwan: every installed CHILD_SA is a protected GRE flow to one peer
+        peers = re.findall(r"ESTABLISHED.*?\n\s+local.*?\n\s+remote\s+'?[^']*'?\s*@\s*(\d+\.\d+\.\d+\.\d+)", sas)
+        out["sa_peers"] = sorted(set(peers))
+        out["sa"] = len(re.findall(r"INSTALLED", sas))
+        load = re.search(r"^(\d+\.\d+) (\d+\.\d+)", sas, re.M)
+        out["cpu_5s"] = out["cpu_1m"] = None
+        out["load_1m"] = float(load[2]) if load else None
+        overlay = ipaddress.ip_network(m["service"]["overlay"])
+        sess = [{"peer": p, "as": int(a), "state": st} for p, a, st in FRR_ROW.findall(text)]
+        ov = [x for x in sess if ipaddress.ip_address(x["peer"]) in overlay]
+        un = [x for x in sess if ipaddress.ip_address(x["peer"]) not in overlay]
+        out["overlay_up"] = sum(1 for x in ov if x["state"].isdigit())
+        out["overlay"] = len(ov)
+        out["underlay_up"] = sum(1 for x in un if x["state"].isdigit())
+        out["underlay"] = len(un)
+        return out
+
     def router_state(self, node, n, m):
+        if n.get("platform") == "vyos":
+            return self.vyos_router_state(node, n, m)
         out = {"name": node, "role": n["role"], "error": None, "tunnel_ip": n["tunnel_ip"], "nbma": n["nbma"]}
         try:
             r = ios(n["mgmt_ip"], "show dmvpn", "show crypto session brief", "show ip bgp summary",

@@ -191,7 +191,10 @@ body.print .legend { margin:2px 0 6px } body.print #mapinfo { padding-top:6px; b
 </main>
 
 <dialog id="wiz"><h2>Add a customer</h2>
-  <div class="row"><div><label>Name</label><input id="w-name"></div>
+  <div class="row"><div><label>Router type</label><select id="w-plat" style="width:100%;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--body);font:inherit;font-size:13.5px">
+      <option value="c8000v">Cisco Catalyst 8000v (IOS-XE, Network-as-Code)</option>
+      <option value="vyos">VyOS (FRR nhrpd + strongSwan)</option></select></div></div>
+  <div class="row" style="margin-top:9px"><div><label>Name</label><input id="w-name"></div>
     <div><label>Region</label><input id="w-region"></div>
     <div><label>Management address</label><input id="w-mgmt"></div>
     <div><label>Site LAN</label><input id="w-lan"></div></div>
@@ -291,7 +294,7 @@ function specFromForm() {
   const wan = `100.70.${t}.0/30`;
   return { ...base, name: $('w-name').value.trim(), region: $('w-region').value.trim(), mgmt_ip: $('w-mgmt').value.trim(),
     lan: $('w-lan').value.trim(), t_idx: t, tunnel_ip: `172.28.0.${t}`, nbma: `100.70.${t}.2`, router_id: `10.255.5.${t}`,
-    wan_prefix: wan, provider_port: $('w-pport').value.trim(), host: $('w-host').value.trim(), host_mgmt: $('w-hmgmt').value.trim(),
+    wan_prefix: wan, provider_port: $('w-pport').value.trim(), platform: $('w-plat').value, host: $('w-host').value.trim(), host_mgmt: $('w-hmgmt').value.trim(),
     customer: { ...(base.customer || {}), company: $('w-co').value.trim(), industry: $('w-ind').value.trim(), address: $('w-addr').value.trim(),
                 phone: $('w-phone').value.trim(), contact: $('w-contact').value.trim(), email: $('w-email').value.trim(),
                 applications: [...document.querySelectorAll('#w-apps input:checked')].map(i => i.value) } };
@@ -301,7 +304,7 @@ async function check() {
   const v = await (await fetch('/api/customers/validate', { ...J, body: JSON.stringify(spec) })).json();
   if (v.detail) { $('w-msg').textContent = JSON.stringify(v.detail); return null; }
   const p = v.plan;
-  $('w-plan').innerHTML = [['Company', p.company], ['VM', p.vm], ['Cloud', p.cloud], ['WAN', p.wan], ['LAN', p.lan], ['Changes', 'the new router, ' + p.changed.join(', ') + ', Nautobot']]
+  $('w-plan').innerHTML = [['Company', p.company], ['Router', p.vm], ['Cloud', p.cloud], ['WAN', p.wan], ['LAN', p.lan], ['Changes', 'the new router, ' + p.changed.join(', ') + ', Nautobot']]
     .map(([k, x]) => `<tr><th>${esc(k)}</th><td>${esc(x)}</td></tr>`).join('');
   $('w-note').textContent = p.untouched;
   $('w-msg').textContent = (v.problems || []).join('\n');
@@ -311,6 +314,7 @@ async function openWizard() {
   const r = await fetch('/api/customers/suggest'); SPEC = await r.json();
   if (!r.ok) { alert(SPEC.detail); return; }
   $('w-name').value = SPEC.name; $('w-region').value = SPEC.region; $('w-mgmt').value = SPEC.mgmt_ip; $('w-lan').value = SPEC.lan;
+  $('w-plat').value = SPEC.platform || 'c8000v'; $('w-plat').onchange = check;
   const cu = SPEC.customer || {};
   $('w-co').value = cu.company || ''; $('w-ind').value = cu.industry || ''; $('w-addr').value = cu.address || '';
   $('w-phone').value = cu.phone || ''; $('w-contact').value = cu.contact || ''; $('w-email').value = cu.email || '';
@@ -332,7 +336,7 @@ async function pickCustomer() {
   const p = await r.json();
   $('rm-title').textContent = `Remove ${p.name}`;
   $('rm-body').innerHTML = `<p>This deletes the C8000v and its LAN host, and takes the customer out of lab.conf, Terraform's state and Nautobot.</p>
-    <table>${p.customer ? `<tr><th>Customer</th><td>${esc(p.customer.company)} — ${esc(p.customer.industry)}</td></tr>` : ''}<tr><th>VMs</th><td>${esc(p.name)} (${esc(p.mgmt_ip)}) and ${esc(p.host)} (${esc(p.host_mgmt)})</td></tr>
+    <table>${p.customer ? `<tr><th>Customer</th><td>${esc(p.customer.company)} — ${esc(p.customer.industry)}</td></tr>` : ''}<tr><th>VMs</th><td>${esc(p.name)} (${esc(p.platform === 'vyos' ? 'VyOS' : 'Catalyst 8000v')}, ${esc(p.mgmt_ip)}) and ${esc(p.host)} (${esc(p.host_mgmt)})</td></tr>
     <tr><th>Cloud</th><td class="mono">Tunnel0 ${esc(p.tunnel_ip)}, NBMA ${esc(p.nbma)}</td></tr>
     <tr><th>Site LAN</th><td class="mono">${esc(p.lan)}</td></tr>
     <tr><th>Provider port released</th><td class="mono">${esc(p.provider)} ${esc(p.provider_port)} (${esc(p.wan_prefix)})</td></tr></table>
@@ -481,7 +485,8 @@ function drawMap() {
       `<text class="appcap" x="${pos[h].x}" y="${pos[h].y - nh / 2 - 8 - (lines.length - 1 - i) * 13}">${esc(l)}</text>`).join('')}</g>`); });
   const short = (t, k) => t.length > k ? t.slice(0, k - 1) + '…' : t;
   CU.forEach(c => { const co = (ST.nodes[c].customer || {}).company;
-    nodes.push(box(c, co ? 196 : nw, nh, [[co ? short(co, 30) : 'customer · ' + (ST.nodes[c].region || ''), 'role', -12], [c, '', 5], [ST.nodes[c].tunnel_ip, 'sub', 20]])); });
+    const vy = ST.nodes[c].platform === 'vyos' ? ' · VyOS' : '';
+    nodes.push(box(c, co ? 196 : nw, nh, [[co ? short(co, vy ? 23 : 30) + vy : 'customer · ' + (ST.nodes[c].region || '') + vy, 'role', -12], [c, '', 5], [ST.nodes[c].tunnel_ip, 'sub', 20]])); });
   nodes.push(box(P, 190, nh, [['provider · VyOS', 'role', -12], [P, '', 5], [`AS ${ST.provider.as}`, 'sub', 20]]));
   const hn = [];
   CU.forEach(c => { const host = ST.nodes[c].host; if (host) hn.push(box(host, 150, 44, [[host, '', -2], [(ST.nodes[c].lan_port || {}).peer_ip || '', 'sub', 14]])); });
@@ -528,7 +533,9 @@ function selectNode(n) { MAPSEL = n; drawMap(); renderInfo(n, true); }
 function renderInfo(n, fresh) {
   const m = ST.nodes[n] || {}, c = (ST.cloud || {})[n] || {}, st = nodeStatus(n), rows = [];
   const add = (k, v) => { if (v !== undefined && v !== null && v !== '') rows.push(`<dt>${esc(k)}</dt><dd>${v}</dd>`); };
+  const PLAT = { c8000v: 'Catalyst 8000v', vyos: 'VyOS', alpine: 'Alpine Linux' };
   add('Role', esc(m.role === 'spoke' ? 'customer' : m.role) + (m.region ? ' · ' + esc(m.region) : ''));
+  add('Platform', esc(PLAT[m.platform] || m.platform));
   add('Status', pill(st === 'ok', st === 'ok' ? 'healthy' : st === 'warn' ? 'partial' : 'down', st === 'warn'));
   add('VM', esc(m.domain)); add('Management', esc(m.mgmt_ip));
   if (m.role === 'hub' || m.role === 'spoke') {
@@ -552,7 +559,9 @@ function renderInfo(n, fresh) {
       <button data-focus>${MAPFOCUS === n ? 'Show all customers' : `Show only ${esc(n)}'s view`}</button>
       <button data-pdf title="${esc(n)}'s view of the network, with its details, as a PDF">Download PDF</button></div>` : '';
   const pings = m.role === 'host' ? Object.keys(ST.nodes).filter(x => ST.nodes[x].role === 'host' && x !== n).sort() : [];
-  const cmds = (m.role === 'hub' || m.role === 'spoke') ? ['show dmvpn', 'show crypto session brief', 'show ip bgp summary', 'show ip route bgp', 'show ip nhrp'] : [];
+  const cmds = (m.role === 'hub' || m.role === 'spoke')
+    ? (m.platform === 'vyos' ? ['show ip nhrp nhs', 'show ip nhrp cache', 'show ip nhrp shortcut', 'show vpn ipsec sa', 'show ip bgp summary', 'show ip route bgp']
+                             : ['show dmvpn', 'show crypto session brief', 'show ip bgp summary', 'show ip route bgp', 'show ip nhrp']) : [];
   const owner = m.role === 'spoke' ? n : (m.role === 'host' ? m.router : null), cu = owner ? (ST.nodes[owner] || {}).customer : null;
   const company = cu ? `<div class="company"><h3>${esc(cu.company)}</h3><div class="ind">${esc(cu.industry)}${m.role === 'host' ? ` · LAN host at ${esc(owner)}` : ''}</div><dl>
       <dt>Address</dt><dd>${esc(cu.address)}</dd>

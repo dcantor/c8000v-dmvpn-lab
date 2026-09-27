@@ -57,6 +57,37 @@ pings every other one across the overlay. Built and configured as code: libvirt 
 | `webapp/` | the portal: `app.py` (the runs), `customers.py` (allocate, validate, plan), `labconf.py` (edit `lab.conf`), `state.py` (what the routers are doing), `static/index.html` |
 | `results/` | one folder per test run: `configs/pre-run`, `configs/post-run`, the diff, Robot report / log |
 
+## Customer router type: Catalyst 8000v or VyOS
+
+A customer router can be a Catalyst 8000v (the default) or **VyOS**. The choice is recorded as `PLATFORM[<node>]` in
+`lab.conf`, and "Add a customer" asks for it. A VyOS customer is wired the same way as a C8000v one: eth2 to the
+provider, eth3 to the LAN, eth1 and eth4 spare. It gets the same service, rendered by `tools/render.py`
+(`vyos_customer`) and configured over its console:
+- eBGP to the provider carrying only its access link.
+- An mGRE `tun0` registered with all three hubs.
+- IKEv2/IPsec, and iBGP with all three hubs.
+
+It uses 1 GB instead of 4 GB and boots in about two minutes. Network-as-Code covers only the C8000vs.
+
+What it takes to interoperate with the IOS hubs:
+- **IPsec in tunnel mode with no PFS.** That's what the hubs' transform-set and IPsec profile negotiate. VyOS's own
+  DMVPN examples use transport mode and PFS, which the hubs refuse.
+- **No ESN in the IKE proposal.** VyOS always renders each IKE proposal with a `-noesn` variant, and strongSwan 6
+  then sends a Sequence Numbers (type 5) transform in the IKE SA. IOS-XE 17.15 drops that IKE_SA_INIT as malformed
+  without replying ("Transform type 5 invalid for protocol id 1"). `tools/vyos_ike_noesn.sh` is a VyOS post-commit
+  hook that removes the ESN variants from the IKE proposals only and reloads strongSwan. `tools/vyos_hooks.py`
+  installs it at bootstrap and on every `configure`, and it then runs after every commit, including the one at boot.
+- **The hub as next hop.** VyOS only accepts a /32 on an NHRP tunnel, so the other customers' tunnel addresses (the
+  next hops the hubs reflect) aren't reachable directly. Routes from a hub are imported with the hub as next hop.
+  Phase 3 still works: the hub's redirect installs an NHRP shortcut (distance 10), which beats BGP.
+- **A route to the overlay through the hubs (distance 250).** This is what lets nhrpd answer resolution requests from
+  the C8000v customers, so their shortcuts to the VyOS customer form too.
+
+Suite `08_vyos_customers` checks all of this from the VyOS side (FRR, strongSwan) and skips when there's no VyOS
+customer. The other suites run the IOS checks against the C8000vs and check reachability to every router whatever its
+platform. On the map, a VyOS customer is marked, and its details show the platform and VyOS commands (`show ip nhrp …`,
+`show vpn ipsec sa`, …). Nautobot models it with platform `vyos`, `dum0` for the router-id and `tun0`.
+
 ## The customers
 
 Each customer site belongs to a (fictional) company, recorded in **`customers.json`**: company, industry, address,

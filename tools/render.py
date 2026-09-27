@@ -105,9 +105,11 @@ class Renderer:
     def mac(self, n, port):
         return f"{self.inv['mac_oui']}:{n['idx']:02x}:{port:02x}"
 
-    def provider(self, n):
+    def vyos_base(self, n, what, dc, ports_comment):
+        """What every VyOS router here carries: identity, the OOB port, the API, the exporters, Telegraf, syslog, and
+        every data port (addressed when wired, disabled and labelled when not)."""
         oob = ipaddress.ip_network(self.inv["oob"]["prefix"])
-        out = [f"# {n['name']}: the MPLS provider — day-0 pushed over the serial console by lab.sh bootstrap; rendered by tools/render.py",
+        out = [f"# {n['name']}: {what} — day-0 pushed over the serial console by lab.sh bootstrap; rendered by tools/render.py",
                f"set system host-name {n['name']}",
                "set system login user vyos authentication plaintext-password vyos",
                "set system time-zone UTC",
@@ -132,11 +134,11 @@ class Renderer:
                 f"set service monitoring telegraf influxdb authentication token {TELEGRAF_TOKEN}",
                 f"set service monitoring telegraf global-tag lab value {self.inv['lab']}",
                 f"set service monitoring telegraf global-tag role value {n['role']}",
-                "set service monitoring telegraf global-tag dc value provider",
+                f"set service monitoring telegraf global-tag dc value {dc}",
                 f"set system syslog remote {nms} port {VL_SYSLOG_PORT}",
                 f"set system syslog remote {nms} protocol udp",
                 f"set system syslog remote {nms} facility all level info",
-                "#", "# access links: one /30 per site, the provider is .1"]
+                "#", f"# {ports_comment}"]
         for p in n["ports"]:
             out.append(f"set interfaces ethernet {p['name']} hw-id {self.mac(n, p['num'])}")
             if p["ip"]:
@@ -145,6 +147,10 @@ class Renderer:
             else:
                 out += [f"set interfaces ethernet {p['name']} description 'unwired'",
                         f"set interfaces ethernet {p['name']} disable"]
+        return out
+
+    def provider(self, n):
+        out = self.vyos_base(n, "the MPLS provider", "provider", "access links: one /30 per site, the provider is .1")
         pg, pl, wan = "CE", "WAN-ADDRESSES", self.prov["wan_net"]
         out += ["#", f"# {n['name']}: its own AS, eBGP with every site through a listen range; it carries the sites' WAN "
                      "addresses and nothing else",
@@ -165,6 +171,115 @@ class Renderer:
                 f"set protocols bgp peer-group {pg} address-family ipv4-unicast prefix-list import {pl}",
                 "set protocols bgp listen limit 64",
                 f"set protocols bgp listen range {wan} peer-group {pg}"]
+        return "\n".join(out) + "\n"
+
+    def vyos_customer(self, n):
+        """A DMVPN customer on VyOS, interoperating with the Catalyst hubs. It gets the same service a C8000v customer
+        does — eBGP to the provider for its NBMA address, one mGRE tunnel registered with every hub, IKEv2/IPsec,
+        iBGP with every hub — and has to match what the hubs' IOS negotiates, not what VyOS would pick:
+
+          IPsec in tunnel mode and without PFS: the hubs' transform-set is tunnel mode and their profile sets no PFS
+          (VyOS's DMVPN examples use transport mode and PFS, which an IOS responder refuses).
+
+          Next hop = the hub. VyOS only takes a /32 on an NHRP tunnel, so the other customers' tunnel addresses — the
+          next hops the hubs reflect — resolve through nothing. Routes from a hub are therefore imported with the hub
+          as next hop; phase 3 still works, because the hub's redirect makes nhrpd install a shortcut (distance 10),
+          which beats BGP.
+
+          A route to the overlay through the hubs (distance 250). nhrpd only answers a resolution request if the
+          requester's tunnel address resolves through NHRP; with a /32 and no connected subnet nothing does, and the
+          C8000v customers' shortcuts to this one would never form. The route makes every overlay address resolve
+          through a hub, and loses to any shortcut."""
+        s_, wan, t = self.svc, n["wan"], n["t_idx"]
+        rid_net = f"{n['router_id'].rsplit('.', 1)[0]}.0/24"
+        out = self.vyos_base(n, f"DMVPN customer on VyOS ({n.get('region') or ''})", n.get("region") or "customer",
+                             "ports: eth2 to the provider, eth3 the site LAN (eth1, eth4 spare) — cabled like a C8000v customer")
+        out += ["#", "# the router-id",
+                f"set interfaces dummy dum0 address {n['router_id']}/32",
+                "set interfaces dummy dum0 description 'router-id'"]
+        out += ["#", "# filters: the provider gets our access link and nothing else; the overlay carries LANs and router-ids",
+                "set policy prefix-list WAN-OUT description 'offer the provider our own access link and nothing else'",
+                "set policy prefix-list WAN-OUT rule 10 action permit",
+                f"set policy prefix-list WAN-OUT rule 10 prefix {wan['prefix']}",
+                "set policy prefix-list WAN-IN description 'accept only the provider access-link range'",
+                "set policy prefix-list WAN-IN rule 10 action permit",
+                f"set policy prefix-list WAN-IN rule 10 prefix {self.prov['wan_net']}",
+                "set policy prefix-list WAN-IN rule 10 le 32",
+                "set policy prefix-list OVERLAY-ROUTES description 'site LANs and router-ids: all the overlay carries'",
+                "set policy prefix-list OVERLAY-ROUTES rule 10 action permit",
+                "set policy prefix-list OVERLAY-ROUTES rule 10 prefix 192.168.0.0/16",
+                "set policy prefix-list OVERLAY-ROUTES rule 10 ge 24",
+                "set policy prefix-list OVERLAY-ROUTES rule 10 le 24",
+                "set policy prefix-list OVERLAY-ROUTES rule 20 action permit",
+                f"set policy prefix-list OVERLAY-ROUTES rule 20 prefix {rid_net}",
+                "set policy prefix-list OVERLAY-ROUTES rule 20 ge 32",
+                "set policy route-map OVERLAY-IN rule 10 action permit",
+                "set policy route-map OVERLAY-IN rule 10 match ip address prefix-list OVERLAY-ROUTES",
+                "set policy route-map OVERLAY-IN rule 10 set ip-next-hop peer-address",
+                "set policy route-map OVERLAY-OUT rule 10 action permit",
+                "set policy route-map OVERLAY-OUT rule 10 match ip address prefix-list OVERLAY-ROUTES"]
+        out += ["#", f"# BGP AS {s_['as']}: eBGP to the provider (AS {self.prov['as']}) underneath, iBGP with every hub over the tunnel",
+                f"set protocols bgp system-as {s_['as']}",
+                f"set protocols bgp parameters router-id {n['router_id']}",
+                "set protocols bgp parameters log-neighbor-changes",
+                f"set protocols bgp timers keepalive {s_['keepalive']}",
+                f"set protocols bgp timers holdtime {s_['holdtime_bgp']}",
+                f"set protocols bgp address-family ipv4-unicast network {n['lan']}",
+                f"set protocols bgp address-family ipv4-unicast network {n['router_id']}/32",
+                f"set protocols bgp address-family ipv4-unicast network {wan['prefix']}",
+                f"set protocols bgp neighbor {wan['peer_ip']} remote-as {self.prov['as']}",
+                f"set protocols bgp neighbor {wan['peer_ip']} description 'provider {wan['peer']}'",
+                f"set protocols bgp neighbor {wan['peer_ip']} address-family ipv4-unicast prefix-list export WAN-OUT",
+                f"set protocols bgp neighbor {wan['peer_ip']} address-family ipv4-unicast prefix-list import WAN-IN",
+                f"set protocols bgp peer-group HUBS remote-as {s_['as']}",
+                "set protocols bgp peer-group HUBS description 'the DMVPN hubs (route reflectors)'",
+                f"set protocols bgp peer-group HUBS update-source {n['tunnel_ip']}",
+                "set protocols bgp peer-group HUBS address-family ipv4-unicast soft-reconfiguration inbound",
+                "set protocols bgp peer-group HUBS address-family ipv4-unicast route-map import OVERLAY-IN",
+                "set protocols bgp peer-group HUBS address-family ipv4-unicast route-map export OVERLAY-OUT"]
+        for h in self.hubs:
+            out += [f"set protocols bgp neighbor {h['tunnel_ip']} peer-group HUBS",
+                    f"set protocols bgp neighbor {h['tunnel_ip']} description 'DMVPN hub {h['name']}'"]
+        out += ["#", "# the overlay through the hubs, below any shortcut: lets nhrpd answer resolution requests"]
+        out += [f"set protocols static route {self.svc['overlay']} next-hop {h['tunnel_ip']} distance 250" for h in self.hubs]
+        out += ["#", "# the DMVPN tunnel: mGRE (no remote), a /32 as NHRP on VyOS requires, the hubs' GRE key",
+                "set interfaces tunnel tun0 encapsulation gre",
+                f"set interfaces tunnel tun0 source-address {n['nbma']}",
+                f"set interfaces tunnel tun0 address {n['tunnel_ip']}/32",
+                f"set interfaces tunnel tun0 mtu {s_['mtu']}",
+                f"set interfaces tunnel tun0 ip adjust-mss {s_['mss']}",
+                f"set interfaces tunnel tun0 parameters ip key {s_['tunnel_key']}",
+                "set interfaces tunnel tun0 parameters ip ttl 64",
+                f"set interfaces tunnel tun0 description 'DMVPN customer (mGRE, phase 3) {self.svc['overlay']}'",
+                "#", "# NHRP: registered with every hub, shortcuts on (the hubs send redirects)",
+                f"set protocols nhrp tunnel tun0 network-id {s_['network_id']}",
+                f"set protocols nhrp tunnel tun0 holdtime {s_['holdtime']}",
+                f"set protocols nhrp tunnel tun0 mtu {s_['mtu']}",
+                f"set protocols nhrp tunnel tun0 authentication {s_['nhrp_secret']}",
+                "set protocols nhrp tunnel tun0 registration-no-unique",
+                "set protocols nhrp tunnel tun0 shortcut"]
+        out += [f"set protocols nhrp tunnel tun0 nhs tunnel-ip {h['tunnel_ip']} nbma {h['nbma']}" for h in self.hubs]
+        out += ["#", "# IKEv2 / IPsec, matched to the hubs: AES-256 / SHA-256 / DH 14, ESP tunnel mode, no PFS",
+                "set vpn ipsec ike-group DMVPN-IKE key-exchange ikev2",
+                "set vpn ipsec ike-group DMVPN-IKE lifetime 28800",
+                "set vpn ipsec ike-group DMVPN-IKE dead-peer-detection action clear",
+                "set vpn ipsec ike-group DMVPN-IKE dead-peer-detection interval 30",
+                "set vpn ipsec ike-group DMVPN-IKE dead-peer-detection timeout 150",
+                "set vpn ipsec ike-group DMVPN-IKE proposal 1 encryption aes256",
+                "set vpn ipsec ike-group DMVPN-IKE proposal 1 hash sha256",
+                "set vpn ipsec ike-group DMVPN-IKE proposal 1 dh-group 14",
+                "set vpn ipsec esp-group DMVPN-ESP mode tunnel",
+                "set vpn ipsec esp-group DMVPN-ESP lifetime 3600",
+                "set vpn ipsec esp-group DMVPN-ESP pfs disable",
+                "set vpn ipsec esp-group DMVPN-ESP proposal 1 encryption aes256",
+                "set vpn ipsec esp-group DMVPN-ESP proposal 1 hash sha256",
+                "set vpn ipsec profile DMVPN-IPSEC authentication mode pre-shared-secret",
+                f"set vpn ipsec profile DMVPN-IPSEC authentication pre-shared-secret {s_['psk']}",
+                "set vpn ipsec profile DMVPN-IPSEC ike-group DMVPN-IKE",
+                "set vpn ipsec profile DMVPN-IPSEC esp-group DMVPN-ESP",
+                "set vpn ipsec profile DMVPN-IPSEC bind tunnel tun0",
+                "set vpn ipsec disable-uniqreqids",
+                "set vpn ipsec options disable-route-autoinstall"]
         return "\n".join(out) + "\n"
 
     # ---- C8000v: Network-as-Code ----------------------------------------------------------------------------------
@@ -287,7 +402,7 @@ class Renderer:
         }
 
     def nac_devices(self):
-        c8k = self.hubs + self.spokes
+        c8k = [n for n in self.hubs + self.spokes if n.get("platform", "c8000v") == "c8000v"]
         templates = [{"name": f"tunnel0_{n['name']}", "type": "cli", "content": self.tunnel_cli(n)} for n in c8k]
         templates += [{"name": f"bgp_hub_{n['name']}", "type": "cli", "content": self.hub_bgp_cli(n)} for n in self.hubs]
         doc = {"iosxe": {"templates": templates, "devices": [self.device(n) for n in c8k]}}
@@ -300,7 +415,9 @@ def render_all(inv):
     r = Renderer(inv)
     out = {}
     for n in inv["nodes"]:
-        if n["role"] in ("hub", "spoke"):
+        if n["role"] in ("hub", "spoke") and n.get("platform", "c8000v") == "vyos":
+            out[f"nodes/{n['name']}/vyos_config.txt"] = r.vyos_customer(n)
+        elif n["role"] in ("hub", "spoke"):
             out[f"nodes/{n['name']}/iosxe_config.txt"] = r.day0(n)
         elif n["role"] == "provider":
             out[f"nodes/{n['name']}/vyos_config.txt"] = r.provider(n)

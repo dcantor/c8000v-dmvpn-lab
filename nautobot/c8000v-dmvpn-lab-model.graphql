@@ -3,6 +3,7 @@ query c8000v_dmvpn_lab_model {
   devices(location: ["c8000v-dmvpn-lab", "c8d-east", "c8d-central", "c8d-west"]) {
     name
     role { name }
+    platform { name }
     location { name }
     primary_ip4 { address }
     interfaces {

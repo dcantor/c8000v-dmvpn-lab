@@ -14,6 +14,7 @@ import labconf
 
 LAB = Path(__file__).resolve().parents[1]
 CUSTOMERS = LAB / "customers.json"
+PLATFORMS = {"c8000v": "Catalyst 8000v", "vyos": "VyOS"}
 COMPANY_FIELDS = ("company", "industry", "address", "phone", "contact", "email", "account")
 
 # fictional companies for new customers: 555-01xx numbers are reserved for fiction, .example domains for documentation
@@ -88,6 +89,7 @@ def suggest(f=None, region=None):
             "router_id": f"{rid_net}.{t}", "lan": f"192.168.{60 + n}.0/24", "lan_port": "GigabitEthernet3",
             "provider": prov, "provider_port": pport, "wan_prefix": wan,
             "idx": 10 + n, "console": 5510 + n, "host_idx": 30 + n, "host_console": 5530 + n,
+            "platform": "c8000v",
             "customer": {**fake_company(n), "applications": ["APP-1002", "APP-1010"]}}   # email + SSO: what everyone takes
 
 
@@ -143,6 +145,8 @@ def validate(spec, f=None):
     for field in COMPANY_FIELDS:
         if not str(cu.get(field) or "").strip():
             p.append(f"customer {field} is missing")
+    if spec.get("platform", "c8000v") not in PLATFORMS:
+        p.append(f"router type {spec.get('platform')!r} is not one of {', '.join(PLATFORMS)}")
     known = {a["id"] for a in f["inv"].get("applications") or []}
     for aid in cu.get("applications") or []:
         if aid not in known:
@@ -161,7 +165,10 @@ def plan(spec, f=None):
     """What adding this customer will do — shown before anything happens."""
     f = f or facts()
     return {"customer": spec["name"], "host": spec["host"], "region": spec["region"],
-            "vm": f"a new Catalyst 8000v ({spec['mgmt_ip']}, console {spec['console']}) and an Alpine host ({spec['host_mgmt']})",
+            "vm": (f"a new {PLATFORMS.get(spec.get('platform', 'c8000v'), '?')} router ({spec['mgmt_ip']}, console {spec['console']}, "
+                   f"{'4 GB, 2 vCPU; first boot ~10 min' if spec.get('platform', 'c8000v') == 'c8000v' else '1 GB, 1 vCPU; first boot ~2 min'})"
+                   f" and an Alpine host ({spec['host_mgmt']})"),
+            "platform": spec.get("platform", "c8000v"),
             "company": f"{spec['customer']['company']} ({spec['customer']['industry']})" if spec.get("customer") else "",
             "cloud": f"Tunnel0 {spec['tunnel_ip']} sourced from {spec['nbma']}, registered with " + ", ".join(f["hubs"]),
             "wan": f"GigabitEthernet2 into {spec['provider']} {spec['provider_port']} on {spec['wan_prefix']}",
@@ -181,6 +188,7 @@ def removal_plan(name, f=None):
     n = f["nodes"][name]
     h = f["nodes"].get(n.get("host") or "")
     return [], {"name": name, "host": n["host"], "region": n.get("region"), "mgmt_ip": n["mgmt_ip"], "customer": n.get("customer"),
+                "platform": n.get("platform", "c8000v"),
                 "host_mgmt": h["mgmt_ip"] if h else None, "t_idx": n["t_idx"], "tunnel_ip": n["tunnel_ip"],
                 "nbma": n["nbma"], "router_id": n["router_id"], "lan": n["lan"],
                 "provider": n["wan"]["peer"], "provider_port": n["wan"]["peer_port"], "wan_prefix": n["wan"]["prefix"],

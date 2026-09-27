@@ -29,7 +29,7 @@ companies = {k: v for k, v in json.loads(CUSTOMERS.read_text()).items() if not k
 
 
 def port_name(node, num):
-    return f"GigabitEthernet{num}" if role[node] in ("hub", "spoke") else f"eth{num}"
+    return f"GigabitEthernet{num}" if maps["PLATFORM"][node] == "c8000v" else f"eth{num}"
 
 
 def end_addr(prefix, end):
@@ -40,7 +40,7 @@ def end_addr(prefix, end):
 overlay = ipaddress.ip_network(scalar["DMVPN_OVERLAY"])
 nodes = []
 for name in lists["ALL_NODES"]:
-    node = {"name": name, "role": role[name], "domain": scalar["DOMAIN_PREFIX"] + name,
+    node = {"name": name, "role": role[name], "platform": maps["PLATFORM"][name], "domain": scalar["DOMAIN_PREFIX"] + name,
             "region": maps["REGION"].get(name), "mgmt_ip": maps["MGMT_IP"][name],
             "console": int(maps["CONSOLE_PORT"][name]), "idx": int(maps["NODE_IDX"][name])}
     plist = []

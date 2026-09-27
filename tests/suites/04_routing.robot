@@ -28,7 +28,7 @@ The hubs peer with each other in the overlay
     END
 
 Every customer peers with all three hubs, and only with them in the overlay
-    FOR    ${s}    IN    @{SPOKES}
+    FOR    ${s}    IN    @{C8K_SPOKES}
         ${sum}=    Show    ${s}    show bgp ipv4 unicast summary | begin Neighbor
         FOR    ${h}    IN    @{HUBS}
             Should Match Regexp    ${sum}    (?m)^${ROUTERS}[${h}][tunnel]\\s+4\\s+${BGP_ASN}\\s+.*\\s\\d+\\s*$
@@ -41,7 +41,7 @@ Every customer peers with all three hubs, and only with them in the overlay
 Every router has every other LAN and router-id with the originating router as next hop
     FOR    ${r}    IN    @{C8K}
         ${rt}=    Show    ${r}    show ip route bgp
-        FOR    ${o}    IN    @{C8K}
+        FOR    ${o}    IN    @{DMVPN}
             Continue For Loop If    '${r}' == '${o}'
             Should Match Regexp    ${rt}    (?m)^B\\s+${ROUTERS}[${o}][lan] \\[200/0\\] via ${ROUTERS}[${o}][tunnel]
             Should Match Regexp    ${rt}    (?m)^B\\s+${ROUTERS}[${o}][router_id](/32)? \\[200/0\\] via ${ROUTERS}[${o}][tunnel]
@@ -52,7 +52,7 @@ No provider route enters the overlay and no overlay route resolves through it
     FOR    ${r}    IN    @{C8K}
         ${ibgp}=    Show    ${r}    show ip route bgp | include \\[200/
         Should Not Contain    ${ibgp}    100.70.
-        FOR    ${o}    IN    @{C8K}
+        FOR    ${o}    IN    @{DMVPN}
             Continue For Loop If    '${r}' == '${o}'
             ${one}=    Show    ${r}    show ip route ${ROUTERS}[${o}][lan_ip]
             Should Not Contain    ${one}    via ${ROUTERS}[${r}][wan_peer]
@@ -61,7 +61,7 @@ No provider route enters the overlay and no overlay route resolves through it
 
 Every site LAN reaches every other site LAN through the overlay
     FOR    ${r}    IN    @{C8K}
-        FOR    ${o}    IN    @{C8K}
+        FOR    ${o}    IN    @{DMVPN}
             Continue For Loop If    '${r}' == '${o}'
             ${src}=    Set Variable If    '${ROUTERS}[${r}][role]' == 'hub'    Loopback10    ${ROUTERS}[${r}][lan_ip]
             ${p}=    Show    ${r}    ping ${ROUTERS}[${o}][lan_ip] source ${src} repeat 5

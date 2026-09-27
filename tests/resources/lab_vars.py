@@ -10,13 +10,17 @@ NODES = {n["name"]: n for n in INV["nodes"]}
 
 HUBS = SVC["hubs"]
 SPOKES = SVC["spokes"]
-C8K = HUBS + SPOKES
+DMVPN = HUBS + SPOKES                                                    # every router in the cloud, any platform
+PLATFORM = {n: v.get("platform", "c8000v") for n, v in NODES.items()}
+C8K = [r for r in DMVPN if PLATFORM[r] == "c8000v"]                     # the IOS-XE routers (show commands, NAC)
+C8K_SPOKES = [s for s in SPOKES if PLATFORM[s] == "c8000v"]
+VYOS_SPOKES = [s for s in SPOKES if PLATFORM[s] == "vyos"]
 PROVIDER = PROV["nodes"][0]
 HOSTS = [n for n, v in NODES.items() if v["role"] == "host"]
 ALL_NODES = list(NODES)
 
 ROUTERS = {}
-for name in C8K:
+for name in DMVPN:
     n = NODES[name]
     lan = n["lan"]
     lan_ip = lan.rsplit(".", 1)[0] + ".1"

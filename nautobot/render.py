@@ -34,6 +34,7 @@ a = p.parse_args()
 H = {"Authorization": f"Token {a.token}", "Accept": "application/json"}
 QUERY_NAME = "c8000v-dmvpn-lab-model"
 ROLE = {"dmvpn-hub": "hub", "dmvpn-spoke": "spoke", "wan-provider": "provider", "host": "host"}
+PLATFORM = {"cisco_xe": "c8000v", "vyos": "vyos", "alpine": "alpine", "linux": "alpine"}
 # the pre-shared key and the NHRP secret are secrets: lab.conf keeps them, Nautobot does not
 SECRETS = json.loads(subprocess.run(
     ["bash", "-c", f'source {LAB}/lab.conf; printf \'{{"psk": "%s", "nhrp_secret": "%s", "lan_port": %s}}\' '
@@ -70,7 +71,8 @@ def inventory_from_nautobot():
     nodes = []
     for x in sorted(d["devices"], key=lambda x: x["name"]):
         name, role = short(x["name"]), ROLE[x["role"]["name"]]
-        c8k = role in ("hub", "spoke")
+        c8k = role in ("hub", "spoke")                     # carries the cloud (C8000v or VyOS)
+        platform = PLATFORM.get((x.get("platform") or {}).get("name"), "c8000v")
         oob = next(i for i in x["interfaces"] if i["mgmt_only"])
         idx = int(oob["mac_address"].split(":")[4], 16)      # MACs are <oui>:<idx>:<port>
         ifaces = {i["name"]: i for i in x["interfaces"]}
@@ -90,12 +92,12 @@ def inventory_from_nautobot():
                           "peer_ip": addr1(ci).split("/")[0] if ci["ip_addresses"] else None})
         ri = (x["bgp_routing_instances"] or [None])[0]
         loc = x["location"]["name"]
-        node = {"name": name, "role": role, "domain": x["name"],
+        node = {"name": name, "role": role, "platform": platform, "domain": x["name"],
                 "region": loc.split("-", 1)[1].capitalize() if loc.startswith("c8d-") else None,
                 "mgmt_ip": x["primary_ip4"]["address"].split("/")[0], "idx": idx, "ports": ports}
         if c8k:
             wan = next(p for p in ports if p.get("peer_role") == "provider")
-            tun = addr1(ifaces["Tunnel0"]).split("/")[0]
+            tun = addr1(ifaces.get("Tunnel0") or ifaces["tun0"]).split("/")[0]
             lan_port = next((p for p in ports if p["num"] == SECRETS["lan_port"] and p["ip"]), None)
             lan = (lan_port["prefix"] if lan_port else
                    str(ipaddress.ip_interface(addr1(ifaces["Loopback10"])).network))

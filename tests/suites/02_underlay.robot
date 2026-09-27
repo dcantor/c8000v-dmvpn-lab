@@ -37,7 +37,7 @@ Every router peers eBGP with the provider and offers it only its own WAN /30
 Every router reaches every other router's NBMA address through the provider, and only through it
     FOR    ${r}    IN    @{C8K}
         ${rt}=    Show    ${r}    show ip route bgp
-        FOR    ${o}    IN    @{C8K}
+        FOR    ${o}    IN    @{DMVPN}
             Continue For Loop If    '${r}' == '${o}'
             Should Match Regexp    ${rt}    (?m)^B\\s+${ROUTERS}[${o}][wan_prefix] \\[20/0\\] via ${ROUTERS}[${r}][wan_peer]
             ${p}=    Show    ${r}    ping ${ROUTERS}[${o}][nbma] source GigabitEthernet2 repeat 3 timeout 1

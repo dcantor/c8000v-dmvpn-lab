@@ -31,3 +31,9 @@ On Host
     [Arguments]    ${h}    ${command}    ${timeout}=60
     ${res}=    Host Command    ${HOST_VMS}[${h}][host]    ${command}    ${timeout}
     RETURN    ${res}
+
+On VyOS
+    [Documentation]    An operational command on a VyOS router by name (vtysh for NHRP / BGP: `sudo vtysh -c '...'`).
+    [Arguments]    ${r}    ${command}
+    ${out}=    Vyos Command    ${ROUTERS}[${r}][host]    ${command}
+    RETURN    ${out}

@@ -44,7 +44,7 @@ The hubs know each other statically, not as clients, and the tunnel between them
     END
 
 Every customer has all three hubs as NHS, with shortcuts enabled
-    FOR    ${s}    IN    @{SPOKES}
+    FOR    ${s}    IN    @{C8K_SPOKES}
         ${cfg}=    Show    ${s}    show running-config all | section interface Tunnel0
         Should Contain    ${cfg}    ip nhrp shortcut
         ${nhs}=    Show    ${s}    show ip nhrp nhs detail
@@ -59,7 +59,7 @@ Every customer has all three hubs as NHS, with shortcuts enabled
     END
 
 IKEv2 SAs are READY from every customer to every hub, with the modelled crypto
-    FOR    ${s}    IN    @{SPOKES}
+    FOR    ${s}    IN    @{C8K_SPOKES}
         ${sa}=    Show    ${s}    show crypto ikev2 sa
         FOR    ${h}    IN    @{HUBS}
             Should Match Regexp    ${sa}    (?m)^\\d+\\s+${ROUTERS}[${s}][nbma]/500\\s+${ROUTERS}[${h}][nbma]/500\\s+none/none\\s+READY

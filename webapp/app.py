@@ -15,6 +15,7 @@ drives the pipelines:
 Adding a customer never touches a hub: it registers with NHRP and arrives on the hubs' BGP listen range. Runs execute
 one at a time; their state is mirrored to runs/<id>.json. Start with ./lab.sh webapp."""
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -28,7 +29,7 @@ from labportal import RunBase, RunRegistry, exposition, install_runs_api, metric
 from pydantic import BaseModel, Field
 
 import customers as C
-from state import HOST_PASS, HOST_USER, State, _ssh, ios
+from state import HOST_PASS, HOST_USER, State, _ssh, ios, vyos_show
 
 LAB = Path(__file__).resolve().parents[1]
 HERE = Path(__file__).resolve().parent
@@ -90,6 +91,7 @@ class CustomerSpec(BaseModel):
     host_idx: int
     host_console: int
     customer: dict = Field(default_factory=dict, description="the company: company, industry, address, phone, contact, email, account")
+    platform: str = Field("c8000v", description="the customer router: c8000v (Catalyst 8000v) or vyos")
 
 
 class RunRequest(BaseModel):
@@ -150,7 +152,8 @@ class Run(RunBase):
 
     def do_bootstrap(self, s):
         self.sh([LAB / "lab.sh", "bootstrap", self.spec["name"], self.spec["host"]], timeout=3600)
-        s["summary"] = "day-0 applied, crypto licence active, RESTCONF answering"
+        s["summary"] = ("day-0 applied, crypto licence active, RESTCONF answering" if self.spec.get("platform", "c8000v") == "c8000v"
+                        else "VyOS configured over the serial console (tunnel, NHRP, IPsec, BGP), SSH answering")
 
     def do_nac(self, s):
         # after a removal this changes no router — the departed one is already out of the state — but it rewrites
@@ -158,7 +161,8 @@ class Run(RunBase):
         self.sh([LAB / "lab.sh", "nac", "init", "-input=false", "-no-color"])
         self.sh([LAB / "lab.sh", "nac", "apply", "-auto-approve", "-parallelism=1", "-input=false", "-no-color"],
                 timeout=3600)
-        s["summary"] = "applied and saved"
+        s["summary"] = ("applied and saved" if (self.spec or {}).get("platform", "c8000v") == "c8000v" or self.mode != "customer"
+                        else "applied and saved (the new router is VyOS: Network-as-Code has nothing to add for it)")
 
     def do_provider(self, s):
         self.sh([LAB / "lab.sh", "configure"])
@@ -293,10 +297,15 @@ def api_removal(name: str):
 def api_query(node: str, command: str):
     nodes = C.facts()["nodes"]
     if node not in nodes or nodes[node]["role"] not in ("hub", "spoke"):
-        raise HTTPException(404, f"{node} is not a C8000v of this lab")
-    if not command.startswith("show ") or any(ch in command for ch in "\n\r"):
+        raise HTTPException(404, f"{node} is not a router of this lab")
+    if not re.fullmatch(r"show [A-Za-z0-9 ._/|-]+", command):
         raise HTTPException(400, "only a single `show ...` command is allowed")
-    return {"node": node, "command": command, "output": ios(nodes[node]["mgmt_ip"], command)[command]}
+    n = nodes[node]
+    if n.get("platform", "c8000v") == "vyos":
+        out = vyos_show(n["mgmt_ip"], command)
+    else:
+        out = ios(n["mgmt_ip"], command)[command]
+    return {"node": node, "command": command, "output": out}
 
 
 @app.get("/api/customers/{name}/map.pdf", tags=["provisioning"], summary="A customer's view of the network map, as a PDF",
@@ -356,10 +365,10 @@ def api_config(node: str):
         raise HTTPException(404, f"{node} is not a node of this lab")
     n = nodes[node]
     try:
-        if n["role"] in ("hub", "spoke"):
+        if n["role"] in ("hub", "spoke") and n.get("platform", "c8000v") == "c8000v":
             cmd = "show running-config"
             out = ios(n["mgmt_ip"], cmd)[cmd]
-        elif n["role"] == "provider":
+        elif n.get("platform") == "vyos":
             from netmiko import ConnectHandler
             cmd = "show configuration commands"
             c = ConnectHandler(device_type="vyos", host=n["mgmt_ip"], username="vyos", password="vyos")
@@ -526,23 +535,24 @@ def api_lab_tools():
         {"group": "Monitoring", "name": "VictoriaLogs (syslog)", "url": f"http://{pub}:9428/select/vmui/", "login": "none",
          "what": "router syslog: facility_keyword:local7 for the C8000vs, hostname:mpls for the provider"},
     ]
-    creds = {"hub": ("admin", "admin"), "spoke": ("admin", "admin"), "provider": ("vyos", "vyos"), "host": ("lab", "lab")}
-    kind = {"hub": "Catalyst 8000v", "spoke": "Catalyst 8000v", "provider": "VyOS", "host": "Alpine Linux"}
+    creds = {"c8000v": ("admin", "admin"), "vyos": ("vyos", "vyos"), "alpine": ("lab", "lab")}
+    kind = {"c8000v": "Catalyst 8000v", "vyos": "VyOS", "alpine": "Alpine Linux"}
     nodes = []
     for n in inv["nodes"]:
-        user, pw = creds[n["role"]]
+        plat = n.get("platform", "c8000v")
+        user, pw = creds[plat]
         extra = []
-        if n["role"] in ("hub", "spoke"):
+        if plat == "c8000v":
             extra = [f"RESTCONF https://{n['mgmt_ip']}/restconf (admin / admin)", f"NETCONF {n['mgmt_ip']}:830",
                      "enable secret admin"]
-        elif n["role"] == "provider":
+        elif plat == "vyos":
             extra = [f"HTTPS API https://{n['mgmt_ip']} (key c8000v-dmvpn-lab)", f"node-exporter {n['mgmt_ip']}:9100",
-                     f"frr-exporter {n['mgmt_ip']}:9342"]
+                     f"frr-exporter {n['mgmt_ip']}:9342"] + (["NHRP / BGP: sudo vtysh -c 'show ip nhrp nhs'"] if n["role"] == "spoke" else [])
         elif n["role"] == "host":
             extra = [f"node-exporter {n['mgmt_ip']}:9100", "no sudo: user lab only"]
         addrs = {k: v for k, v in (("Tunnel0", n.get("tunnel_ip")), ("NBMA", n.get("nbma")), ("LAN", n.get("lan")),
                                    ("Router-id", n.get("router_id")), ("LAN address", n.get("lan_ip"))) if v}
-        nodes.append({"name": n["name"], "role": n["role"], "kind": kind[n["role"]], "vm": n["domain"], "mgmt_ip": n["mgmt_ip"],
+        nodes.append({"name": n["name"], "role": n["role"], "kind": kind[plat], "vm": n["domain"], "mgmt_ip": n["mgmt_ip"],
                       "user": user, "password": pw, "ssh": f"ssh {user}@{n['mgmt_ip']}", "lab_sh": f"./lab.sh ssh {n['name']}",
                       "console": f"127.0.0.1:{n['console']}", "console_cmd": f"./lab.sh console {n['name']}",
                       "company": (n.get("customer") or {}).get("company"), "addresses": addrs, "extra": extra})
@@ -563,9 +573,10 @@ def prometheus_sd():
     f = C.facts()
     sd = [{"targets": [f"{LAB_HOST_IP}:{WEBAPP_PORT}"], "labels": {"lab": LAB_NAME, "job": "portal", "role": "portal", "node": "portal"}}]
     for name, n in f["nodes"].items():
-        if n["role"] == "provider":
-            sd.append({"targets": [f"{n['mgmt_ip']}:9100"], "labels": {"lab": LAB_NAME, "job": "node", "role": "provider", "node": name, "dc": "provider"}})
-            sd.append({"targets": [f"{n['mgmt_ip']}:9342"], "labels": {"lab": LAB_NAME, "job": "frr", "role": "provider", "node": name, "dc": "provider"}})
+        if n.get("platform") == "vyos":
+            dc = "provider" if n["role"] == "provider" else (n.get("region") or "")
+            sd.append({"targets": [f"{n['mgmt_ip']}:9100"], "labels": {"lab": LAB_NAME, "job": "node", "role": n["role"], "node": name, "dc": dc}})
+            sd.append({"targets": [f"{n['mgmt_ip']}:9342"], "labels": {"lab": LAB_NAME, "job": "frr", "role": n["role"], "node": name, "dc": dc}})
         elif n["role"] == "host":
             dc = f["nodes"][n["router"]].get("region") or ""
             sd.append({"targets": [f"{n['mgmt_ip']}:9100"], "labels": {"lab": LAB_NAME, "job": "node", "role": "host", "node": name, "dc": dc}})

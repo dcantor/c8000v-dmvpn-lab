@@ -73,7 +73,8 @@ def add_customer(text, spec):
     c, h = spec["name"], spec["host"]
     for arr, val in (("ROLE", "spoke"), ("REGION", spec["region"]), ("MGMT_IP", spec["mgmt_ip"]),
                      ("T_IDX", spec["t_idx"]), ("LAN", spec["lan"]), ("HOST_OF", h),
-                     ("CONSOLE_PORT", spec["console"]), ("NODE_IDX", spec["idx"])):
+                     ("CONSOLE_PORT", spec["console"]), ("NODE_IDX", spec["idx"]),
+                     ("PLATFORM", spec.get("platform", "c8000v"))):
         text = add_assoc(text, arr, c, val)
     for arr, val in (("ROLE", "host"), ("MGMT_IP", spec["host_mgmt"]),
                      ("CONSOLE_PORT", spec["host_console"]), ("NODE_IDX", spec["host_idx"])):
@@ -89,7 +90,7 @@ def add_customer(text, spec):
 
 def remove_customer(text, spec):
     c, h = spec["name"], spec["host"]
-    for arr in ("ROLE", "REGION", "MGMT_IP", "T_IDX", "LAN", "HOST_OF", "CONSOLE_PORT", "NODE_IDX"):
+    for arr in ("ROLE", "REGION", "MGMT_IP", "T_IDX", "LAN", "HOST_OF", "CONSOLE_PORT", "NODE_IDX", "PLATFORM"):
         text = remove_assoc(text, arr, c)
     for arr in ("ROLE", "MGMT_IP", "CONSOLE_PORT", "NODE_IDX"):
         text = remove_assoc(text, arr, h)

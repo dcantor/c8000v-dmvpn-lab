@@ -218,7 +218,7 @@ dt = {"c8k": c8k_type,
       or get_or_create(nb.dcim.device_types, {"model": "VyOS"}, manufacturer=mf["vyos"].id, u_height=0),
       "linux": nb.dcim.device_types.get(model="Alpine VM", manufacturer=mf["alpine"].id)
       or get_or_create(nb.dcim.device_types, {"model": "Alpine VM"}, manufacturer=mf["alpine"].id, u_height=0)}
-kind = lambda n: {"hub": "c8k", "spoke": "c8k", "provider": "vyos", "host": "linux"}[n["role"]]   # noqa: E731
+kind = lambda n: {"c8000v": "c8k", "vyos": "vyos", "alpine": "linux"}[n.get("platform") or "c8000v"]   # noqa: E731
 
 # ---- prefixes -----------------------------------------------------------------------------------------------------
 pq = {x["prefix"]: x for x in gql('{ prefixes { prefix locations { name } } }')["prefixes"]}   # locations are M2M
@@ -287,7 +287,7 @@ def ensure_ip(address, description, iface=None):
 
 COMMENTS = {
     "hub": "DMVPN hub (C8000v): NHRP server and iBGP route reflector; customers arrive on a BGP listen range",
-    "spoke": "DMVPN customer (C8000v): one mGRE Tunnel0 registered with all three hubs, iBGP with all three",
+    "spoke": "DMVPN customer: one mGRE tunnel registered with all three hubs, iBGP with all three",
     "provider": "The simulated MPLS provider (VyOS): its own AS, eBGP with every site on a listen range with "
                 "as-override. It carries the sites' WAN addresses and nothing else",
     "host": "Alpine LAN host (iperf3 / tcpdump / mtr) behind a customer router",
@@ -341,6 +341,11 @@ for n in inv["nodes"]:
             lan = ipaddress.ip_network(n["lan"])
             lo10 = ensure_if("Loopback10", "virtual", "hub LAN")
             ensure_ip(f"{lan.network_address + 1}/{lan.prefixlen}", f"{n['name']} LAN", lo10)
+    elif k == "vyos" and n["role"] == "spoke":       # a VyOS customer: dum0 carries the router-id, tun0 the cloud
+        dum = ensure_if("dum0", "virtual", "router-id")
+        ensure_ip(f"{n['router_id']}/32", f"{n['name']} router-id", dum)
+        tun = ensure_if("tun0", "virtual", f"DMVPN customer (mGRE, phase 3), sourced from {n['wan']['name']} {n['nbma']}")
+        ensure_ip(f"{n['tunnel_ip']}/{ipaddress.ip_network(SVC['overlay']).prefixlen}", f"{n['name']} tun0", tun)
     elif k == "vyos":
         ensure_ip(f"{n['router_id']}/32", f"{n['name']} router-id")
 
