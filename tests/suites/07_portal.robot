@@ -73,15 +73,16 @@ Every LAN host pings every other one from the Network map, and only hosts can be
     ${bad}=    GET On Session    portal    /api/hosts/${HOSTS}[0]/ping    params=target=${HUBS}[0]    expected_status=404
     ${self}=    GET On Session    portal    /api/hosts/${HOSTS}[0]/ping    params=target=${HOSTS}[0]    expected_status=400
 
-Each customer's view of the Network map downloads as a one-page PDF
-    [Documentation]    The portal's headless Chrome renders the map in print mode, focused on the customer.
+Each customer's view of the Network map downloads as a two-page PDF
+    [Documentation]    The portal's headless Chrome renders the map in print mode, focused on the customer: page one the
+    ...                company and its view of the network, page two its applications and the technical details.
     FOR    ${c}    IN    @{SPOKES}
         ${r}=    GET On Session    portal    /api/customers/${c}/map.pdf
         Should Be Equal    ${r.headers}[content-type]    application/pdf
         Should Contain    ${r.headers}[content-disposition]    ${c}-network-map-
         Should Start With    ${r.content}    ${{b"%PDF"}}
         ${pages}=    Pdf Page Count    ${r.content}
-        Should Be Equal As Integers    ${pages}    1    msg=${c}'s map PDF runs to ${pages} pages
+        Should Be Equal As Integers    ${pages}    2    msg=${c}'s map PDF runs to ${pages} pages
     END
     GET On Session    portal    /api/customers/${HUBS}[0]/map.pdf    expected_status=404
 
@@ -96,3 +97,9 @@ The portal shows each customer's company, and proposes a complete one for the ne
     END
     Should Match Regexp    ${s.json()}[customer][phone]    555-01\\d\\d$    msg=fictional numbers only
     Should End With    ${s.json()}[customer][email]    .example
+
+The live state carries the application catalogue the map draws from
+    ${r}=    GET On Session    portal    /api/state
+    ${n}=    Get Length    ${r.json()}[applications]
+    ${want}=    Get Length    ${APPLICATIONS}
+    Should Be Equal As Integers    ${n}    ${want}

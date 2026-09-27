@@ -57,7 +57,8 @@ class State:
         f = C.facts()
         inv = f["inv"]
         return {"service": inv["service"], "provider": inv["provider"], "oob": inv["oob"], "hubs": f["hubs"],
-                "customers": f["customers"], "nodes": {n["name"]: n for n in inv["nodes"]}}
+                "customers": f["customers"], "nodes": {n["name"]: n for n in inv["nodes"]},
+                "applications": inv.get("applications") or []}
 
     # ---- per router --------------------------------------------------------------------------------------------
     def router_state(self, node, n, m):

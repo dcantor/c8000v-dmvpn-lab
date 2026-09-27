@@ -501,6 +501,77 @@ for t in nb.tenancy.tenants.filter(tenant_group=tg.id):          # a company who
         t.delete()
         created.append(f"removed tenant {t.name} (no customer site)")
 
+# ---- applications: one load-balancer Virtual Server per application per hosting hub (applications.json) ----------
+# The VIP is an address in the hub's LAN (role vip); the application's identity rides in custom fields; each customer's
+# tenant is related to the Virtual Servers of the applications it subscribes to (customers.json: applications).
+APPS = inv.get("applications") or []
+APP_FIELDS = (("application_id", "Application ID"), ("application_name", "Application"),
+              ("application_url", "URL"), ("application_description", "Description"))
+for key, label in APP_FIELDS:
+    if key not in cf:
+        cf[key] = nb.extras.custom_fields.create(key=key, label=label, type="text", content_types=["load_balancers.virtualserver"],
+                                                 grouping="Application", description=f"the hosted application's {label.lower()}")
+        created.append(f"custom-field:{key}")
+        if not a.check:
+            desc = cf[key].description
+            cf[key].update({"description": desc + " "}); cf[key].update({"description": desc})
+lb = nb.load_balancers
+rel = nb.extras.relationships.get(key="application_subscriptions")
+if rel is None:
+    rel = nb.extras.relationships.create(label="Application subscriptions", key="application_subscriptions", type="many-to-many",
+                                         source_type="tenancy.tenant", destination_type="load_balancers.virtualserver",
+                                         source_label="Subscribed applications", destination_label="Subscribers",
+                                         description="which customer companies consume the application served by this VIP")
+    created.append("relationship:application_subscriptions")
+vip_role = with_ct(get_or_create(nb.extras.roles, {"name": "vip"}, color="00838f", content_types=["ipam.ipaddress"],
+                                 description="a load-balancer virtual IP"), "ipam.ipaddress")
+hub_ids = {str(devs[h].id) for h in SVC["hubs"]}
+vs_of = {}                                                        # (app id, hub) -> Virtual Server
+for app in APPS:
+    for h in app["hubs"]:
+        name = f"{app['id']} {app['name']} @ {h}"
+        vip = ensure_ip(f"{app['vips'][h]}/32", f"VIP {app['id']} {app['name']} at {h}")
+        ensure(vip, role=vip_role.id)
+        fields = dict(vip=vip.id, port=app["port"], protocol=app["protocol"], load_balancer_type="layer7" if app["protocol"] in ("http", "https") else "layer4",
+                      device=devs[h].id, enabled=True)
+        cfs = {"application_id": app["id"], "application_name": app["name"], "application_url": app["url"],
+               "application_description": app["description"]}
+        vs = lb.virtual_servers.get(name=name)
+        if vs is None:
+            vs = lb.virtual_servers.create(name=name, **fields, custom_fields=cfs)
+            created.append(f"virtual-server:{name}")
+        else:
+            ensure(vs, **fields)
+            if {k: (vs.custom_fields or {}).get(k) for k in cfs} != cfs:
+                vs.update({"custom_fields": cfs})
+                created.append(f"virtual-server {name}: application fields")
+        vs_of[(app["id"], h)] = vs
+for vs in lb.virtual_servers.filter(device=list(hub_ids)) if hub_ids else []:   # an application or a hosting hub gone
+    if (vs.custom_fields or {}).get("application_id") and vs.id not in {x.id for x in vs_of.values()}:
+        vs.delete()
+        created.append(f"removed virtual server {vs.name}")
+# subscriptions: exactly the associations customers.json asks for, between this lab's tenants and its Virtual Servers
+want = set()
+for c in SVC["spokes"]:
+    cu, t = N[c].get("customer") or {}, tenant_of.get(c)
+    for aid in cu.get("applications") or []:
+        for (app_id, h), vs in vs_of.items():
+            if app_id == aid and t is not None:
+                want.add((str(t.id), str(vs.id)))
+ours_t = {str(t.id) for t in tenant_of.values()}
+have = {}
+for x in nb.extras.relationship_associations.filter(relationship=rel.key):
+    src, dst = str(x.source_id), str(x.destination_id)
+    if src in ours_t:
+        have[(src, dst)] = x
+for key in want - set(have):
+    nb.extras.relationship_associations.create(relationship=rel.id, source_type="tenancy.tenant", source_id=key[0],
+                                               destination_type="load_balancers.virtualserver", destination_id=key[1])
+    created.append("subscription " + key[0][:8] + " -> " + key[1][:8])
+for key in set(have) - want:
+    have[key].delete()
+    created.append("removed subscription " + key[0][:8] + " -> " + key[1][:8])
+
 # ---- config context ----------------------------------------------------------------------------------------------
 CTX = {"lab": SITE, "domain_name": "lab.local", "mac_oui": MAC_OUI, "oob": OOB,
        "domain_prefix": inv["nodes"][0]["domain"][: -len(inv["nodes"][0]["name"])],

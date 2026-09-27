@@ -1,5 +1,5 @@
 {
- "_comment": "Who each customer site belongs to. Entirely fictional: 555-01xx numbers are reserved for fiction, .example domains for documentation. Read by lab.sh inventory (node.customer), seeded into Nautobot as a tenant per company, shown on the portal's Network map and in the customer's PDF. The portal adds and removes entries with the customer.",
+ "_comment": "Who each customer site belongs to. Entirely fictional: 555-01xx numbers are reserved for fiction, .example domains for documentation. Read by lab.sh inventory (node.customer), seeded into Nautobot as a tenant per company, shown on the portal's Network map and in the customer's PDF. The portal adds and removes entries with the customer. `applications` lists the application IDs (applications.json) the customer subscribes to.",
  "cust1": {
   "company": "Harborview Dental Group",
   "industry": "Healthcare — dental clinics",
@@ -7,7 +7,14 @@
   "phone": "+1 (617) 555-0142",
   "contact": "Maria Chen, IT Manager",
   "email": "it@harborview-dental.example",
-  "account": "C8D-10421"
+  "account": "C8D-10421",
+  "applications": [
+   "APP-1001",
+   "APP-1002",
+   "APP-1005",
+   "APP-1008",
+   "APP-1010"
+  ]
  },
  "cust2": {
   "company": "Prairie Grain Logistics",
@@ -16,7 +23,15 @@
   "phone": "+1 (312) 555-0178",
   "contact": "Derek Olsen, Network Lead",
   "email": "noc@prairiegrain.example",
-  "account": "C8D-10587"
+  "account": "C8D-10587",
+  "applications": [
+   "APP-1001",
+   "APP-1002",
+   "APP-1003",
+   "APP-1006",
+   "APP-1007",
+   "APP-1010"
+  ]
  },
  "cust3": {
   "company": "Cascade Outdoor Supply",
@@ -25,6 +40,13 @@
   "phone": "+1 (206) 555-0123",
   "contact": "Priya Natarajan, Director of IT",
   "email": "it-ops@cascadeoutdoor.example",
-  "account": "C8D-10633"
+  "account": "C8D-10633",
+  "applications": [
+   "APP-1002",
+   "APP-1004",
+   "APP-1007",
+   "APP-1009",
+   "APP-1010"
+  ]
  }
 }

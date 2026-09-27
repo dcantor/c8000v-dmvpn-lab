@@ -1,0 +1,161 @@
+{
+ "_comment": "The applications the provider hosts at its hubs and the customers subscribe to (customers.json: applications). Fictional: .example URLs; each VIP is an address in its hub's LAN. Seeded into Nautobot as one load-balancer Virtual Server per application per hosting hub; shown on the portal's Network map and in the customer's PDF.",
+ "applications": [
+  {
+   "id": "APP-1001",
+   "name": "Unified Communications (VoIP)",
+   "description": "Hosted PBX, SIP trunking and voicemail",
+   "url": "https://voice.apps.c8dlab.example",
+   "protocol": "tcp",
+   "port": 5061,
+   "hubs": [
+    "hub-east",
+    "hub-central",
+    "hub-west"
+   ],
+   "vips": {
+    "hub-east": "192.168.71.10",
+    "hub-central": "192.168.72.10",
+    "hub-west": "192.168.73.10"
+   }
+  },
+  {
+   "id": "APP-1002",
+   "name": "Email & Collaboration",
+   "description": "Mail, calendars and shared workspaces",
+   "url": "https://mail.apps.c8dlab.example",
+   "protocol": "https",
+   "port": 443,
+   "hubs": [
+    "hub-east",
+    "hub-west"
+   ],
+   "vips": {
+    "hub-east": "192.168.71.11",
+    "hub-west": "192.168.73.11"
+   }
+  },
+  {
+   "id": "APP-1003",
+   "name": "ERP — Finance & Procurement",
+   "description": "General ledger, purchasing and accounts payable",
+   "url": "https://erp.apps.c8dlab.example",
+   "protocol": "https",
+   "port": 443,
+   "hubs": [
+    "hub-central"
+   ],
+   "vips": {
+    "hub-central": "192.168.72.11"
+   }
+  },
+  {
+   "id": "APP-1004",
+   "name": "Point of Sale Backend",
+   "description": "Store transactions, pricing and loyalty",
+   "url": "https://pos.apps.c8dlab.example",
+   "protocol": "https",
+   "port": 443,
+   "hubs": [
+    "hub-central",
+    "hub-west"
+   ],
+   "vips": {
+    "hub-central": "192.168.72.12",
+    "hub-west": "192.168.73.12"
+   }
+  },
+  {
+   "id": "APP-1005",
+   "name": "Electronic Health Records",
+   "description": "Patient charts, imaging and scheduling",
+   "url": "https://ehr.apps.c8dlab.example",
+   "protocol": "https",
+   "port": 443,
+   "hubs": [
+    "hub-east"
+   ],
+   "vips": {
+    "hub-east": "192.168.71.12"
+   }
+  },
+  {
+   "id": "APP-1006",
+   "name": "Fleet Tracking & Telematics",
+   "description": "Vehicle location, routes and driver logs",
+   "url": "https://fleet.apps.c8dlab.example",
+   "protocol": "https",
+   "port": 443,
+   "hubs": [
+    "hub-central"
+   ],
+   "vips": {
+    "hub-central": "192.168.72.13"
+   }
+  },
+  {
+   "id": "APP-1007",
+   "name": "Inventory & Warehouse Management",
+   "description": "Stock levels, picking and shipping",
+   "url": "https://wms.apps.c8dlab.example",
+   "protocol": "https",
+   "port": 443,
+   "hubs": [
+    "hub-central",
+    "hub-west"
+   ],
+   "vips": {
+    "hub-central": "192.168.72.14",
+    "hub-west": "192.168.73.13"
+   }
+  },
+  {
+   "id": "APP-1008",
+   "name": "Secure File Transfer",
+   "description": "SFTP drop boxes for partners and payroll",
+   "url": "https://sftp.apps.c8dlab.example",
+   "protocol": "tcp",
+   "port": 22,
+   "hubs": [
+    "hub-east",
+    "hub-central"
+   ],
+   "vips": {
+    "hub-east": "192.168.71.13",
+    "hub-central": "192.168.72.15"
+   }
+  },
+  {
+   "id": "APP-1009",
+   "name": "Video Surveillance (NVR)",
+   "description": "Camera recording and remote viewing",
+   "url": "https://nvr.apps.c8dlab.example",
+   "protocol": "tcp",
+   "port": 554,
+   "hubs": [
+    "hub-west"
+   ],
+   "vips": {
+    "hub-west": "192.168.73.14"
+   }
+  },
+  {
+   "id": "APP-1010",
+   "name": "Identity & Single Sign-On",
+   "description": "Directory, MFA and SSO for every other app",
+   "url": "https://sso.apps.c8dlab.example",
+   "protocol": "https",
+   "port": 443,
+   "hubs": [
+    "hub-east",
+    "hub-central",
+    "hub-west"
+   ],
+   "vips": {
+    "hub-east": "192.168.71.14",
+    "hub-central": "192.168.72.16",
+    "hub-west": "192.168.73.15"
+   }
+  }
+ ]
+}

@@ -37,3 +37,31 @@ Every customer company is a tenant with its details, on the customer's router an
         END
         Lists Should Be Equal    ${t}[devices]    ${{sorted([$DOMAIN_PREFIX + $c, $DOMAIN_PREFIX + $ROUTERS[$c]["host_vm"]])}}
     END
+
+Every application is a Virtual Server with its VIP at each hub that hosts it
+    ${nb}=    Nautobot Applications
+    ${count}=    Set Variable    ${0}
+    FOR    ${app}    IN    @{APPLICATIONS}
+        FOR    ${hub}    IN    @{app}[hubs]
+            ${key}=    Set Variable    ${app}[id]@${DOMAIN_PREFIX}${hub}
+            Dictionary Should Contain Key    ${nb}[vs]    ${key}    msg=no Virtual Server for ${app}[id] at ${hub}
+            ${v}=    Set Variable    ${nb}[vs][${key}]
+            Should Be Equal    ${v}[vip]    ${app}[vips][${hub}]
+            Should Be Equal As Integers    ${v}[port]    ${app}[port]
+            Should Be Equal    ${v}[protocol]    ${app}[protocol]
+            Should Be Equal    ${v}[url]    ${app}[url]
+            Should Be Equal    ${v}[name]    ${app}[name]
+            ${count}=    Evaluate    ${count} + 1
+        END
+    END
+    ${have}=    Get Length    ${nb}[vs]
+    Should Be Equal As Integers    ${have}    ${count}    msg=Virtual Servers Nautobot has that the catalogue does not
+
+Each customer subscribes to exactly its applications
+    ${nb}=    Nautobot Applications
+    FOR    ${c}    IN    @{SPOKES}
+        ${cu}=    Set Variable    ${COMPANIES}[${c}]
+        ${want}=    Evaluate    sorted($cu.get("applications") or [])
+        ${have}=    Evaluate    $nb["subs"].get($cu["company"], [])
+        Lists Should Be Equal    ${have}    ${want}
+    END

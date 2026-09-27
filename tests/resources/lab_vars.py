@@ -24,6 +24,7 @@ for name in C8K:
                      "router_id": n["router_id"], "lan": lan, "lan_ip": lan_ip, "region": n["region"],
                      "wan_prefix": n["wan"]["prefix"], "wan_peer": n["wan"]["peer_ip"], "host_vm": n["host"] or ""}
 COMPANIES = {c: NODES[c].get("customer") for c in SPOKES}
+APPLICATIONS = INV.get("applications") or []
 HOST_VMS = {h: {"host": NODES[h]["mgmt_ip"], "lan_ip": NODES[h]["lan_ip"].split("/")[0],
                 "gateway": NODES[h]["gateway"], "router": NODES[h]["router"]} for h in HOSTS}
 MGMT_IPS = {n: v["mgmt_ip"] for n, v in NODES.items()}

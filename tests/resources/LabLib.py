@@ -174,6 +174,45 @@ class LabLib:
         return out
 
     @keyword
+    def nautobot_applications(self):
+        """What Nautobot holds for the applications: {(app id, hub device): {vip, port, protocol, url, name}} and the
+        subscriptions {tenant name: sorted app ids}."""
+        import requests as rq
+        token = subprocess.run([str(LAB_DIR / "lab.sh"), "nautobot", "token"], capture_output=True, text=True).stdout.strip()
+        url, H = os.environ.get("NAUTOBOT_URL", "http://10.0.0.10:8080"), {"Authorization": f"Token {token}"}
+        q = """{ virtual_servers { id name port protocol _custom_field_data vip { host } device { name } }
+                 tenants { id name } }"""
+        r = rq.post(f"{url}/api/graphql/", json={"query": q}, headers=H, timeout=60)
+        r.raise_for_status()
+        body = r.json()
+        if body.get("errors"):
+            raise AssertionError(body["errors"])
+        vs, subs, app_of = {}, {}, {}
+        for v in body["data"]["virtual_servers"]:
+            cfd = v["_custom_field_data"] or {}
+            if not cfd.get("application_id") or not v["device"]:
+                continue
+            app_of[v["id"]] = cfd["application_id"]
+            vs[f'{cfd["application_id"]}@{v["device"]["name"]}'] = {"vip": v["vip"]["host"], "port": v["port"],
+                                                                    "protocol": str(v["protocol"]).lower(), "url": cfd.get("application_url"),
+                                                                    "name": cfd.get("application_name")}
+        tenant = {t["id"]: t["name"] for t in body["data"]["tenants"]}
+        # the subscriptions relationship is not on the Virtual Server GraphQL type: read its associations over REST
+        nxt = f"{url}/api/extras/relationship-associations/?relationship=application_subscriptions&limit=500"
+        while nxt:
+            page = rq.get(nxt, headers={**H, "Accept": "application/json"}, timeout=60)
+            page.raise_for_status()
+            page = page.json()
+            for a in page["results"]:
+                src, dst = str(a["source_id"]), str(a["destination_id"])
+                if src in tenant and dst in app_of:
+                    subs.setdefault(tenant[src], set()).add(app_of[dst])
+            nxt = page.get("next")
+        out = {"vs": vs, "subs": {k: sorted(v) for k, v in subs.items()}}
+        logger.info(out)
+        return out
+
+    @keyword
     def read_lab_file(self, rel):
         return (LAB_DIR / rel).read_text()
 

@@ -78,6 +78,40 @@ domains are `.example`. `lab.sh inventory` carries it as each customer's `custom
 - **Adding a customer:** the portal proposes a new fictional company, which you can edit, and writes it to
   `customers.json`. Removing the customer removes it.
 
+## The applications
+
+The provider hosts ten (fictional) applications at its hubs, and the customers subscribe to them. The catalogue is
+in **`applications.json`**: ID, name, description, URL (`*.apps.c8dlab.example`), protocol and port, and the hubs
+that host it with a **VIP** at each, taken from that hub's LAN. Each customer's subscriptions are in its `customers.json`
+entry (`applications`).
+
+| ID | Application | Hosted at |
+|---|---|---|
+| APP-1001 | Unified Communications (VoIP) | East, Central, West |
+| APP-1002 | Email & Collaboration | East, West |
+| APP-1003 | ERP — Finance & Procurement | Central |
+| APP-1004 | Point of Sale Backend | Central, West |
+| APP-1005 | Electronic Health Records | East |
+| APP-1006 | Fleet Tracking & Telematics | Central |
+| APP-1007 | Inventory & Warehouse Management | Central, West |
+| APP-1008 | Secure File Transfer | East, Central |
+| APP-1009 | Video Surveillance (NVR) | West |
+| APP-1010 | Identity & Single Sign-On | East, Central, West |
+
+- **Nautobot:** Nautobot 3's core load-balancer model holds them. Each application gets a **Virtual Server** at every
+  hub that hosts it (18 in all). The Virtual Server has its VIP (an IP address with role `vip`), port and protocol,
+  its hub as the device, and custom fields `application_id`, `application_name`, `application_url` and
+  `application_description`. A many-to-many **relationship**, "Application subscriptions", links each customer's
+  tenant to the Virtual Servers of the applications it subscribes to.
+- **Map:**
+  - Hubs are captioned with how many applications they host. In a customer's own view, the caption is the IDs of the
+    customer's applications that hub serves.
+  - A customer's details list its applications (URL, port, hubs and VIPs).
+  - A hub's details list what it hosts and which customers subscribe.
+- **PDF:** a second page, headed with the company name, lists its applications and then the technical details.
+- **Adding a customer:** the portal's wizard has a checkbox per application. Email and SSO are ticked by default.
+- **Not routed:** the VIPs are recorded, not configured. Only each hub LAN's `.1` answers on the routers.
+
 ## Nautobot is the source of truth
 
 `./lab.sh nautobot seed` writes the lab into the shared Nautobot (the `nms` VM of the cat9000v lab,

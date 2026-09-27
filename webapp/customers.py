@@ -88,7 +88,7 @@ def suggest(f=None, region=None):
             "router_id": f"{rid_net}.{t}", "lan": f"192.168.{60 + n}.0/24", "lan_port": "GigabitEthernet3",
             "provider": prov, "provider_port": pport, "wan_prefix": wan,
             "idx": 10 + n, "console": 5510 + n, "host_idx": 30 + n, "host_console": 5530 + n,
-            "customer": fake_company(n)}
+            "customer": {**fake_company(n), "applications": ["APP-1002", "APP-1010"]}}   # email + SSO: what everyone takes
 
 
 def validate(spec, f=None):
@@ -143,6 +143,10 @@ def validate(spec, f=None):
     for field in COMPANY_FIELDS:
         if not str(cu.get(field) or "").strip():
             p.append(f"customer {field} is missing")
+    known = {a["id"] for a in f["inv"].get("applications") or []}
+    for aid in cu.get("applications") or []:
+        if aid not in known:
+            p.append(f"{aid} is not an application of this lab")
     if cu.get("company") and any(v.get("company", "").lower() == cu["company"].strip().lower() for v in companies().values()):
         p.append(f"{cu['company']} is already a customer of this lab")
     return p
@@ -193,6 +197,7 @@ def _write_companies(update):
 def apply_to_labconf(spec):
     labconf.write(labconf.add_customer(labconf.read(), spec))
     cu = {f: str(spec["customer"][f]).strip() for f in COMPANY_FIELDS}
+    cu["applications"] = sorted(set(spec["customer"].get("applications") or []))
     _write_companies(lambda d: d.__setitem__(spec["name"], cu))
 
 

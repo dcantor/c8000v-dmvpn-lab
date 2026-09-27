@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 
 CUSTOMERS = Path(__file__).resolve().parents[1] / "customers.json"
+APPLICATIONS = Path(__file__).resolve().parents[1] / "applications.json"
 
 scalar, maps, lists, ports = {}, {}, {}, {}
 for line in sys.stdin:
@@ -86,6 +87,7 @@ inv = {
     },
     "provider": {"as": int(scalar["PROVIDER_AS"]), "wan_net": f"{scalar['WAN_NET']}.0.0/16", "nodes": lists["PROVIDERS"]},
     "nodes": nodes,
+    "applications": json.loads(APPLICATIONS.read_text())["applications"] if APPLICATIONS.exists() else [],
 }
 json.dump(inv, sys.stdout, indent=2)
 print()
