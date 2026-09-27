@@ -24,9 +24,8 @@ The live view agrees with the routers: every customer registered with every hub
 The next customer is allocated the lab's way and validates cleanly
     ${r}=    GET On Session    portal    /api/customers/suggest
     ${s}=    Set Variable    ${r.json()}
-    ${n}=    Get Length    ${SPOKES}
-    Should Be Equal    ${s}[name]    cust${n + 1}
-    Should Be Equal As Integers    ${s}[t_idx]    ${10 + ${n} + 1}
+    Should Be Equal    ${s}[name]    cust${NEXT_CUSTOMER}    msg=the next name is the highest customer number plus one (gaps are not reused)
+    Should Be Equal As Integers    ${s}[t_idx]    ${10 + ${NEXT_CUSTOMER}}
     Should Be Equal    ${s}[tunnel_ip]    172.28.0.${s}[t_idx]
     Should Be Equal    ${s}[wan_prefix]    100.70.${s}[t_idx].0/30
     ${v}=    POST On Session    portal    /api/customers/validate    json=${s}
@@ -35,12 +34,13 @@ The next customer is allocated the lab's way and validates cleanly
 A customer that would collide with the running lab is refused
     ${r}=    GET On Session    portal    /api/customers/suggest
     ${s}=    Set Variable    ${r.json()}
-    Set To Dictionary    ${s}    name=cust1    mgmt_ip=${ROUTERS}[cust1][host]    t_idx=${11}    lan=${ROUTERS}[cust1][lan]
+    ${c}=    Set Variable    ${SPOKES}[0]                    # whichever customer exists first
+    Set To Dictionary    ${s}    name=${c}    mgmt_ip=${ROUTERS}[${c}][host]    t_idx=${ROUTERS}[${c}][t_idx]    lan=${ROUTERS}[${c}][lan]
     ${v}=    POST On Session    portal    /api/customers/validate    json=${s}
     ${problems}=    Catenate    SEPARATOR=\n    @{v.json()}[problems]
-    Should Contain    ${problems}    cust1 already exists
-    Should Contain    ${problems}    index 11 is taken
-    Should Contain    ${problems}    overlaps ${ROUTERS}[cust1][lan]
+    Should Contain    ${problems}    ${c} already exists
+    Should Contain    ${problems}    index ${ROUTERS}[${c}][t_idx] is taken
+    Should Contain    ${problems}    overlaps ${ROUTERS}[${c}][lan]
 
 The Network map page is served, with everything it draws present in the live state
     [Documentation]    The map is drawn in the browser from /api/state: every router's access link and LAN port, each

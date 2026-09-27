@@ -76,7 +76,8 @@ Customer-to-customer traffic builds a dynamic shortcut tunnel
     [Documentation]    Phase 3: the first packets go through a hub, which sends an NHRP redirect; the customer resolves
     ...                the other customer's NBMA address, brings up a direct IPsec tunnel, and the next traceroute's
     ...                first hop is the other customer's tunnel address.
-    FOR    ${pair}    IN    cust1:cust2    cust2:cust3    cust3:cust1
+    Skip If    not $C8K_PAIRS    fewer than two C8000v customers: no pair to test from the IOS side
+    FOR    ${pair}    IN    @{C8K_PAIRS}
         ${a}    ${b}=    Split String    ${pair}    :
         ${p}=    Show    ${a}    ping ${ROUTERS}[${b}][lan_ip] source ${ROUTERS}[${a}][lan_ip] repeat 10
         Should Match Regexp    ${p}    Success rate is (100|90|80|70) percent

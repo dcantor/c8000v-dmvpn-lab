@@ -11,6 +11,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 While the version is 0.x, the lab's interfaces are still settling. The current version is in [`VERSION`](VERSION), in
 the portal's header, and in git as a `v<version>` tag.
 
+## [0.15.1] — 2026-09-27
+
+### Fixed
+- **Tests broke when customers changed.** After cust3 was removed and cust5 re-added on VyOS, the deployment's Robot
+  run reported 49 of 52. All three failures were test bugs; the network was healthy (the run's own verify passed, and
+  12 of 12 host pairs were reachable). The suites had customer names written into them:
+  - `03_dmvpn`: the shortcut test used the fixed pairs cust1→cust2→cust3.
+  - `04_routing`: the host path test used host-cust1 → host-cust3.
+  - `07_portal`: expected the next customer to be "count + 1" (cust5), but the allocator correctly proposes the highest
+    number + 1 (cust6), because gaps aren't reused.
+  - Two more spots were tied to cust1: the collision test and a hub regex.
+
+  Everything now comes from the inventory: `C8K_PAIRS` (a ring of the C8000v customers), `HOST_PAIR`, `NEXT_CUSTOMER`
+  and the first existing customer. A test skips when the lab has too few customers for it.
+
+### Lab state
+- cust3 (Catalyst 8000v, Cascade Outdoor Supply) was removed. cust5 was removed and re-added on VyOS (Summit Ridge
+  Property Management). Customers are now cust1 and cust2 (Catalyst 8000v), and cust4 and cust5 (VyOS). 52 of 52.
+
 ## [0.15.0] — 2026-09-27
 
 ### Added
@@ -188,6 +207,7 @@ the portal's header, and in git as a `v<version>` tag.
   - `nac/`, Network-as-Code for the C8000vs.
   - Robot suites, the README, and the first Nautobot seed.
 
+[0.15.1]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.12.1...v0.13.0

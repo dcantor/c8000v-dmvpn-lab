@@ -1,5 +1,6 @@
 """Robot Framework variable file: every fact the suites check, derived from `lab.sh inventory` — never restated."""
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -15,6 +16,10 @@ PLATFORM = {n: v.get("platform", "c8000v") for n, v in NODES.items()}
 C8K = [r for r in DMVPN if PLATFORM[r] == "c8000v"]                     # the IOS-XE routers (show commands, NAC)
 C8K_SPOKES = [s for s in SPOKES if PLATFORM[s] == "c8000v"]
 VYOS_SPOKES = [s for s in SPOKES if PLATFORM[s] == "vyos"]
+# derived from whichever customers exist, so the suites follow the lab as the portal adds and removes them
+C8K_PAIRS = ([f"{a}:{b}" for a, b in zip(C8K_SPOKES, C8K_SPOKES[1:] + C8K_SPOKES[:1])]   # a ring; two give a:b and b:a
+             if len(C8K_SPOKES) >= 2 else [])
+NEXT_CUSTOMER = max((int(re.search(r"(\d+)$", s)[1]) for s in SPOKES if re.search(r"(\d+)$", s)), default=0) + 1   # the allocator's rule
 PROVIDER = PROV["nodes"][0]
 HOSTS = [n for n, v in NODES.items() if v["role"] == "host"]
 ALL_NODES = list(NODES)
@@ -25,10 +30,11 @@ for name in DMVPN:
     lan = n["lan"]
     lan_ip = lan.rsplit(".", 1)[0] + ".1"
     ROUTERS[name] = {"role": n["role"], "host": n["mgmt_ip"], "nbma": n["nbma"], "tunnel": n["tunnel_ip"],
-                     "router_id": n["router_id"], "lan": lan, "lan_ip": lan_ip, "region": n["region"],
+                     "router_id": n["router_id"], "lan": lan, "lan_ip": lan_ip, "region": n["region"], "t_idx": n["t_idx"],
                      "wan_prefix": n["wan"]["prefix"], "wan_peer": n["wan"]["peer_ip"], "host_vm": n["host"] or ""}
 COMPANIES = {c: NODES[c].get("customer") for c in SPOKES}
 APPLICATIONS = INV.get("applications") or []
+HOST_PAIR = [HOSTS[0], HOSTS[-1]] if len(HOSTS) >= 2 else []                 # a host and the one furthest from it
 HOST_VMS = {h: {"host": NODES[h]["mgmt_ip"], "lan_ip": NODES[h]["lan_ip"].split("/")[0],
                 "gateway": NODES[h]["gateway"], "router": NODES[h]["router"]} for h in HOSTS}
 MGMT_IPS = {n: v["mgmt_ip"] for n, v in NODES.items()}

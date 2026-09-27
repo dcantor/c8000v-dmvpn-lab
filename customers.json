@@ -33,22 +33,6 @@
    "APP-1010"
   ]
  },
- "cust3": {
-  "company": "Cascade Outdoor Supply",
-  "industry": "Retail — outdoor equipment",
-  "address": "2201 Western Avenue, Seattle, WA 98121",
-  "phone": "+1 (206) 555-0123",
-  "contact": "Priya Natarajan, Director of IT",
-  "email": "it-ops@cascadeoutdoor.example",
-  "account": "C8D-10633",
-  "applications": [
-   "APP-1002",
-   "APP-1004",
-   "APP-1007",
-   "APP-1009",
-   "APP-1010"
-  ]
- },
  "cust4": {
   "company": "Redwood Coast Brewing Co.",
   "industry": "Food & beverage — brewery",
@@ -71,8 +55,9 @@
   "email": "it@summitridge.example",
   "account": "C8D-10765",
   "applications": [
-   "APP-1008",
-   "APP-1009"
+   "APP-1003",
+   "APP-1006",
+   "APP-1008"
   ]
  }
 }

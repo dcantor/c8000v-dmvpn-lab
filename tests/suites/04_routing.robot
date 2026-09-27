@@ -9,7 +9,7 @@ Every hub accepts every customer on its listen range as a route-reflector client
     FOR    ${h}    IN    @{HUBS}
         ${sum}=    Show    ${h}    show bgp ipv4 unicast summary
         Should Contain    ${sum}    local AS number ${BGP_ASN}
-        Should Match Regexp    ${sum}    (?m)^\\* ${ROUTERS}[cust1][tunnel]|dynamically created
+        Should Match Regexp    ${sum}    (?m)^\\* ${ROUTERS}[${SPOKES}[0]][tunnel]|dynamically created
         FOR    ${s}    IN    @{SPOKES}
             ${nbr}=    Show    ${h}    show bgp ipv4 unicast neighbors ${ROUTERS}[${s}][tunnel] | include BGP state|Route-Reflector|peer-group|dynamic
             Should Contain    ${nbr}    BGP state = Established
@@ -79,10 +79,11 @@ Every host pings every other host
     END
 
 A host's traffic to another customer leaves over the direct tunnel
-    [Documentation]    After the shortcut has formed, the path from host-cust1 is its router, then the far customer's
+    [Documentation]    After the shortcut has formed, the path from one customer's host is its router, then the far customer's
     ...                tunnel address — not a hub.
-    On Host    host-cust1    ping -c 5 -W 2 ${HOST_VMS}[host-cust3][lan_ip]
-    Wait Until Keyword Succeeds    45s    5s    Host Path Is Direct    host-cust1    host-cust3
+    Skip If    not $HOST_PAIR    fewer than two customer hosts
+    On Host    ${HOST_PAIR}[0]    ping -c 5 -W 2 ${HOST_VMS}[${HOST_PAIR}[1]][lan_ip]
+    Wait Until Keyword Succeeds    45s    5s    Host Path Is Direct    ${HOST_PAIR}[0]    ${HOST_PAIR}[1]
 
 *** Keywords ***
 Host Path Is Direct
