@@ -48,6 +48,14 @@ input { width:100%; padding:5px 8px; border:1px solid var(--line); border-radius
 .hint { color:var(--muted); font-size:12.5px; margin:6px 0 0 } .msg { color:var(--red); font-size:13px; white-space:pre-wrap; margin:8px 0 0 }
 .actions { display:flex; gap:8px; margin-top:14px; align-items:center }
 pre.out { background:#0c2129; color:#d7e3e8; padding:12px 14px; border-radius:8px; overflow:auto; max-height:420px; font-size:12.5px }
+.prog { display:flex; align-items:center; gap:8px; min-width:160px } .prog .bar { flex:1; height:8px; border-radius:4px; background:var(--pill); overflow:hidden }
+.prog .fill { height:100%; border-radius:4px; background:var(--teal); transition:width .6s ease } .prog .t { font-size:12px; color:var(--muted); white-space:nowrap; font-variant-numeric:tabular-nums }
+.prog.ok .fill { background:var(--green) } .prog.bad .fill { background:var(--red) } .prog.idle .fill { background:var(--muted) }
+.prog.live .fill { background-image:linear-gradient(45deg,rgba(255,255,255,.25) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.25) 50%,rgba(255,255,255,.25) 75%,transparent 75%);
+  background-size:16px 16px; animation:prog-stripes 1s linear infinite }
+@keyframes prog-stripes { to { background-position:16px 0 } }
+@media (prefers-reduced-motion: reduce) { .prog.live .fill { animation:none } }
+.run-prog { margin:0 0 12px } .run-prog .prog .bar { height:12px; border-radius:6px } .run-prog .prog .t { font-size:13px }
 .steps { padding-left:18px } .steps li { margin-bottom:5px } .steps .s { font-weight:600 } .steps .d { color:var(--muted); font-size:12.5px }
 
 /* network map */
@@ -192,7 +200,7 @@ body.print .legend { margin:2px 0 6px } body.print #mapinfo { padding-top:6px; b
 
 <section id="v-runs" class="view">
   <div class="card"><h2>Runs <small>one at a time; a failed run resumes from the step that failed</small></h2>
-    <table id="runs"><thead><tr><th>Started</th><th>Mode</th><th>Customer</th><th>Status</th><th>Tests</th></tr></thead><tbody></tbody></table></div>
+    <table id="runs"><thead><tr><th>Started</th><th>Mode</th><th>Customer</th><th>Status</th><th>Progress</th><th>Tests</th></tr></thead><tbody></tbody></table></div>
   <div class="card"><h2 id="run-title">Run</h2><div id="run-body" class="hint">select a run</div></div>
 </section>
 </main>
@@ -399,13 +407,24 @@ async function start(body) {
 }
 // running blinks (the step being processed, the run in progress); pending / queued / skipped stay grey
 const stCls = s => s === 'success' ? 'ok' : (s === 'failed' || s === 'interrupted') ? 'bad' : s === 'running' ? 'warn live' : '';
+// a run's progress: finished steps out of all its steps, the step in progress counting half; the bar takes the run's colour
+function progress(r, wide) {
+  const st = r.steps || [], n = st.length || 1, done = st.filter(x => x.status === 'success').length;
+  const cur = st.find(x => x.status === 'running'), pct = Math.round(100 * (r.status === 'success' ? n : done + (cur ? 0.5 : 0)) / n);
+  const cls = r.status === 'success' ? 'ok' : ['failed', 'interrupted', 'cancelled'].includes(r.status) ? 'bad' : r.status === 'running' ? 'live' : 'idle';
+  const i = cur ? st.indexOf(cur) + 1 : done;
+  const label = r.status === 'running' && cur ? `step ${i} of ${st.length}${wide ? ' — ' + (cur.title || cur.name) : ''}`
+              : `${done} / ${st.length} steps`;
+  return `<div class="prog ${cls}" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" title="${esc(label)}">
+    <div class="bar"><div class="fill" style="width:${pct}%"></div></div><span class="t">${pct}% · ${esc(label)}</span></div>`;
+}
 async function loadRuns() {
   const runs = await (await fetch('/api/runs')).json();
   $('runs').querySelector('tbody').innerHTML = runs.map(r => `<tr style="cursor:pointer" onclick="watch('${esc(r.id)}')">
     <td class="hint">${new Date(r.started * 1000).toLocaleString()}</td><td>${esc(r.mode)}</td><td>${esc(r.customer || '')}${((r.spec || {}).platform || (r.removal || {}).platform) ? ` <span class="hint">${esc({ c8000v: 'C8000v', vyos: 'VyOS' }[(r.spec || {}).platform || (r.removal || {}).platform] || '')}</span>` : ''}</td>
-    <td><span class="pill ${stCls(r.status)}">${esc(r.status)}</span></td>
+    <td><span class="pill ${stCls(r.status)}">${esc(r.status)}</span></td><td>${progress(r)}</td>
     <td>${r.tests ? `${r.tests.passed}/${r.tests.total}` : ''}</td></tr>`).join('')
-    || '<tr><td colspan="5" class="hint">nothing has run yet</td></tr>';
+    || '<tr><td colspan="6" class="hint">nothing has run yet</td></tr>';
 }
 async function watch(id) {
   clearInterval(watching); watching = null;
@@ -416,11 +435,12 @@ async function watch(id) {
     const plat = (r.spec || {}).platform || (r.removal || {}).platform, PLATN = { c8000v: 'Catalyst 8000v', vyos: 'VyOS' };
     $('run-title').innerHTML = `${esc(r.mode)} ${esc(r.customer || '')}${plat ? ` <span class="pill teal">${esc(PLATN[plat] || plat)}</span>` : ''} <span class="pill ${stCls(r.status)}">${esc(r.status)}</span>
       ${['failed', 'interrupted'].includes(r.status) ? `<button onclick="resume('${esc(r.id)}')">Resume</button>` : ''}`;
-    $('run-body').innerHTML = `<ol class="steps">${(r.steps || []).map(s => `<li class="${s.status === 'running' ? 'cur' : ''}"><span class="pill ${stCls(s.status)}">${esc(s.status)}</span>
+    $('run-body').innerHTML = `<div class="run-prog">${progress(r, true)}</div><ol class="steps">${(r.steps || []).map(s => `<li class="${s.status === 'running' ? 'cur' : ''}"><span class="pill ${stCls(s.status)}">${esc(s.status)}</span>
       <span class="s">${esc(s.title || s.name)}</span>${s.summary ? `<div class="d">${esc(s.summary)}</div>` : ''}</li>`).join('')}</ol>
       ${r.tests ? `<p><b>Tests:</b> ${r.tests.passed}/${r.tests.total} passed${r.results_dir ? ` — <a href="/results/${esc(r.results_dir)}/report.html" target="_blank">report</a>` : ''}</p>` : ''}
       <pre class="out">${esc(log.slice(-8000))}</pre>`;
     const pre = $('run-body').querySelector('pre'); if (pre) pre.scrollTop = pre.scrollHeight;
+    if (location.hash === '#runs') loadRuns();          // the list's bars move with the run being watched
     if (['success', 'failed', 'cancelled', 'interrupted'].includes(r.status)) { done = true; clearInterval(watching); watching = null; loadRuns(); load(true); }
   };
   await tick(); if (!done) watching = setInterval(tick, 3000);

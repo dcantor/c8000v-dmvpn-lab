@@ -11,6 +11,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 While the version is 0.x, the lab's interfaces are still settling. The current version is in [`VERSION`](VERSION), in
 the portal's header, and in git as a `v<version>` tag.
 
+## [0.17.0] — 2026-09-27
+
+### Added
+- **Runs page: a progress bar for every run.** The list has a Progress column, and the selected run's card has a
+  wider bar above its steps.
+  - Progress is the finished steps out of all the run's steps. The step in progress counts as half.
+  - The label reads "step 3 of 5" while running (the wide bar adds the step's title), otherwise "8 / 9 steps".
+  - Colours: striped teal while running, green on success, red when failed, interrupted or cancelled, grey when
+    queued. Reduced motion stops the stripes.
+  - While you watch a run, the list's bars move with it.
+
 ## [0.16.0] — 2026-09-27
 
 ### Changed
@@ -215,6 +226,7 @@ the portal's header, and in git as a `v<version>` tag.
   - `nac/`, Network-as-Code for the C8000vs.
   - Robot suites, the README, and the first Nautobot seed.
 
+[0.17.0]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.15.1...v0.16.0
 [0.15.1]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.14.0...v0.15.0
