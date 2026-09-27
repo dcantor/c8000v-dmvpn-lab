@@ -30,6 +30,9 @@ td { padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:top } 
 button { font:inherit; padding:5px 12px; border:1px solid var(--line); background:var(--card); color:var(--body);
   border-radius:7px; cursor:pointer } button:hover { border-color:var(--teal) }
 button.primary { background:var(--teal); color:#fff; border-color:var(--teal) } button.danger { color:var(--red) }
+button.danger-fill { background:var(--red); color:#fff; border-color:var(--red) } button.danger-fill:hover { filter:brightness(1.1) }
+button[disabled] { opacity:.45; cursor:not-allowed }
+input[disabled] { opacity:1; color:var(--body); background:var(--card); border-style:dashed }
 button.task { text-align:left; display:flex; flex-direction:column; gap:3px; padding:11px 13px }
 button.task .t { font-weight:600 } button.task .w { font-size:12.5px; color:var(--muted); font-weight:400 }
 button.task .m { font-size:11.5px; color:var(--teal) }
@@ -217,9 +220,30 @@ body.print .legend { margin:2px 0 6px } body.print #mapinfo { padding-top:6px; b
   <div class="actions"><button class="primary" id="w-go">Provision the customer</button><button id="w-check">Re-check</button>
     <span style="flex:1"></span><button onclick="wiz.close()">Cancel</button></div></dialog>
 
-<dialog id="rm"><h2 id="rm-title">Remove a customer</h2><div id="rm-body"></div>
+<dialog id="rm"><h2>Remove a customer</h2>
+  <div class="row"><div><label>Customer</label><select id="r-cust" style="width:100%;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--body);font:inherit;font-size:13.5px"></select></div></div>
+  <div class="row" style="margin-top:9px">
+    <div><label>Router type</label><input id="r-plat" disabled></div>
+    <div><label>Region</label><input id="r-region" disabled></div>
+    <div><label>Management address</label><input id="r-mgmt" disabled></div>
+    <div><label>Site LAN</label><input id="r-lan" disabled></div></div>
+  <div class="row" style="margin-top:9px">
+    <div><label>Index (WAN /30, tunnel, router-id)</label><input id="r-tidx" disabled></div>
+    <div><label>Provider port</label><input id="r-pport" disabled></div>
+    <div><label>LAN host</label><input id="r-host" disabled></div>
+    <div><label>Host management</label><input id="r-hmgmt" disabled></div></div>
+  <h3 style="font-size:14px;margin:14px 0 6px">The customer company <small class="hint">(removed from customers.json and Nautobot with the site)</small></h3>
+  <div class="row"><div><label>Company</label><input id="r-co" disabled></div><div><label>Industry</label><input id="r-ind" disabled></div>
+    <div><label>Contact</label><input id="r-contact" disabled></div></div>
+  <div class="row" style="margin-top:9px"><div style="flex:2"><label>Address</label><input id="r-addr" disabled></div>
+    <div><label>Phone</label><input id="r-phone" disabled></div><div><label>Email</label><input id="r-email" disabled></div></div>
+  <h3 style="font-size:14px;margin:14px 0 6px">Applications <small class="hint">(its subscriptions end; the applications stay at the hubs)</small></h3>
+  <div id="r-apps" class="hint"></div>
+  <table style="margin-top:12px"><tbody id="r-plan"></tbody></table>
+  <p class="hint" id="r-note"></p>
+  <label style="margin-top:10px"><input type="checkbox" id="r-test" checked style="width:auto"> run the suites at the end</label>
   <div class="msg" id="rm-msg"></div>
-  <div class="actions"><button class="danger" id="rm-go">Remove it</button>
+  <div class="actions"><button class="danger-fill" id="rm-go">Remove the customer</button><button id="r-check">Re-check</button>
     <span style="flex:1"></span><button onclick="rm.close()">Cancel</button></div></dialog>
 
 <script>
@@ -329,20 +353,38 @@ $('w-go').onclick = async () => { const spec = await check(); if (!spec) return;
   wiz.close(); start({ mode: 'customer', customer: spec, options: { test: $('w-test').checked } }); };
 
 async function pickCustomer() {
-  const name = prompt('Which customer should be removed?\n\n' + ST.customers.join(', '));
-  if (!name) return;
-  const r = await fetch(`/api/customers/${encodeURIComponent(name.trim())}/removal`);
-  if (!r.ok) { alert((await r.json()).detail); return; }
-  const p = await r.json();
-  $('rm-title').textContent = `Remove ${p.name}`;
-  $('rm-body').innerHTML = `<p>This deletes the C8000v and its LAN host, and takes the customer out of lab.conf, Terraform's state and Nautobot.</p>
-    <table>${p.customer ? `<tr><th>Customer</th><td>${esc(p.customer.company)} — ${esc(p.customer.industry)}</td></tr>` : ''}<tr><th>VMs</th><td>${esc(p.name)} (${esc(p.platform === 'vyos' ? 'VyOS' : 'Catalyst 8000v')}, ${esc(p.mgmt_ip)}) and ${esc(p.host)} (${esc(p.host_mgmt)})</td></tr>
-    <tr><th>Cloud</th><td class="mono">Tunnel0 ${esc(p.tunnel_ip)}, NBMA ${esc(p.nbma)}</td></tr>
-    <tr><th>Site LAN</th><td class="mono">${esc(p.lan)}</td></tr>
-    <tr><th>Provider port released</th><td class="mono">${esc(p.provider)} ${esc(p.provider_port)} (${esc(p.wan_prefix)})</td></tr></table>
-    <p class="hint">The hubs are not touched: the customer simply stops registering, and its BGP sessions go away.</p>`;
-  $('rm-go').onclick = () => { rm.close(); start({ mode: 'remove', name: p.name }); };
-  rm.showModal();
+  if (!ST) await load();
+  const PLAT = { c8000v: 'Catalyst 8000v', vyos: 'VyOS' };
+  $('r-cust').innerHTML = ST.customers.map(c => { const m = ST.nodes[c] || {}, cu = m.customer || {};
+    return `<option value="${esc(c)}">${esc(c)} — ${esc(cu.company || 'no company')} (${esc(PLAT[m.platform] || m.platform)}, ${esc(m.region || '')})</option>`; }).join('');
+  $('r-cust').onchange = checkRemoval; $('r-check').onclick = checkRemoval;
+  $('rm-msg').textContent = '';
+  await checkRemoval(); rm.showModal();
+}
+async function checkRemoval() {
+  const name = $('r-cust').value, go = $('rm-go');
+  go.disabled = true; $('rm-msg').textContent = '';
+  const r = await fetch(`/api/customers/${encodeURIComponent(name)}/removal`), p = await r.json();
+  if (!r.ok) { $('rm-msg').textContent = p.detail || 'cannot remove'; $('r-plan').innerHTML = ''; return null; }
+  const cu = p.customer || {}, PLAT = { c8000v: 'Catalyst 8000v', vyos: 'VyOS' };
+  const set = (id, v) => $(id).value = v ?? '';
+  set('r-plat', PLAT[p.platform] || p.platform); set('r-region', p.region); set('r-mgmt', p.mgmt_ip); set('r-lan', p.lan);
+  set('r-tidx', p.t_idx); set('r-pport', `${p.provider} ${p.provider_port}`); set('r-host', p.host); set('r-hmgmt', p.host_mgmt);
+  set('r-co', cu.company); set('r-ind', cu.industry); set('r-contact', cu.contact); set('r-addr', cu.address); set('r-phone', cu.phone); set('r-email', cu.email);
+  const apps = (ST.applications || []).filter(a => (cu.applications || []).includes(a.id));
+  $('r-apps').innerHTML = apps.length ? apps.map(a => `<span class="pill" style="margin:0 4px 4px 0">${esc(a.id)} ${esc(a.name)}</span>`).join('') : 'no subscriptions';
+  const steps = [
+    ['Company', cu.company ? `${cu.company} (${cu.industry})` : '—'],
+    ['Router', `${p.name}: ${PLAT[p.platform] || p.platform} (${p.mgmt_ip}) and its Alpine host ${p.host} (${p.host_mgmt}) — powered off and deleted`],
+    ['Cloud', `Tunnel0 ${p.tunnel_ip} (NBMA ${p.nbma}) stops registering with ${ST.hubs.join(', ')}`],
+    ['WAN', `${p.provider} ${p.provider_port} released (${p.wan_prefix}): address removed, port disabled`],
+    ['LAN', `${p.lan} and router-id ${p.router_id} withdrawn`],
+    ['Changes', `lab.conf, customers.json, ${p.platform === 'c8000v' ? "Terraform's state, " : ''}${p.provider}, Nautobot`]];
+  $('r-plan').innerHTML = steps.map(([k, x]) => `<tr><th>${esc(k)}</th><td>${esc(x)}</td></tr>`).join('');
+  $('r-note').textContent = 'the hubs: a customer that stops registering simply goes away from NHRP, and its BGP sessions from their listen range, so no hub configuration changes';
+  go.disabled = false;
+  go.onclick = () => { rm.close(); start({ mode: 'remove', name: p.name, options: { test: $('r-test').checked } }); };
+  return p;
 }
 
 async function start(body) {
