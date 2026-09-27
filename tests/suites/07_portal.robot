@@ -122,3 +122,19 @@ Lab Tools lists every node's access details and every tool, and the tools answer
         ${code}=    Evaluate    __import__("requests").get($tool["url"], timeout=15, allow_redirects=False).status_code
         Should Be True    ${code} < 400    msg=${tool}[name] (${tool}[url]) answers ${code}
     END
+
+Show configuration returns each node's own configuration, read live
+    FOR    ${n}    IN    @{C8K}
+        ${r}=    GET On Session    portal    /api/config/${n}
+        Should Be Equal    ${r.json()}[command]    show running-config
+        Should Contain    ${r.json()}[output]    hostname ${n}
+        Should Contain    ${r.json()}[output]    interface Tunnel0
+    END
+    ${r}=    GET On Session    portal    /api/config/${PROVIDER}
+    Should Contain    ${r.json()}[output]    set system host-name '${PROVIDER}'
+    FOR    ${h}    IN    @{HOSTS}
+        ${r}=    GET On Session    portal    /api/config/${h}
+        Should Contain    ${r.json()}[output]    # hostname: ${h}
+        Should Contain    ${r.json()}[output]    ${HOST_VMS}[${h}][lan_ip]
+    END
+    GET On Session    portal    /api/config/no-such-node    expected_status=404

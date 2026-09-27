@@ -347,6 +347,35 @@ def api_host_ping(host: str, target: str, count: int = Query(4, ge=1, le=10)):
             "output": out.rsplit("__rc=", 1)[0].rstrip() + "\n"}
 
 
+@app.get("/api/config/{node}", tags=["state"], summary="A node's configuration, read live from the device")
+def api_config(node: str):
+    """C8000v: `show running-config`; the VyOS provider: `show configuration commands` (the set form lab.sh renders);
+    an Alpine host has no configuration file of its own, so its network set-up: interfaces, addresses, routes."""
+    nodes = C.facts()["nodes"]
+    if node not in nodes:
+        raise HTTPException(404, f"{node} is not a node of this lab")
+    n = nodes[node]
+    try:
+        if n["role"] in ("hub", "spoke"):
+            cmd = "show running-config"
+            out = ios(n["mgmt_ip"], cmd)[cmd]
+        elif n["role"] == "provider":
+            from netmiko import ConnectHandler
+            cmd = "show configuration commands"
+            c = ConnectHandler(device_type="vyos", host=n["mgmt_ip"], username="vyos", password="vyos")
+            try:
+                out = c.send_command(cmd, read_timeout=90)
+            finally:
+                c.disconnect()
+        else:
+            cmd = "network configuration (hostname, /etc/network/interfaces, ip addr, ip route)"
+            out = _ssh(n["mgmt_ip"], "echo \"# hostname: $(hostname)\"; echo; echo '# /etc/network/interfaces'; cat /etc/network/interfaces 2>/dev/null;"
+                                     " echo; echo '# ip -4 addr'; ip -4 addr; echo; echo '# ip route'; ip route", HOST_USER, HOST_PASS, timeout=30)
+    except Exception as e:                                        # noqa: BLE001
+        raise HTTPException(502, f"{node}: {e.__class__.__name__}: {e}")
+    return {"node": node, "role": n["role"], "command": cmd, "lines": out.count("\n") + 1, "output": out}
+
+
 @app.post("/api/runs", tags=["runs"], summary="Start a run")
 def api_run(req: RunRequest):
     if req.mode not in ("customer", "remove", "deploy", "plan", "test"):
