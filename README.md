@@ -28,6 +28,8 @@ pings every other one across the overlay. Built and configured as code: libvirt 
    routing: eBGP AS 65100 <-> AS 65000 on Gi2 (underlay) · iBGP AS 65100 over Tunnel0, hubs = route reflectors
 ```
 
+Version and changes: [`VERSION`](VERSION) and [`CHANGELOG.md`](CHANGELOG.md), which uses semantic versioning. Each release is tagged `v<version>`.
+
 ## Quick start
 
 ```bash

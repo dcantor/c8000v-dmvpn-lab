@@ -47,12 +47,15 @@ def ios(ip, *commands):
 def vyos_show(ip, command):
     """A `show` command on a VyOS router: NHRP, BGP and routes live in FRR (vtysh), IPsec and the rest in op-mode."""
     if command.startswith("show vpn") or command.startswith("show interfaces") or command.startswith("show configuration"):
-        c = ConnectHandler(device_type="vyos", host=ip, username=VYOS_USER, password=VYOS_PASS)
-        try:
-            return c.send_command(command, read_timeout=60)
-        finally:
-            c.disconnect()
+        return vyos_op(ip, command)
     return vtysh(ip, command)
+
+
+def vyos_op(ip, command, timeout=90):
+    """A VyOS op-mode command over a plain SSH exec channel, through VyOS's own op-mode wrapper — no interactive
+    prompt to detect (netmiko's VyOS login intermittently misses it and times out)."""
+    safe = command.replace("'", "")
+    return _ssh(ip, f"/opt/vyatta/bin/vyatta-op-cmd-wrapper {safe}", VYOS_USER, VYOS_PASS, timeout=timeout)
 
 
 def vtysh(ip, *commands):

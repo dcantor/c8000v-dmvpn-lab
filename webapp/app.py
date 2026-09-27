@@ -29,7 +29,7 @@ from labportal import RunBase, RunRegistry, exposition, install_runs_api, metric
 from pydantic import BaseModel, Field
 
 import customers as C
-from state import HOST_PASS, HOST_USER, State, _ssh, ios, vyos_show
+from state import HOST_PASS, HOST_USER, State, _ssh, ios, vyos_op, vyos_show
 
 LAB = Path(__file__).resolve().parents[1]
 HERE = Path(__file__).resolve().parent
@@ -50,7 +50,7 @@ STEP_TITLES = {
     "test": "Robot Framework suites",
     "rm_validate": "Validate the removal",
     "rm_nac": "Terraform forgets the router (its resources leave the state; the hubs are not touched)",
-    "rm_vm": "Power off and delete the C8000v and its host",
+    "rm_vm": "Power off and delete the router and its host",
     "rm_labconf": "Remove from lab.conf and re-render",
     "rm_provider": "Release the provider port (address removed, port disabled)",
     "rm_nautobot": "Remove the customer from Nautobot",
@@ -106,11 +106,38 @@ class Run(RunBase):
     STEP_TITLES = STEP_TITLES
     EXTRA = {"customer": "customer", "spec": "spec", "removal": "removal"}
 
+    # the steps that read differently for a VyOS router (the defaults above describe a Catalyst 8000v)
+    VYOS_TITLES = {
+        "vm": "Create and boot the VyOS router and its LAN host",
+        "bootstrap": "Day-0 over the serial console (the whole VyOS configuration, the IKE hook), wait for SSH",
+        "nac": "Network-as-Code: terraform apply (nothing for a VyOS router; the C8000vs are re-asserted)",
+        "rm_nac": "Terraform forgets the router (a VyOS router was never in its state)",
+        "rm_vm": "Power off and delete the VyOS router and its host",
+    }
+
     def __init__(self, mode, spec, options, resume_of=None):
         self.spec = spec
         self.removal = (resume_of or {}).get("removal")
         self.customer = (spec or {}).get("name")
         super().__init__(mode, options, resume_of, runs_dir=RUNS_DIR, cwd=LAB)
+        self.retitle()
+
+    def platform(self):
+        if self.mode == "customer":
+            return (self.spec or {}).get("platform", "c8000v")
+        if self.mode == "remove":
+            n = C.facts()["nodes"].get((self.spec or {}).get("name") or "")
+            return (self.removal or {}).get("platform") or (n or {}).get("platform")
+        return None
+
+    def retitle(self):
+        """Step titles name the router the run is building or removing."""
+        plat = self.platform()
+        for st in self.steps:
+            if plat == "vyos" and st["name"] in self.VYOS_TITLES:
+                st["title"] = self.VYOS_TITLES[st["name"]]
+            elif plat == "c8000v" and st["name"] == "rm_vm":
+                st["title"] = "Power off and delete the C8000v and its host"
 
     def plan(self):
         if self.mode == "test":
@@ -261,6 +288,11 @@ def resume_factory(rec):
 
 
 # ---- API ---------------------------------------------------------------------------------------------------------
+@app.get("/api/version", tags=["state"], summary="The lab's version (VERSION; CHANGELOG.md has what changed)")
+def api_version():
+    return {"version": (LAB / "VERSION").read_text().strip(), "changelog": "https://github.com/dcantor/c8000v-dmvpn-lab/blob/main/CHANGELOG.md"}
+
+
 @app.get("/", include_in_schema=False)
 def index():
     return FileResponse(str(HERE / "static" / "index.html"), headers={"Cache-Control": "no-store"})   # a UI change shows on the next load
@@ -369,13 +401,8 @@ def api_config(node: str):
             cmd = "show running-config"
             out = ios(n["mgmt_ip"], cmd)[cmd]
         elif n.get("platform") == "vyos":
-            from netmiko import ConnectHandler
             cmd = "show configuration commands"
-            c = ConnectHandler(device_type="vyos", host=n["mgmt_ip"], username="vyos", password="vyos")
-            try:
-                out = c.send_command(cmd, read_timeout=90)
-            finally:
-                c.disconnect()
+            out = vyos_op(n["mgmt_ip"], cmd)
         else:
             cmd = "network configuration (hostname, /etc/network/interfaces, ip addr, ip route)"
             out = _ssh(n["mgmt_ip"], "echo \"# hostname: $(hostname)\"; echo; echo '# /etc/network/interfaces'; cat /etc/network/interfaces 2>/dev/null;"

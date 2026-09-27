@@ -19,8 +19,14 @@ echo "==> capturing router configurations (pre-run)"
 
 # a suite path given on the command line replaces the default of every suite
 suites=(suites/); for a in "$@"; do [[ "$a" == suites/* ]] && suites=(); done
+# the report's title is the lab's name; which router runs what is spelled out in its metadata
+routers="$(../lab.sh inventory | python3 -c '
+import json, sys
+d = json.load(sys.stdin); P = {"c8000v": "Catalyst 8000v", "vyos": "VyOS"}
+print(" · ".join(n["name"] + ": " + P.get(n["platform"], n["platform"]) for n in d["nodes"] if n["role"] in ("hub", "spoke", "provider")))')"
 echo "==> running Robot Framework suites"
-.venv/bin/robot --outputdir "$out" --name "c8000v-dmvpn-lab" --loglevel INFO --pythonpath resources "$@" "${suites[@]}"
+.venv/bin/robot --outputdir "$out" --name "c8000v-dmvpn-lab" --loglevel INFO --pythonpath resources \
+  --metadata "Lab:c8000v-dmvpn-lab (the lab's name — not a router type)" --metadata "Routers:$routers" "$@" "${suites[@]}"
 rc=$?
 
 echo "==> capturing router configurations (post-run backup)"
