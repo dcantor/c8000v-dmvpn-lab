@@ -22,7 +22,8 @@ import vyos_ssh  # noqa: E402
 
 host, path = sys.argv[1], sys.argv[2]
 dry = "--dry-run" in sys.argv
-lines = [l.strip() for l in open(path) if l.strip() and not l.startswith("#")]
+import labsecrets  # noqa: E402 — the rendered file carries a placeholder for the pre-shared key
+lines = [labsecrets.fill(l.strip()) for l in open(path) if l.strip() and not l.startswith("#")]
 
 # every ethernet port the file manages, and the addresses it wants on each (an empty set = the model says none)
 want_addr, want_disabled = {}, set()
@@ -52,7 +53,7 @@ for l in running.splitlines():
     if m and want_addr.get(m[1]) and m[1] not in want_disabled:
         deletes.append(f"delete interfaces ethernet {m[1]} disable")
 if dry:
-    print("\n".join(deletes + lines)); sys.exit()
+    print(labsecrets.mask("\n".join(deletes + lines))); sys.exit()
 rc, out = vyos_ssh.configure(host, deletes + lines)
 bad = [l for l in out.splitlines() if re.search(r"Invalid|Commit failed|is not valid|Set failed|Error", l)]
 if rc != 0 or bad: print("FAILED:", *(bad or out.splitlines()[-15:]), sep="\n  "); sys.exit(1)

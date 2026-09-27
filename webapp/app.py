@@ -33,6 +33,7 @@ import auth as A
 import backup as B
 import changes as CH
 import confighist as CFG
+import ikeauth as IKE
 import cportal as CP
 import maint as M
 import chaos as X
@@ -42,6 +43,8 @@ from state import HOST_PASS, HOST_USER, State, _ssh, ios, vtysh, vyos_op, vyos_s
 
 LAB = Path(__file__).resolve().parents[1]
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(LAB / "tools"))
+import labsecrets as SEC  # noqa: E402
 RUNS_DIR = HERE / "runs"
 RUNS_DIR.mkdir(exist_ok=True)
 RESULTS = LAB / "results"
@@ -85,6 +88,9 @@ STEP_TITLES = {
     "fo_report": "Collect every flow's replies and measure the outages",
     "cfg_before": "Snapshot every router's configuration (before)",
     "cfg_after": "Snapshot every router's configuration (after) and compare",
+    "sec_newkey": "Choose a new random pre-shared key (kept in secrets/, never in git or the log)",
+    "sec_reauth": "Re-authenticate every IKE session, one router at a time",
+    "sec_verify": "Verify every IKE session: it authenticated with the pre-shared key, and after the rotation",
     "render": "Render the configuration from lab.conf",
     "plan": "terraform plan: what Network-as-Code would change",
     "check": "Compare Nautobot's rendering with lab.conf's",
@@ -321,9 +327,9 @@ class Run(RunBase):
     STEP_TITLES = STEP_TITLES
     EXTRA = {"customer": "customer", "spec": "spec", "removal": "removal", "modification": "modification", "drift": "drift",
              "restore": "restore", "change": "change", "failover": "failover", "started_by": "started_by",
-             "config_changes": "config_changes"}
-    CHANGING = ("customer", "remove", "modify", "deploy", "fixdrift", "restore")       # jobs that change routers
-    MAINTENANCE = ("remove", "modify", "deploy", "fixdrift", "restore", "failover")   # jobs that disturb the service
+             "config_changes": "config_changes", "security": "security"}
+    CHANGING = ("customer", "remove", "modify", "deploy", "fixdrift", "restore", "rotatepsk")   # jobs that change routers
+    MAINTENANCE = ("remove", "modify", "deploy", "fixdrift", "restore", "failover", "rotatepsk")   # jobs that disturb the service
 
     def execute(self):
         """A disruptive job runs under a maintenance record: its routers' alerts are muted, its customers are told."""
@@ -354,6 +360,7 @@ class Run(RunBase):
         self.drift = None
         self.change = (resume_of or {}).get("change")        # the change request that started it, if any
         self.started_by = (resume_of or {}).get("started_by")
+        self.security = (resume_of or {}).get("security")
         self.config_changes = (resume_of or {}).get("config_changes")
         self.failover = (resume_of or {}).get("failover")
         self.restore = (resume_of or {}).get("restore")
@@ -406,6 +413,8 @@ class Run(RunBase):
             return ["plan", "check"]
         if self.mode == "drift":
             return ["drift"]
+        if self.mode == "rotatepsk":
+            return ["sec_newkey", "render", "nac", "provider", "sec_reauth", "sec_verify", "verify"]
         if self.mode == "failover":
             return ["fo_prepare", "fo_inject", "fo_hold", "fo_restore", "fo_recover", "fo_report"]
         if self.mode == "restore":
@@ -602,6 +611,31 @@ class Run(RunBase):
             self.sh([LAB / "lab.sh", "nautobot", "remove-customer", o["name"], "--host", o["host"], *_wans(o), "--lan", o["lan"]])
         self.sh([LAB / "lab.sh", "nautobot", "seed"])
         s["summary"] = "re-modelled and seeded" if m["rebuild"] or m["relan"] or m.get("rewire") else "seeded"
+
+    # ---- IKE: rotating the pre-shared key --------------------------------------------------------------------------
+    def do_sec_newkey(self, s):
+        old = SEC.psk_info()
+        new = SEC.set_psk(SEC.new_psk())
+        self.security = {"rotated_at": new["since"], "old": old["fingerprint"], "new": new["fingerprint"]}
+        self.say(f"a new pre-shared key: fingerprint …{new['fingerprint']} (was …{old['fingerprint']}, {old['source']})")
+        s["summary"] = f"new key …{new['fingerprint']} (the key itself is in secrets/dmvpn_psk only)"
+
+    def do_sec_reauth(self, s):
+        IKE.reauth(C.facts()["inv"], state, self.say)
+        s["summary"] = "every router's IKE sessions set up again"
+
+    def do_sec_verify(self, s):
+        want = "psk"
+        young = time.time() - self.security["rotated_at"]             # every SA must be younger than the new key
+        rep = IKE.verify(C.facts()["inv"], want=want, younger_than=young)
+        bad = {r: v for r, v in rep.items() if v.get("error") or v["wrong"] or v["old"] or not v["sas"]}
+        for r, v in sorted(rep.items()):
+            self.say(f"{r}: {v['sas']} IKE SAs {v.get('by_auth', {})}" + (f" — {len(v['wrong'])} not {want}" if v["wrong"] else "")
+                     + (f" — {len(v['old'])} older than the key" if v["old"] else "") + (f" — {v['error']}" if v.get("error") else ""))
+        self.security = {**(self.security or {}), "verified": {r: {k: v.get(k) for k in ("sas", "by_auth")} for r, v in rep.items()}}
+        if bad:
+            raise RuntimeError("not every IKE SA is as it should be: " + ", ".join(sorted(bad)))
+        s["summary"] = f"{sum(v['sas'] for v in rep.values())} IKE SAs on {len(rep)} routers, all authenticated with the new pre-shared key"
 
     # ---- failover timing ---------------------------------------------------------------------------------------
     RECOVER_S = 240
@@ -1176,6 +1210,15 @@ def api_c_pdf(token: str, request: Request):
     return api_customer_map_pdf(_cust(token, request))
 
 
+# ---- security: IKE authentication ---------------------------------------------------------------------------------
+@app.get("/api/security", tags=["provisioning"], summary="The IKE pre-shared key: where it comes from, its age, its fingerprint")
+def api_security():
+    """Never the key itself: where it comes from, when it was set, and the last characters of its SHA-256."""
+    last = next((r for r in registry.list(100) if r["mode"] == "rotatepsk" and r["status"] == "success"), None)
+    return {"psk": SEC.psk_info(), "routers": C.facts()["hubs"] + C.facts()["customers"],
+            "last_rotation": {k: last.get(k) for k in ("id", "finished", "started_by")} if last else None}
+
+
 # ---- maintenance ----------------------------------------------------------------------------------------------------
 class MaintenanceRequest(BaseModel):
     summary: str = Field(examples=["replacing hub-west's uplink"])
@@ -1368,7 +1411,7 @@ def api_query(node: str, command: str):
         out = vyos_show(n["mgmt_ip"], command)
     else:
         out = ios(n["mgmt_ip"], command)[command]
-    return {"node": node, "command": command, "output": out}
+    return {"node": node, "command": command, "output": SEC.mask(out)}
 
 
 @app.get("/api/customers/{name}/map.pdf", tags=["provisioning"], summary="A customer's view of the network map, as a PDF",
@@ -1562,7 +1605,7 @@ def api_config(node: str):
                                      " echo; echo '# ip -4 addr'; ip -4 addr; echo; echo '# ip route'; ip route", HOST_USER, HOST_PASS, timeout=30)
     except Exception as e:                                        # noqa: BLE001
         raise HTTPException(502, f"{node}: {e.__class__.__name__}: {e}")
-    return {"node": node, "role": n["role"], "command": cmd, "lines": out.count("\n") + 1, "output": out}
+    return {"node": node, "role": n["role"], "command": cmd, "lines": out.count("\n") + 1, "output": SEC.mask(out)}
 
 
 def _run_platform(d):
@@ -1612,7 +1655,8 @@ def _change_summary(req, run):
     if m == "failover":
         fl = req.fault or {}
         return f"measure failover: {X.KINDS[fl['kind']]['title']} on {fl['target']} for {fl.get('hold', 60)} s", _fault_affects(fl["kind"], fl["target"])
-    return {"deploy": "deploy the model to every router", "fixdrift": "put every router back to the model (fix drift)"}.get(m, m), ["all"]
+    return {"deploy": "deploy the model to every router", "fixdrift": "put every router back to the model (fix drift)",
+            "rotatepsk": "rotate the IKE pre-shared key on every router"}.get(m, m), ["all"]
 
 
 def _job_scope(run):
@@ -1637,7 +1681,8 @@ def _fault_affects(kind, target):
 
 def _new_run(req: RunRequest):
     """RunRequest -> Run (validated), not started."""
-    if req.mode not in ("customer", "remove", "modify", "deploy", "plan", "test", "drift", "fixdrift", "restore", "failover"):
+    if req.mode not in ("customer", "remove", "modify", "deploy", "plan", "test", "drift", "fixdrift", "restore", "failover",
+                        "rotatepsk"):
         raise HTTPException(400, f"unknown mode {req.mode}")
     spec = req.customer.model_dump() if req.customer else ({"name": req.name} if req.name else None)
     if req.mode == "customer" and not spec:
@@ -1655,6 +1700,8 @@ def _new_run(req: RunRequest):
         except ValueError as e:
             raise HTTPException(400, str(e))
         spec = {"name": fl["target"], "fault": {"kind": fl["kind"], "target": fl["target"], "hold": max(20, min(int(fl.get("hold", 60)), 600))}}
+    if req.mode == "rotatepsk":
+        spec = {"name": "pre-shared key"}
     if req.mode in ("modify", "restore") and not (spec or {}).get("name"):
         raise HTTPException(400, f"mode {req.mode} needs a name")
     try:
@@ -1688,6 +1735,8 @@ def api_run(req: RunRequest, request: Request):
     """A run the change policy covers (GET /api/policy) does not start: it becomes a change request, answered with 202
     and `{"change": ...}`; it starts when someone else approves it (inside a change window)."""
     req.requested_by = _user(request).get("username") or req.requested_by        # the signed-in account, never a typed name
+    if req.mode == "rotatepsk" and not A.has(_user(request), "admin"):
+        raise HTTPException(403, "rotating the pre-shared key is for an admin")
     run = _new_run(req)
     run.started_by = req.requested_by
     if CH.covered(req.mode):

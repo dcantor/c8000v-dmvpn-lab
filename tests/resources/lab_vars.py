@@ -5,6 +5,7 @@ import subprocess
 from pathlib import Path
 
 LAB_DIR = Path(__file__).resolve().parents[2]
+LAB_ROOT = str(LAB_DIR)
 INV = json.loads(subprocess.run([str(LAB_DIR / "lab.sh"), "inventory"], capture_output=True, text=True, check=True).stdout)
 SVC, PROV = INV["service"], INV["provider"]
 NODES = {n["name"]: n for n in INV["nodes"]}

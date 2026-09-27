@@ -298,7 +298,7 @@ class Renderer:
                 "set vpn ipsec esp-group DMVPN-ESP proposal 1 encryption aes256",
                 "set vpn ipsec esp-group DMVPN-ESP proposal 1 hash sha256",
                 "set vpn ipsec profile DMVPN-IPSEC authentication mode pre-shared-secret",
-                f"set vpn ipsec profile DMVPN-IPSEC authentication pre-shared-secret {s_['psk']}",
+                "set vpn ipsec profile DMVPN-IPSEC authentication pre-shared-secret @@DMVPN_PSK@@",   # filled at push (labsecrets.py)
                 "set vpn ipsec profile DMVPN-IPSEC ike-group DMVPN-IKE",
                 "set vpn ipsec profile DMVPN-IPSEC esp-group DMVPN-ESP",
                 "set vpn ipsec profile DMVPN-IPSEC bind tunnel tun0"] + (["set vpn ipsec profile DMVPN-IPSEC bind tunnel tun1"] if n.get("wan2") else []) + [
@@ -499,8 +499,7 @@ class Renderer:
             "device_groups": ["DMVPN", "DMVPN_HUB" if hub else "DMVPN_CUSTOMER"],
             "templates": templates,
             "variables": {"router_id": n["router_id"], "nbma": n["nbma"], "tunnel_ip": n["tunnel_ip"],
-                          "lan": n["lan"], "region": n["region"],
-                          "dmvpn_psk": self.svc["psk"]},
+                          "lan": n["lan"], "region": n["region"]},     # dmvpn_psk: a global variable, secrets.nac.yaml
             "configuration": {
                 "system": {"hostname": n["name"]},
                 "interfaces": {"ethernets": ethernets, "loopbacks": loopbacks},
@@ -568,8 +567,9 @@ class Renderer:
 
     def nac_devices(self):
         c8k = [n for n in self.hubs + self.spokes if n.get("platform", "c8000v") == "c8000v"]
-        templates = [{"name": f"tunnel0_{n['name']}", "type": "cli", "content": self.tunnel_cli(n)} for n in c8k]
-        templates += [{"name": f"tunnel1_{n['name']}", "type": "cli", "content": self.tunnel_cli(n, 2)} for n in c8k if n.get("wan2")]
+        # the tunnels are written after the rest of the model (order 1): what they refer to already exists
+        templates = [{"name": f"tunnel0_{n['name']}", "type": "cli", "content": self.tunnel_cli(n), "order": 1} for n in c8k]
+        templates += [{"name": f"tunnel1_{n['name']}", "type": "cli", "content": self.tunnel_cli(n, 2), "order": 1} for n in c8k if n.get("wan2")]
         templates += [{"name": f"bgp_hub_{n['name']}", "type": "cli", "content": self.hub_bgp_cli(n)} for n in self.hubs]
         templates += [{"name": f"vips_{n['name']}", "type": "cli", "content": self.hub_vips(n)} for n in self.hubs if self.hub_vips(n)]
         doc = {"iosxe": {"templates": templates, "devices": [self.device(n) for n in c8k]}}

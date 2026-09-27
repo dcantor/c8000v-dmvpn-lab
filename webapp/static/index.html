@@ -161,6 +161,7 @@ body.print .slah3 { margin-top:6px } body.print .slaprint table td, body.print .
 /* roles: a viewer or approver sees no operator controls, only an approver the approve buttons, only an admin Users */
 body.ro #mt-go, body.ro [data-mend], body.ro #tasks, body.ro #f-apply, body.ro #f-measure, body.ro #f-restore-all, body.ro [data-restore], body.ro #drift-card h2 button,
 body.ro .driftfix, body.ro [data-watch], body.ro [data-plink], body.ro [data-cancel] { display:none !important }
+body:not(.isadmin) .adminonly, body:not(.isadmin) .task.adminonly,
 body.noapprove [data-approve], body.noapprove [data-reject], body.noapprove [data-emerg], body:not(.isadmin) #pol-toggle,
 body:not(.isadmin) #users-card { display:none !important }
 body.ro #v-provision .card h2 small::after { content:' — your role reads only' }
@@ -331,6 +332,9 @@ pre.diff .dp, #mapout .dp { color:#86efac } pre.diff .dm, #mapout .dm { color:#f
 <section id="v-provision" class="view">
   <div class="card"><h2>What do you want to do? <small>every change is a job: pick one, review what it will do, then watch it</small></h2>
     <div class="tasks" id="tasks"></div></div>
+  <div class="card" id="sec-card"><h2>DMVPN pre-shared key <small>the IKEv2 key every router authenticates with</small>
+    <span style="float:right" class="adminonly"><button class="primary" id="sec-rotate" title="a new random pre-shared key on every router, then every IKE session set up again">Rotate the pre-shared key</button></span></h2>
+    <div id="sec-body"><p class="hint">loading…</p></div></div>
 </section>
 
 <section id="v-runs" class="view">
@@ -495,7 +499,7 @@ applyTheme(); $('theme').onclick = e => { e.preventDefault();
 document.querySelectorAll('nav a[data-view]').forEach(a => a.onclick = e => { e.preventDefault(); show(a.dataset.view); });
 function show(v) { document.querySelectorAll('.view').forEach(x => x.classList.toggle('on', x.id === 'v-' + v));
   document.querySelectorAll('nav a[data-view]').forEach(a => a.classList.toggle('on', a.dataset.view === v));
-  location.hash = v; if (v === 'runs') { loadRuns(); loadChanges(); loadMaint(); } if (v === 'requests') loadRequests(); if (v === 'diag') openDiag(); if (v === 'tools') loadTools(); if (v === 'sla') openSla(); if (v === 'resilience') loadResilience(); }
+  location.hash = v; if (v === 'runs') { loadRuns(); loadChanges(); loadMaint(); } if (v === 'provision') loadSecurity(); if (v === 'requests') loadRequests(); if (v === 'diag') openDiag(); if (v === 'tools') loadTools(); if (v === 'sla') openSla(); if (v === 'resilience') loadResilience(); }
 const pill = (ok, text, warn) => `<span class="pill ${ok ? 'ok' : (warn ? 'warn' : 'bad')}">${esc(text)}</span>`;
 
 const TASKS = [
@@ -508,10 +512,24 @@ const TASKS = [
   { title: 'Fix drift', what: 'Put every router back to the model: re-render, terraform apply, re-push the VyOS routers, re-seed Nautobot — then check again.', meta: 'a few minutes', go: () => start({ mode: 'fixdrift', options: { test: false } }) },
   { title: 'Back up the lab', what: 'Download the whole lab state as one .tar.gz: lab.conf, customers and applications, every rendered file, this lab in Nautobot, the routers’ running configurations, the Terraform state.', meta: 'read only · half a minute', go: downloadBackup },
   { title: 'Restore from a backup', what: 'Upload a backup, see what it would change — customers removed, added, changed — and rebuild the lab to it.', meta: 'depends on the changes', go: openRestore },
+  { title: 'Rotate the pre-shared key', admin: true, what: 'A new random IKE pre-shared key on every router (it never leaves secrets/ on the lab host), then every router’s IKE sessions set up again and checked.', meta: 'admin · about 7 minutes', go: () => { loadSecurity().then(() => $('sec-rotate').click()); } },
   { title: 'Run the tests', what: 'The Robot Framework suites against the live lab, with the evidence kept.', meta: 'about 10 minutes', go: () => start({ mode: 'test' }) },
 ];
+async function loadSecurity() {
+  const r = await fetch('/api/security'); if (!r.ok) return; const d = await r.json();
+  const ago = t => t ? `${fmtT(t)} (${Math.max(0, Math.round((Date.now() / 1000 - t) / 86400))} days ago)` : 'never rotated';
+  $('sec-rotate').onclick = () => { if (confirm('Rotate the pre-shared key? A new random key goes to every router; then every IKE session is set up again, one router at a time.'))
+    start({ mode: 'rotatepsk', options: { test: false } }); };
+  $('sec-body').innerHTML = `<table><tbody>
+      <tr><th>Key</th><td>${esc(d.psk.source)} · fingerprint <span class="mono">…${esc(d.psk.fingerprint)}</span></td></tr>
+      <tr><th>Set</th><td>${esc(ago(d.psk.since))}${d.last_rotation ? ` · by ${esc(d.last_rotation.started_by || '?')} (job ${esc(d.last_rotation.id)})` : ''}</td></tr>
+      <tr><th>Used by</th><td>${esc(d.routers.join(', '))}</td></tr></tbody></table>
+    <p class="hint">A rotation picks a random 40-character key, applies it to every router (Network-as-Code, the VyOS push), sets every router's IKE sessions up
+      again one router at a time, and verifies that every session was made with the new key. The key never appears here, in the logs or in git:
+      it is in <span class="mono">secrets/dmvpn_psk</span> on the lab host, shown only by its fingerprint. An admin rotates it; change control applies.</p>`;
+}
 function renderTasks() {
-  $('tasks').innerHTML = TASKS.map((t, i) => `<button type="button" class="task" data-i="${i}">
+  $('tasks').innerHTML = TASKS.map((t, i) => `<button type="button" class="task${t.admin ? ' adminonly' : ''}" data-i="${i}">
     <span class="t">${esc(t.title)}</span><span class="w">${esc(t.what)}</span><span class="m">${esc(t.meta)}</span></button>`).join('');
   $('tasks').querySelectorAll('button').forEach(b => b.onclick = () => TASKS[b.dataset.i].go());
 }
@@ -901,7 +919,8 @@ async function decide(id, what, emergency) {
 }
 function renderPolicy() {
   const P = CHG.policy, el = $('pol'), days = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'], cov = CHG.policy.approval.covers;
-  const COV = { remove: 'Remove a customer', modify: 'Modify a customer', restore: 'Restore from a backup', deploy: 'Deploy the model', fixdrift: 'Fix drift', failover: 'Measure a failover', fault: 'Simulate a failure' };
+  const COV = { remove: 'Remove a customer', modify: 'Modify a customer', restore: 'Restore from a backup', deploy: 'Deploy the model', fixdrift: 'Fix drift', failover: 'Measure a failover', fault: 'Simulate a failure',
+                rotatepsk: 'Rotate the pre-shared key' };
   el.innerHTML = `<div style="border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:0 0 10px;background:var(--bg)">
     <label class="ck"><input type="checkbox" id="p-on" ${P.approval.enabled ? 'checked' : ''}> <b>approval needed for:</b></label>
     ${Object.entries(COV).map(([k, v]) => `<label class="ck"><input type="checkbox" data-cov="${k}" ${cov.includes(k) ? 'checked' : ''}> ${esc(v)}</label>`).join('')}

@@ -26,10 +26,11 @@ _lock = threading.Lock()
 
 # what can need approval: run modes, plus "fault" (simulated failures)
 COVERABLE = {"remove": "Remove a customer", "modify": "Modify a customer", "restore": "Restore from a backup",
-             "deploy": "Deploy the model", "fixdrift": "Fix drift", "failover": "Measure a failover", "fault": "Simulate a failure"}
+             "deploy": "Deploy the model", "fixdrift": "Fix drift", "failover": "Measure a failover", "fault": "Simulate a failure",
+             "rotatepsk": "Rotate the pre-shared key"}
 DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 DEFAULT = {
-    "approval": {"enabled": True, "covers": ["remove", "modify", "restore", "deploy", "fixdrift", "failover", "fault"],
+    "approval": {"enabled": True, "covers": ["remove", "modify", "restore", "deploy", "fixdrift", "failover", "fault", "rotatepsk"],
                  "four_eyes": True},
     "windows": {"enabled": False, "slots": [{"days": ["mon", "tue", "wed", "thu", "fri"], "start": "20:00", "end": "06:00"},
                                             {"days": ["sat", "sun"], "start": "00:00", "end": "23:59"}]},

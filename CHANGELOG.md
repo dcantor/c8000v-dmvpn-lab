@@ -11,6 +11,38 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 While the version is 0.x, the lab's interfaces are still settling. The current version is in [`VERSION`](VERSION), in
 the portal's header, and in git as a `v<version>` tag.
 
+## [0.21.0] — 2026-09-27
+
+### Added
+- **Rotate the pre-shared key** (Provision; admin only; change control applies). A job that:
+  - chooses a random 40-character key and applies it to every router;
+  - sets every router's IKE sessions up again, customers first and then the hubs, one at a time, waiting for each to
+    be registered again;
+  - reads every IKE SA to prove each was made after the rotation with the pre-shared key.
+  
+  A card on Provision shows where the key comes from, its fingerprint, and when and by whom it was last rotated.
+  Endpoint: `GET /api/security`.
+
+### Changed
+- **The pre-shared key is out of git.**
+  - It lives in `secrets/dmvpn_psk` on the lab host; lab.conf's value is only the public default before the first
+    rotation.
+  - The VyOS renders carry an `@@DMVPN_PSK@@` placeholder, filled in when pushed.
+  - Network-as-Code reads the key as a global variable from the git-ignored `nac/data/secrets.nac.yaml`.
+  - The portal masks the key in the configurations it shows, the configuration history and drift reports.
+- **The C8000v tunnel templates are applied after the rest of the Network-as-Code model** (template order 1).
+
+### Removed
+- **Certificate authentication.** It was started in this release and withdrawn at your request before it shipped.
+  - The trustpoint, keys and certificate profile it had put on hub-east and cust1 were removed.
+  - The certificate files and hook on cust4 were removed.
+  - The lab CA was deleted.
+
+### Lab state
+- **The pre-shared key was rotated once** (CR-0021: admin, approved by approver). All 54 IKE SAs on the 8 routers were
+  re-made with the new key.
+- **Tests:** 73 of 73.
+
 ## [0.20.0] — 2026-09-27
 
 ### Added
@@ -454,6 +486,7 @@ the portal's header, and in git as a `v<version>` tag.
   - `nac/`, Network-as-Code for the C8000vs.
   - Robot suites, the README, and the first Nautobot seed.
 
+[0.21.0]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.19.1...v0.20.0
 [0.19.1]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.19.0...v0.19.1
 [0.19.0]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.18.0...v0.19.0

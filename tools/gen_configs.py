@@ -23,6 +23,14 @@ for rel, text in files.items():
     if not check:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text)
+# the pre-shared key, where Network-as-Code reads it and git does not (.gitignore): a global variable
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import labsecrets  # noqa: E402
+sec = LAB_DIR / "nac" / "data" / "secrets.nac.yaml"
+want = labsecrets.nac_secrets_yaml()
+if not check and (not sec.exists() or sec.read_text() != want):
+    sec.write_text(want)
+    sec.chmod(0o600)
 for rel in changed:
     print(f"  {'would change' if check else 'wrote'} {rel}")
 print(f"{len(changed)} of {len(files)} file(s) {'out of date' if check else 'changed'}")

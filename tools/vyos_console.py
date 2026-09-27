@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """VyOS serial-console helper (raw TCP): wait for the login prompt, or push a file of 'set ...' lines (login,
 configure, set*, commit, save, exit).   vyos_console.py wait HOST PORT [TIMEOUT] | push HOST PORT FILE | send HOST PORT CMD"""
-import re, socket, sys, time
+import os, re, socket, sys, time
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 cmd, host, port = sys.argv[1], sys.argv[2], int(sys.argv[3])
 s = socket.create_connection((host, port)); s.settimeout(1); buf = ""
 def rd(t=2):
@@ -29,7 +30,8 @@ if cmd == "wait":
     if not until(r"login: *$|\$ *$", timeout, b"\r"): sys.exit("timeout waiting for VyOS prompt")
     print("prompt")
 elif cmd == "push":
-    login(); lines = [l.strip() for l in open(sys.argv[4]) if l.strip() and not l.startswith("#")]
+    import labsecrets                      # the rendered file carries a placeholder for the pre-shared key
+    login(); lines = [labsecrets.fill(l.strip()) for l in open(sys.argv[4]) if l.strip() and not l.startswith("#")]
     s.sendall(b"configure\r"); until(r"# *$", 30); buf = ""
     for l in lines:
         s.sendall((l + "\r").encode()); until(r"# *$", 60)

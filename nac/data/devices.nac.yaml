@@ -10,6 +10,7 @@ iosxe:
       \ ip nhrp map multicast dynamic\n ip nhrp map 172.28.0.2 100.70.2.2\n ip nhrp map multicast 100.70.2.2\n ip nhrp map\
       \ 172.28.0.3 100.70.3.2\n ip nhrp map multicast 100.70.3.2\n ip nhrp redirect\n tunnel source GigabitEthernet2\n tunnel\
       \ mode gre multipoint\n tunnel key 100\n tunnel protection ipsec profile DMVPN-IPSEC\n"
+    order: 1
   - name: tunnel0_hub-central
     type: cli
     content: "interface Tunnel0\n description DMVPN hub (mGRE, phase 3)\n ip address 172.28.0.2 255.255.255.0\n no ip redirects\n\
@@ -17,6 +18,7 @@ iosxe:
       \ ip nhrp map multicast dynamic\n ip nhrp map 172.28.0.1 100.70.1.2\n ip nhrp map multicast 100.70.1.2\n ip nhrp map\
       \ 172.28.0.3 100.70.3.2\n ip nhrp map multicast 100.70.3.2\n ip nhrp redirect\n tunnel source GigabitEthernet2\n tunnel\
       \ mode gre multipoint\n tunnel key 100\n tunnel protection ipsec profile DMVPN-IPSEC\n"
+    order: 1
   - name: tunnel0_hub-west
     type: cli
     content: "interface Tunnel0\n description DMVPN hub (mGRE, phase 3)\n ip address 172.28.0.3 255.255.255.0\n no ip redirects\n\
@@ -24,6 +26,7 @@ iosxe:
       \ ip nhrp map multicast dynamic\n ip nhrp map 172.28.0.1 100.70.1.2\n ip nhrp map multicast 100.70.1.2\n ip nhrp map\
       \ 172.28.0.2 100.70.2.2\n ip nhrp map multicast 100.70.2.2\n ip nhrp redirect\n tunnel source GigabitEthernet2\n tunnel\
       \ mode gre multipoint\n tunnel key 100\n tunnel protection ipsec profile DMVPN-IPSEC\n"
+    order: 1
   - name: tunnel0_cust1
     type: cli
     content: "interface Tunnel0\n description DMVPN customer (mGRE, phase 3)\n ip address 172.28.0.11 255.255.255.0\n no ip\
@@ -31,6 +34,7 @@ iosxe:
       \ holdtime 60\n ip nhrp nhs 172.28.0.1 nbma 100.70.1.2 multicast\n ip nhrp nhs 172.28.0.2 nbma 100.70.2.2 multicast\n\
       \ ip nhrp nhs 172.28.0.3 nbma 100.70.3.2 multicast\n ip nhrp shortcut\n tunnel source GigabitEthernet2\n tunnel mode\
       \ gre multipoint\n tunnel key 100\n tunnel protection ipsec profile DMVPN-IPSEC\n"
+    order: 1
   - name: tunnel0_cust2
     type: cli
     content: "interface Tunnel0\n description DMVPN customer (mGRE, phase 3)\n ip address 172.28.0.12 255.255.255.0\n no ip\
@@ -38,6 +42,7 @@ iosxe:
       \ holdtime 60\n ip nhrp nhs 172.28.0.1 nbma 100.70.1.2 multicast\n ip nhrp nhs 172.28.0.2 nbma 100.70.2.2 multicast\n\
       \ ip nhrp nhs 172.28.0.3 nbma 100.70.3.2 multicast\n ip nhrp shortcut\n tunnel source GigabitEthernet2\n tunnel mode\
       \ gre multipoint\n tunnel key 100\n tunnel protection ipsec profile DMVPN-IPSEC\n"
+    order: 1
   - name: tunnel1_hub-east
     type: cli
     content: "interface Tunnel1\n description DMVPN hub, cloud 2 (backup) (mGRE, phase 3)\n ip address 172.29.0.1 255.255.255.0\n\
@@ -45,6 +50,7 @@ iosxe:
       \ nhrp holdtime 60\n ip nhrp map multicast dynamic\n ip nhrp map 172.29.0.2 100.71.2.1\n ip nhrp map multicast 100.71.2.1\n\
       \ ip nhrp map 172.29.0.3 100.71.3.1\n ip nhrp map multicast 100.71.3.1\n ip nhrp redirect\n tunnel source GigabitEthernet4\n\
       \ tunnel mode gre multipoint\n tunnel key 200\n tunnel protection ipsec profile DMVPN-IPSEC\n"
+    order: 1
   - name: tunnel1_hub-central
     type: cli
     content: "interface Tunnel1\n description DMVPN hub, cloud 2 (backup) (mGRE, phase 3)\n ip address 172.29.0.2 255.255.255.0\n\
@@ -52,6 +58,7 @@ iosxe:
       \ nhrp holdtime 60\n ip nhrp map multicast dynamic\n ip nhrp map 172.29.0.1 100.71.1.1\n ip nhrp map multicast 100.71.1.1\n\
       \ ip nhrp map 172.29.0.3 100.71.3.1\n ip nhrp map multicast 100.71.3.1\n ip nhrp redirect\n tunnel source GigabitEthernet4\n\
       \ tunnel mode gre multipoint\n tunnel key 200\n tunnel protection ipsec profile DMVPN-IPSEC\n"
+    order: 1
   - name: tunnel1_hub-west
     type: cli
     content: "interface Tunnel1\n description DMVPN hub, cloud 2 (backup) (mGRE, phase 3)\n ip address 172.29.0.3 255.255.255.0\n\
@@ -59,6 +66,7 @@ iosxe:
       \ nhrp holdtime 60\n ip nhrp map multicast dynamic\n ip nhrp map 172.29.0.1 100.71.1.1\n ip nhrp map multicast 100.71.1.1\n\
       \ ip nhrp map 172.29.0.2 100.71.2.1\n ip nhrp map multicast 100.71.2.1\n ip nhrp redirect\n tunnel source GigabitEthernet4\n\
       \ tunnel mode gre multipoint\n tunnel key 200\n tunnel protection ipsec profile DMVPN-IPSEC\n"
+    order: 1
   - name: tunnel1_cust1
     type: cli
     content: "interface Tunnel1\n description DMVPN customer, cloud 2 (backup) (mGRE, phase 3)\n ip address 172.29.0.11 255.255.255.0\n\
@@ -66,6 +74,7 @@ iosxe:
       \ nhrp holdtime 60\n ip nhrp nhs 172.29.0.1 nbma 100.71.1.1 multicast\n ip nhrp nhs 172.29.0.2 nbma 100.71.2.1 multicast\n\
       \ ip nhrp nhs 172.29.0.3 nbma 100.71.3.1 multicast\n ip nhrp shortcut\n tunnel source GigabitEthernet4\n tunnel mode\
       \ gre multipoint\n tunnel key 200\n tunnel protection ipsec profile DMVPN-IPSEC\n"
+    order: 1
   - name: bgp_hub_hub-east
     type: cli
     content: "router bgp 65100\n neighbor CUSTOMERS peer-group\n neighbor CUSTOMERS remote-as 65100\n neighbor CUSTOMERS description\
@@ -133,7 +142,6 @@ iosxe:
       tunnel_ip: 172.28.0.1
       lan: 192.168.71.0/24
       region: East
-      dmvpn_psk: lab-dmvpn-psk-do-not-use-outside-this-lab
     configuration:
       system:
         hostname: hub-east
@@ -354,7 +362,6 @@ iosxe:
       tunnel_ip: 172.28.0.2
       lan: 192.168.72.0/24
       region: Central
-      dmvpn_psk: lab-dmvpn-psk-do-not-use-outside-this-lab
     configuration:
       system:
         hostname: hub-central
@@ -575,7 +582,6 @@ iosxe:
       tunnel_ip: 172.28.0.3
       lan: 192.168.73.0/24
       region: West
-      dmvpn_psk: lab-dmvpn-psk-do-not-use-outside-this-lab
     configuration:
       system:
         hostname: hub-west
@@ -794,7 +800,6 @@ iosxe:
       tunnel_ip: 172.28.0.11
       lan: 192.168.61.0/24
       region: East
-      dmvpn_psk: lab-dmvpn-psk-do-not-use-outside-this-lab
     configuration:
       system:
         hostname: cust1
@@ -1107,7 +1112,6 @@ iosxe:
       tunnel_ip: 172.28.0.12
       lan: 192.168.62.0/24
       region: Central
-      dmvpn_psk: lab-dmvpn-psk-do-not-use-outside-this-lab
     configuration:
       system:
         hostname: cust2

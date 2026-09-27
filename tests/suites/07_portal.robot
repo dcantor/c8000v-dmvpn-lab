@@ -382,6 +382,25 @@ A customer account sees only its own service, asks for changes, and runs its own
     Should Be Equal    ${mine.json()}[0][status]    rejected
     DELETE On Session    admin    /api/auth/users/robot-customer
 
+The pre-shared key stays out of git and out of sight, and only an admin can rotate it
+    [Documentation]    The committed renders carry a placeholder, never the key; the key lives in secrets/ on the lab
+    ...                host; the portal shows it by fingerprint only and masks it in configurations it shows.
+    ${sec}=    GET On Session    portal    /api/security
+    Should Match Regexp    ${sec.json()}[psk][fingerprint]    ^[0-9a-f]{8}$
+    ${key}=    Evaluate    __import__('subprocess').run(['python3', '-c', 'import sys; sys.path.insert(0, "tools"); import labsecrets; print(labsecrets.psk())'], capture_output=True, text=True, cwd=$LAB_ROOT).stdout.strip()
+    Should Not Be Empty    ${key}
+    Should Not Contain    ${sec.text}    ${key}
+    FOR    ${f}    IN    nac/data/devices.nac.yaml    nodes/${VYOS_SPOKES}[0]/vyos_config.txt
+        ${text}=    Read Lab File    ${f}
+        Should Not Contain    ${text}    ${key}
+    END
+    ${vy}=    Read Lab File    nodes/${VYOS_SPOKES}[0]/vyos_config.txt
+    Should Contain    ${vy}    pre-shared-secret @@DMVPN_PSK@@
+    ${cfg}=    GET On Session    portal    /api/config/${HUBS}[0]
+    Should Not Contain    ${cfg.json()}[output]    ${key}
+    Should Contain    ${cfg.json()}[output]    pre-shared-key <secret
+    POST On Session    portal    /api/runs    json=${{{"mode": "rotatepsk"}}}    expected_status=403
+
 *** Keywords ***
 Sign In
     Create Session    portal    http://127.0.0.1:8094    timeout=180

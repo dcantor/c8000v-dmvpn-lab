@@ -399,6 +399,21 @@ waits for an approver, and the page shows its progress (waiting, being carried o
 test its applications or the hubs now, from its own LAN host, or trace the path to an application's VIP — only its own
 applications and the hubs, never another customer's site. The secret link stays read-only; requests need the account.
 
+### Rotating the pre-shared key
+
+**Provision → Rotate the pre-shared key** (an admin; change control applies) replaces the IKEv2 pre-shared key on every
+router with a random 40-character one. The job saves every router's configuration, chooses the key, re-renders and
+applies it — Network-as-Code for the C8000vs, the VyOS push for the VyOS routers — then sets every router's IKE
+sessions up again, customers first and then the hubs, one router at a time and waiting for each to be registered
+again, and finally reads every IKE SA to prove each one was made after the rotation with the pre-shared key.
+
+The key is never in git, the logs or the portal: it lives in `secrets/dmvpn_psk` on the lab host (mode 600; until the
+first rotation, lab.conf's public default is used). The committed renders carry none — `vyos_config.txt` has an
+`@@DMVPN_PSK@@` placeholder filled in when it is pushed, and Network-as-Code reads the key as a global variable from
+`nac/data/secrets.nac.yaml`, written by `gen_configs.py` and git-ignored. The portal shows the key only by its
+fingerprint, and masks it in every configuration it shows, the configuration history and drift reports. A backup
+does not include it.
+
 ## Monitoring
 
 The shared stack on the NMS (`lab-portal/monitoring`: Prometheus, VictoriaMetrics, VictoriaLogs, vmalert, Grafana) covers

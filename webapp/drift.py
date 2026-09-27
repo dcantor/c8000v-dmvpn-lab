@@ -46,7 +46,8 @@ def _norm(line):
 
 
 def vyos_drift(node, ip, rendered_file):
-    want = [_norm(l) for l in Path(rendered_file).read_text().splitlines() if l.startswith("set ")]
+    import labsecrets
+    want = [_norm(labsecrets.fill(l)) for l in Path(rendered_file).read_text().splitlines() if l.startswith("set ")]
     running_text = vyos_ssh.op(ip, "show configuration commands", timeout=120)
     if "set system host-name" not in running_text:
         raise RuntimeError("could not read the running configuration")
@@ -57,10 +58,10 @@ def vyos_drift(node, ip, rendered_file):
         if any(rx.match(w) for rx in VYOS_IGNORE):
             continue
         if w not in have_set and not any(h.startswith(w + " ") for h in have):
-            items.append({"kind": "missing", "line": w})
+            items.append({"kind": "missing", "line": labsecrets.mask(w)})
     for h in have:
         if (h.startswith(VYOS_OWNED) or VYOS_OWNED_RE.match(h)) and h not in want_set:
-            items.append({"kind": "extra", "line": h})
+            items.append({"kind": "extra", "line": labsecrets.mask(h)})
     return items
 
 

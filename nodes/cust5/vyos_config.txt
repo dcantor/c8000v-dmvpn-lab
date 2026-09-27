@@ -157,7 +157,7 @@ set vpn ipsec esp-group DMVPN-ESP pfs disable
 set vpn ipsec esp-group DMVPN-ESP proposal 1 encryption aes256
 set vpn ipsec esp-group DMVPN-ESP proposal 1 hash sha256
 set vpn ipsec profile DMVPN-IPSEC authentication mode pre-shared-secret
-set vpn ipsec profile DMVPN-IPSEC authentication pre-shared-secret lab-dmvpn-psk-do-not-use-outside-this-lab
+set vpn ipsec profile DMVPN-IPSEC authentication pre-shared-secret @@DMVPN_PSK@@
 set vpn ipsec profile DMVPN-IPSEC ike-group DMVPN-IKE
 set vpn ipsec profile DMVPN-IPSEC esp-group DMVPN-ESP
 set vpn ipsec profile DMVPN-IPSEC bind tunnel tun0

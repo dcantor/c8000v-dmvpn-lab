@@ -47,7 +47,8 @@ def snapshot(inv, job, which):
 
     def one(n):
         try:
-            text = "\n".join(HASH.sub(r"\1<hash>", l) for l in _read(n).splitlines() if not NOISE.match(l)).strip() + "\n"
+            import labsecrets                      # keys never reach the history: a masked key still shows a change
+            text = labsecrets.mask("\n".join(HASH.sub(r"\1<hash>", l) for l in _read(n).splitlines() if not NOISE.match(l)).strip() + "\n")
             (d / f"{n['name']}.txt").write_text(text)
         except Exception as e:                                        # noqa: BLE001
             errors[n["name"]] = f"{e.__class__.__name__}: {e}"[:200]
