@@ -104,12 +104,23 @@ body.print #map { width:auto; max-width:100%; height:100mm; margin:0 auto }   /*
 body.print .legend { margin:2px 0 6px } body.print #mapinfo { padding-top:6px; border-top:1px solid var(--line) }
 @page { size:A4 landscape; margin:10mm }
 #mapcmd pre.out { max-height:560px; margin:0; font-size:12.5px; white-space:pre; overflow:auto }
+/* lab tools */
+.toolgrid { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:10px }
+.tool { border:1px solid var(--line); border-radius:9px; padding:10px 12px; background:var(--bg) }
+.tool a.name { font-weight:600; color:var(--teal); text-decoration:none } .tool a.name:hover { text-decoration:underline }
+:root[data-theme=dark] .tool a.name, :root[data-theme=dark] #v-tools a { color:#67e8f9 }
+.tool .what { color:var(--muted); font-size:12.5px; margin:3px 0 6px } .tool .meta { font-size:12.5px; display:flex; gap:6px; align-items:center; flex-wrap:wrap }
+.tool .url { font-family:"DejaVu Sans Mono",Consolas,monospace; font-size:11.5px; color:var(--muted); word-break:break-all }
+.grp { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:12px 0 6px } .grp:first-child { margin-top:0 }
+.copy { font-size:11px; padding:1px 7px; margin-left:4px } .cmd { font-family:"DejaVu Sans Mono",Consolas,monospace; font-size:12.5px; white-space:nowrap }
+#nodes-t td { font-size:13px } #nodes-t .sub { color:var(--muted); font-size:11.5px } #nodes-t ul { margin:0; padding-left:15px; font-size:12px }
+.access { display:flex; gap:10px; flex-wrap:wrap; align-items:center; font-size:13.5px }
 </style></head><body>
 <header>
   <div><h1>C8000v DMVPN Portal</h1>
     <div class="sub">three hubs &middot; Catalyst 8000v customers &middot; a VyOS MPLS provider &middot; Network-as-Code &middot; Nautobot</div></div>
   <nav><a href="#cloud" data-view="cloud" class="on">The cloud</a><a href="#map" data-view="map">Network map</a><a href="#provision" data-view="provision">Provision</a>
-       <a href="#runs" data-view="runs">Runs</a><a href="/docs" target="_blank">API</a></nav>
+       <a href="#runs" data-view="runs">Runs</a><a href="#tools" data-view="tools">Lab Tools</a><a href="/docs" target="_blank">API</a></nav>
   <div class="right"><span id="hdr"></span> &middot; <a href="#" id="theme">&#9790; dark</a></div>
 </header>
 <main>
@@ -152,6 +163,19 @@ body.print .legend { margin:2px 0 6px } body.print #mapinfo { padding-top:6px; b
   <div class="card" id="mapcmd" hidden><h2><span class="mono" id="mapcmd-title"></span> <small id="mapcmd-when"></small>
     <span style="float:right"><button id="mapcmd-copy">Copy</button> <button id="mapcmd-close">Close</button></span></h2>
     <pre class="out" id="mapout"></pre></div>
+</section>
+
+<section id="v-tools" class="view">
+  <div class="card"><h2>How to get in</h2>
+    <div class="access" id="tools-access"></div>
+    <p class="hint" id="tools-note"></p></div>
+  <div class="card"><h2>Tools <small>everything the lab uses, with the login each one takes</small></h2><div id="tools-list"><p class="hint">loading…</p></div></div>
+  <div class="card"><h2>Nodes <small>every VM of the lab and the shared NMS: addresses, consoles, credentials</small>
+    <span style="float:right"><input id="nodes-q" placeholder="filter: name, IP, role, company…" style="width:240px"></span></h2>
+    <table id="nodes-t"><thead><tr><th>Node</th><th>VM</th><th>Management</th><th>SSH</th><th>Login</th><th>Serial console</th>
+      <th>Addresses</th><th>Other access</th></tr></thead><tbody></tbody></table>
+    <p class="hint">Consoles are raw TCP on the lab host (127.0.0.1): <span class="cmd">./lab.sh console &lt;node&gt;</span> attaches with socat
+      (exit: Ctrl-] then q). Credentials are the lab defaults, the same ones in the repository.</p></div>
 </section>
 
 <section id="v-provision" class="view">
@@ -208,7 +232,7 @@ applyTheme(); $('theme').onclick = e => { e.preventDefault();
 document.querySelectorAll('nav a[data-view]').forEach(a => a.onclick = e => { e.preventDefault(); show(a.dataset.view); });
 function show(v) { document.querySelectorAll('.view').forEach(x => x.classList.toggle('on', x.id === 'v-' + v));
   document.querySelectorAll('nav a[data-view]').forEach(a => a.classList.toggle('on', a.dataset.view === v));
-  location.hash = v; if (v === 'runs') loadRuns(); }
+  location.hash = v; if (v === 'runs') loadRuns(); if (v === 'tools') loadTools(); }
 const pill = (ok, text, warn) => `<span class="pill ${ok ? 'ok' : (warn ? 'warn' : 'bad')}">${esc(text)}</span>`;
 
 const TASKS = [
@@ -587,6 +611,43 @@ function runMapPing(host, target) {
 $('mapcmd-close').onclick = () => { MAPCMD_SEQ++; $('mapcmd').hidden = true; };
 $('mapcmd-copy').onclick = async () => { try { await navigator.clipboard.writeText(`${$('mapcmd-title').textContent}\n${$('mapout').textContent}`);
   $('mapcmd-copy').textContent = 'Copied'; setTimeout(() => $('mapcmd-copy').textContent = 'Copy', 1500); } catch (e) {} };
+
+
+// ---- lab tools ------------------------------------------------------------------------------------------------------
+let TOOLS = null;
+const copyBtn = t => `<button class="copy" data-copy="${esc(t)}" title="copy">copy</button>`;
+document.addEventListener('click', async e => { const b = e.target.closest('[data-copy]'); if (!b) return;
+  try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = 'copied'; setTimeout(() => b.textContent = 'copy', 1200); } catch (x) {} });
+async function loadTools() {
+  if (!TOOLS) TOOLS = await (await fetch('/api/lab-tools')).json();
+  const T = TOOLS, a = T.access;
+  $('tools-access').innerHTML = `<span>Lab host: <span class="cmd">${esc(a.lab_host)}</span>${copyBtn(a.lab_host)}</span>
+    <span>then <span class="cmd">cd ${esc(a.lab_dir)}</span>${copyBtn('cd ' + a.lab_dir)}</span>
+    <span>management network <span class="cmd">${esc(a.oob.prefix)}</span> (${esc(a.oob.network)}, host ${esc(a.oob.gateway)})</span>`;
+  $('tools-note').textContent = a.note;
+  const groups = [...new Set(T.tools.map(t => t.group))];
+  $('tools-list').innerHTML = groups.map(g => `<div class="grp">${esc(g)}</div><div class="toolgrid">${T.tools.filter(t => t.group === g).map(t => `
+    <div class="tool"><a class="name" href="${esc(t.url)}" target="_blank" rel="noopener">${esc(t.name)} ↗</a>
+      <div class="what">${esc(t.what)}</div>
+      <div class="meta"><span>login: <b>${esc(t.login)}</b></span></div>
+      <div class="url">${esc(t.url)}${copyBtn(t.url)}</div></div>`).join('')}</div>`).join('');
+  drawNodes();
+}
+function drawNodes() {
+  const q = ($('nodes-q').value || '').toLowerCase();
+  const rows = TOOLS.nodes.filter(n => !q || JSON.stringify(n).toLowerCase().includes(q));
+  $('nodes-t').querySelector('tbody').innerHTML = rows.map(n => `<tr>
+    <td><b>${esc(n.name)}</b><div class="sub">${esc(n.kind)} · ${esc(n.role === 'spoke' ? 'customer' : n.role)}</div>${n.company ? `<div class="sub">${esc(n.company)}</div>` : ''}</td>
+    <td class="mono">${esc(n.vm)}</td>
+    <td class="mono">${esc(n.mgmt_ip)}</td>
+    <td><span class="cmd">${esc(n.ssh)}</span>${copyBtn(n.ssh)}${n.lab_sh ? `<div class="sub cmd">${esc(n.lab_sh)}</div>` : ''}</td>
+    <td class="cmd">${esc(n.user)} / ${esc(n.password)}</td>
+    <td><span class="cmd">${esc(n.console)}</span>${n.console_cmd ? `<div class="sub cmd">${esc(n.console_cmd)}${copyBtn(n.console_cmd)}</div>` : ''}</td>
+    <td class="mono" style="font-size:12px">${Object.entries(n.addresses).map(([k, v]) => `<div><span class="sub">${esc(k)}</span> ${esc(v)}</div>`).join('')}</td>
+    <td><ul>${n.extra.map(x => `<li>${esc(x)}</li>`).join('')}</ul></td></tr>`).join('')
+    || '<tr><td colspan="8" class="hint">no node matches</td></tr>';
+}
+$('nodes-q').oninput = () => TOOLS && drawNodes();
 
 if (PRINT) {
   document.documentElement.dataset.theme = 'light'; document.body.classList.add('print');

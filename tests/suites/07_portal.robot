@@ -103,3 +103,22 @@ The live state carries the application catalogue the map draws from
     ${n}=    Get Length    ${r.json()}[applications]
     ${want}=    Get Length    ${APPLICATIONS}
     Should Be Equal As Integers    ${n}    ${want}
+
+Lab Tools lists every node's access details and every tool, and the tools answer
+    ${page}=    GET On Session    portal    /
+    Should Contain    ${page.text}    data-view="tools"
+    ${r}=    GET On Session    portal    /api/lab-tools
+    ${t}=    Set Variable    ${r.json()}
+    ${by}=    Evaluate    {n["name"]: n for n in $t["nodes"]}
+    FOR    ${n}    IN    @{ALL_NODES}
+        Dictionary Should Contain Key    ${by}    ${n}
+        Should Be Equal    ${by}[${n}][mgmt_ip]    ${MGMT_IPS}[${n}]
+        Should Be Equal    ${by}[${n}][vm]    ${DOMAIN_PREFIX}${n}
+        Should Match Regexp    ${by}[${n}][console]    ^127\\.0\\.0\\.1:55\\d\\d$
+        Should Not Be Empty    ${by}[${n}][password]
+    END
+    FOR    ${tool}    IN    @{t}[tools]
+        Continue For Loop If    '${tool}[url]'.startswith('https://github.com')
+        ${code}=    Evaluate    __import__("requests").get($tool["url"], timeout=15, allow_redirects=False).status_code
+        Should Be True    ${code} < 400    msg=${tool}[name] (${tool}[url]) answers ${code}
+    END

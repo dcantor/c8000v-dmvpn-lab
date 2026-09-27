@@ -458,6 +458,77 @@ def prometheus_metrics():
     return PlainTextResponse(exposition(out + run_metrics(L, registry.list())), media_type="text/plain; version=0.0.4")
 
 
+# ---- lab tools: where everything is, and how to get in ----------------------------------------------------------------
+PUBLIC_HOST = os.environ.get("LAB_PUBLIC_HOST", "192.168.50.231")   # the lab host on the LAN, where the NMS tools are relayed
+
+
+@app.get("/api/lab-tools", tags=["state"], summary="Every tool of the lab and how to reach every node (addresses, consoles, logins)")
+def api_lab_tools():
+    """The lab's lab-default credentials are in the repo already (lab.conf, the day-0 configs); nothing here is a secret.
+    The Nautobot API token is not shown: `./lab.sh nautobot token` reads it from the NMS."""
+    f = C.facts()
+    inv, pub = f["inv"], PUBLIC_HOST
+    nb = f"http://{pub}:8080"
+    tools = [
+        {"group": "This lab", "name": "Provisioning portal", "url": f"http://{pub}:{WEBAPP_PORT}", "login": "none",
+         "what": "the cloud, the Network map, provisioning runs"},
+        {"group": "This lab", "name": "Portal API (Swagger)", "url": f"http://{pub}:{WEBAPP_PORT}/docs", "login": "none",
+         "what": "every endpoint the portal offers; /metrics and /api/sd for Prometheus"},
+        {"group": "This lab", "name": "Lab hub", "url": f"http://{pub}:8088", "login": "none",
+         "what": "every lab on this host, VM power, host CPU / memory"},
+        {"group": "This lab", "name": "GitHub repository", "url": "https://github.com/dcantor/c8000v-dmvpn-lab", "login": "public",
+         "what": "the code: lab.sh, the renderer, NAC, tests, Nautobot, the portal"},
+        {"group": "Source of truth", "name": "Nautobot", "url": nb, "login": "admin / admin",
+         "what": "the shared NMS (cat9000v lab); API token: ./lab.sh nautobot token"},
+        {"group": "Source of truth", "name": "Nautobot: this lab's devices", "url": f"{nb}/dcim/devices/?q={inv['nodes'][0]['domain'][:4]}",
+         "login": "admin / admin", "what": "every VM of the lab, under its c8d- name"},
+        {"group": "Source of truth", "name": "Nautobot: customer companies", "url": f"{nb}/tenancy/tenants/?tenant_group={inv['lab']}+customers",
+         "login": "admin / admin", "what": "a tenant per customer, with its details and subscriptions"},
+        {"group": "Source of truth", "name": "Nautobot: applications (Virtual Servers)", "url": f"{nb}/load-balancers/virtual-servers/",
+         "login": "admin / admin", "what": "one per application per hosting hub, with its VIP"},
+        {"group": "Monitoring", "name": "Grafana: C8000v DMVPN overview", "url": f"http://{pub}:3001/d/c8000v-dmvpn-lab-overview",
+         "login": "anonymous viewer; admin / admin", "what": "the cloud, the provider, router syslog, the host"},
+        {"group": "Monitoring", "name": "Prometheus: this lab's targets", "url": f"http://{pub}:9091/targets?search=c8000v",
+         "login": "none", "what": "the portal, the provider's exporters, the hosts"},
+        {"group": "Monitoring", "name": "Prometheus: alerts", "url": f"http://{pub}:9091/alerts", "login": "none",
+         "what": "the Dmvpn* rules and the shared lab rules"},
+        {"group": "Monitoring", "name": "VictoriaMetrics (vmui)", "url": f"http://{pub}:8428/vmui/", "login": "none",
+         "what": "the metrics store: query lab_dmvpn_*, the provider's Telegraf series"},
+        {"group": "Monitoring", "name": "VictoriaLogs (syslog)", "url": f"http://{pub}:9428/select/vmui/", "login": "none",
+         "what": "router syslog: facility_keyword:local7 for the C8000vs, hostname:mpls for the provider"},
+    ]
+    creds = {"hub": ("admin", "admin"), "spoke": ("admin", "admin"), "provider": ("vyos", "vyos"), "host": ("lab", "lab")}
+    kind = {"hub": "Catalyst 8000v", "spoke": "Catalyst 8000v", "provider": "VyOS", "host": "Alpine Linux"}
+    nodes = []
+    for n in inv["nodes"]:
+        user, pw = creds[n["role"]]
+        extra = []
+        if n["role"] in ("hub", "spoke"):
+            extra = [f"RESTCONF https://{n['mgmt_ip']}/restconf (admin / admin)", f"NETCONF {n['mgmt_ip']}:830",
+                     "enable secret admin"]
+        elif n["role"] == "provider":
+            extra = [f"HTTPS API https://{n['mgmt_ip']} (key c8000v-dmvpn-lab)", f"node-exporter {n['mgmt_ip']}:9100",
+                     f"frr-exporter {n['mgmt_ip']}:9342"]
+        elif n["role"] == "host":
+            extra = [f"node-exporter {n['mgmt_ip']}:9100", "no sudo: user lab only"]
+        addrs = {k: v for k, v in (("Tunnel0", n.get("tunnel_ip")), ("NBMA", n.get("nbma")), ("LAN", n.get("lan")),
+                                   ("Router-id", n.get("router_id")), ("LAN address", n.get("lan_ip"))) if v}
+        nodes.append({"name": n["name"], "role": n["role"], "kind": kind[n["role"]], "vm": n["domain"], "mgmt_ip": n["mgmt_ip"],
+                      "user": user, "password": pw, "ssh": f"ssh {user}@{n['mgmt_ip']}", "lab_sh": f"./lab.sh ssh {n['name']}",
+                      "console": f"127.0.0.1:{n['console']}", "console_cmd": f"./lab.sh console {n['name']}",
+                      "company": (n.get("customer") or {}).get("company"), "addresses": addrs, "extra": extra})
+    nms = {"name": "nms (shared)", "role": "nms", "kind": "Ubuntu (cat9000v lab)", "vm": "nms", "mgmt_ip": inv["oob"]["nms"],
+           "user": "lab", "password": "SSH key from the lab host", "ssh": "ssh lab@10.0.0.10", "lab_sh": "",
+           "console": "127.0.0.1:5003", "console_cmd": "", "company": None,
+           "addresses": {"on this lab's network": inv["oob"]["nms"], "home network": "10.0.0.10"},
+           "extra": ["Nautobot, Prometheus, Grafana, VictoriaMetrics / Logs (docker compose in /opt/monitoring)"]}
+    return {"public_host": pub, "tools": tools, "nodes": nodes + [nms],
+            "access": {"lab_host": f"ssh {os.environ.get('USER', 'dcantor')}@{pub}", "lab_dir": str(LAB), "oob": inv["oob"],
+                       "note": f"The management addresses ({inv['oob']['prefix']}) and the consoles live on the lab host "
+                               f"(bridge {inv['oob']['network']}, host {inv['oob']['gateway']}): log in to the lab host first, "
+                               f"then ssh from there or run ./lab.sh in {LAB}."}}
+
+
 @app.get("/api/sd", tags=["monitoring"], summary="Prometheus HTTP service discovery: the portal, the provider's exporters, the hosts")
 def prometheus_sd():
     f = C.facts()
