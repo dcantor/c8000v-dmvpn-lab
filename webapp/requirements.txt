@@ -6,3 +6,4 @@ paramiko==4.0.0
 netmiko==4.7.0
 requests==2.32.3
 labportal @ git+https://github.com/dcantor/lab-portal
+playwright==1.62.0

@@ -70,6 +70,18 @@ pre.out { background:#0c2129; color:#d7e3e8; padding:12px 14px; border-radius:8p
 #mapinfo dl { display:grid; grid-template-columns:auto 1fr; gap:3px 10px; margin:0; font-size:13px } #mapinfo dt { color:var(--muted) }
 #mapinfo dd { margin:0; font-family:"DejaVu Sans Mono",Consolas,monospace; font-size:12.5px; word-break:break-word }
 #mapinfo .cmds { display:flex; gap:6px; flex-wrap:wrap; margin:10px 0 6px } #mapinfo .cmds button { font-size:12px; padding:3px 8px }
+.mapfocus { display:flex; gap:10px; align-items:center; flex-wrap:wrap; background:var(--pill); border-radius:8px; padding:7px 12px; margin-bottom:8px; font-size:13.5px }
+.printhead { display:none }
+body.print header, body.print nav, body.print .maptools, body.print #mapcmd, body.print .mapfocus, body.print #map-when,
+body.print .card h2 button, body.print #mapinfo .cmds, body.print .view:not(#v-map) { display:none !important }
+body.print main { padding:0; max-width:none } body.print .card { border:0; padding:0 0 8px; margin:0 }
+body.print .mapwrap { grid-template-columns:1fr; gap:4px } body.print #map { min-width:0 } body.print .mapscroll { overflow:visible }
+body.print .printhead { display:block; margin:0 0 6px } body.print .printhead h1 { font-size:20px; margin:0 } body.print .printhead p { margin:2px 0; color:var(--muted); font-size:12.5px }
+body.print #mapinfo dl { grid-template-columns:repeat(3, auto 1fr); column-gap:16px; row-gap:2px } body.print #mapinfo h2 { display:none }
+body.print, body.print .card { background:#fff } body.print #v-map > .mapwrap > .card:first-child > h2 { display:none }
+body.print #map { width:auto; max-width:100%; height:112mm; margin:0 auto }   /* heading + map + legend + details on one A4 landscape page */
+body.print .legend { margin:2px 0 6px } body.print #mapinfo { padding-top:6px; border-top:1px solid var(--line) }
+@page { size:A4 landscape; margin:10mm }
 #mapcmd pre.out { max-height:560px; margin:0; font-size:12.5px; white-space:pre; overflow:auto }
 </style></head><body>
 <header>
@@ -97,6 +109,8 @@ pre.out { background:#0c2129; color:#d7e3e8; padding:12px 14px; border-radius:8p
   <div class="mapwrap">
     <div class="card"><h2>Network map <small>drawn from the routers' live state &mdash; click a node for details</small>
       <span style="float:right"><span class="hint" id="map-when"></span> <button onclick="load(true)">Refresh</button></span></h2>
+      <div class="printhead" id="printhead"></div>
+      <div class="mapfocus" id="mapfocus" hidden></div>
       <div class="maptools">
         <label><input type="checkbox" data-layer="underlay" checked> Provider links (eBGP)</label>
         <label><input type="checkbox" data-layer="overlay" checked> DMVPN tunnels</label>
@@ -303,7 +317,8 @@ async function resume(id) { const r = await fetch(`/api/runs/${encodeURIComponen
 
 
 // ---- network map --------------------------------------------------------------------------------------------------
-let MAPSEL = null;
+let MAPSEL = null, MAPFOCUS = null;
+const PRINT = new URLSearchParams(location.search).get('print');   // ?print=<customer>: the PDF view
 const MAPLAYERS = { underlay: true, overlay: true, shortcuts: true, hosts: true, labels: true };
 try { Object.assign(MAPLAYERS, JSON.parse(localStorage.getItem('c8d-map-layers') || '{}')); } catch (e) {}
 document.querySelectorAll('[data-layer]').forEach(cb => { cb.checked = MAPLAYERS[cb.dataset.layer] !== false;
@@ -314,6 +329,12 @@ function applyLayers() { document.querySelectorAll('#map [data-g]').forEach(g =>
 
 function nodeStatus(n) {
   const m = ST.nodes[n] || {}, c = (ST.cloud || {})[n], H = ST.hubs, CU = ST.customers;
+  if (MAPFOCUS && (m.role === 'hub' || m.role === 'provider')) {     // what this customer sees of the hub / the provider
+    const f = (ST.cloud || {})[MAPFOCUS] || {};
+    if (m.role === 'hub') return (!c || c.error || !c.underlay_up) ? 'bad' : ((f.nhs_up || []).includes(n) ? 'ok' : 'bad');
+    if (!f.underlay_up) return 'bad';
+    return H.every(h => ((ST.cloud || {})[h] || {}).underlay_up) ? 'ok' : 'warn';
+  }
   if (m.role === 'provider') { const s = (ST.provider_state || {})[n] || {}, want = H.length + CU.length;
     return s.error ? 'bad' : (s.customers_up >= want ? 'ok' : (s.customers_up ? 'warn' : 'bad')); }
   if (m.role === 'host') return (ST.hosts_up || {})[n] ? 'ok' : 'bad';
@@ -325,7 +346,11 @@ function nodeStatus(n) {
 
 function drawMap() {
   if (!ST || !$('map')) return;
-  const W = 1200, H = ST.hubs, CU = ST.customers, P = ST.provider.nodes[0], svg = [], cloud = ST.cloud || {};
+  if (MAPFOCUS && !ST.customers.includes(MAPFOCUS)) MAPFOCUS = null;   // a removed customer drops the focus
+  const W = 1200, H = ST.hubs, CU = MAPFOCUS ? [MAPFOCUS] : ST.customers, P = ST.provider.nodes[0], svg = [], cloud = ST.cloud || {};
+  const fb = $('mapfocus'); fb.hidden = !MAPFOCUS;
+  if (MAPFOCUS) { fb.innerHTML = `<span>Showing <b>${esc(MAPFOCUS)}</b>'s view: the hubs, the provider and its own site — hubs coloured by whether ${esc(MAPFOCUS)} is registered with them. ${ST.customers.length - 1} other customer(s) hidden.</span>
+      <button id="mapfocus-all">Show all customers</button>`; $('mapfocus-all').onclick = () => setFocus(null); }
   const xs = (i, n) => W * (i + 1) / (n + 1), pos = {};
   H.forEach((h, i) => pos[h] = { x: xs(i, H.length), y: 120 });
   CU.forEach((c, i) => { pos[c] = { x: xs(i, CU.length), y: 580 }; const host = ST.nodes[c].host; if (host) pos[host] = { x: pos[c].x, y: 725 }; });
@@ -365,7 +390,10 @@ function drawMap() {
   // shortcuts: pairs of customers talking directly (dynamic NHRP entries)
   const sc = [], seen = new Set();
   CU.forEach(c => ((cloud[c] || {}).shortcuts || []).forEach(o => { const k = [c, o].sort().join('|');
-    if (seen.has(k) || !pos[o]) return; seen.add(k); const a = pos[c], b = pos[o];
+    if (!pos[o]) { const a = pos[c], i = sc.length, x2 = a.x + 250, y2 = a.y - 70 - i * 30;
+      sc.push(edge('sc', `M${a.x + 84},${a.y - 10} Q${a.x + 170},${y2 + 10} ${x2},${y2}`, `shortcut ${c} ⇄ ${o}: a direct IPsec tunnel NHRP resolved`),
+              `<text class="lbl" x="${x2 + 6}" y="${y2 + 4}">shortcut → ${esc(o)} ${esc(ST.nodes[o].tunnel_ip)}</text>`); return; }
+    if (seen.has(k)) return; seen.add(k); const a = pos[c], b = pos[o];
     sc.push(edge('sc', `M${a.x},${top(c)} Q${(a.x + b.x) / 2},${a.y - 110} ${b.x},${top(o)}`, `shortcut ${c} ⇄ ${o}: a direct IPsec tunnel NHRP resolved`)); }));
   svg.push(`<g data-g="shortcuts">${sc.join('')}</g>`);
 
@@ -394,7 +422,34 @@ function drawMap() {
   $('map').querySelectorAll('.node').forEach(g => { g.onclick = () => selectNode(g.dataset.node);
     g.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectNode(g.dataset.node); } }; });
   $('map-when').textContent = ST.generated ? 'live · ' + new Date(ST.generated * 1000).toLocaleTimeString() : '';
-  if (MAPSEL) renderInfo(MAPSEL, false);
+  if (MAPSEL && ST.nodes[MAPSEL] && (!MAPFOCUS || pos[MAPSEL])) renderInfo(MAPSEL, false);
+  else if (MAPSEL) { MAPSEL = null; $('mapinfo').innerHTML = '<h2>Details</h2><p class="hint">Select a router, the provider or a host on the map.</p>'; }
+  if (PRINT) printReady();
+}
+
+function setFocus(c) { MAPFOCUS = c; if (c) MAPSEL = c; drawMap(); }
+
+// print mode (?print=<customer>): what the portal's headless Chrome renders into the customer's PDF
+function printReady() {
+  const m = ST.nodes[PRINT];
+  if (!m || m.role !== 'spoke') { document.body.innerHTML = `<p>${esc(PRINT)} is not a customer of this lab</p>`; window.__mapReady = true; return; }
+  $('printhead').innerHTML = `<h1>${esc(PRINT)} — network view</h1>
+    <p>c8000v-dmvpn-lab · ${esc(m.region || '')} · Tunnel0 ${esc(m.tunnel_ip)} · LAN ${esc(m.lan)} · generated ${esc(new Date().toLocaleString())} from the routers' live state (${esc(new Date(ST.generated * 1000).toLocaleTimeString())})</p>`;
+  window.__mapReady = true;
+}
+
+async function downloadCustomerPdf(c, btn) {
+  const label = btn.textContent; btn.disabled = true; btn.textContent = 'Preparing PDF…';
+  try {
+    const r = await fetch(`/api/customers/${encodeURIComponent(c)}/map.pdf`);
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || `HTTP ${r.status}`);
+    const blob = await r.blob(), a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = (r.headers.get('content-disposition') || '').match(/filename="?([^";]+)/)?.[1] || `${c}-network-map.pdf`;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    btn.textContent = 'Downloaded';
+  } catch (e) { btn.textContent = 'PDF failed'; alert(`Could not build the PDF: ${e.message}`); }
+  setTimeout(() => { btn.textContent = label; btn.disabled = false; }, 2000);
 }
 
 function selectNode(n) { MAPSEL = n; drawMap(); renderInfo(n, true); }
@@ -421,12 +476,17 @@ function renderInfo(n, fresh) {
   } else if (m.role === 'host') {
     add('LAN address', esc(m.lan_ip)); add('Gateway', esc(`${m.gateway} (${m.router})`)); add('Login', 'lab / lab');
   }
+  const view = m.role === 'spoke' ? `<div class="cmds">
+      <button data-focus>${MAPFOCUS === n ? 'Show all customers' : `Show only ${esc(n)}'s view`}</button>
+      <button data-pdf title="${esc(n)}'s view of the network, with its details, as a PDF">Download PDF</button></div>` : '';
   const pings = m.role === 'host' ? Object.keys(ST.nodes).filter(x => ST.nodes[x].role === 'host' && x !== n).sort() : [];
   const cmds = (m.role === 'hub' || m.role === 'spoke') ? ['show dmvpn', 'show crypto session brief', 'show ip bgp summary', 'show ip route bgp', 'show ip nhrp'] : [];
-  $('mapinfo').innerHTML = `<h2>${esc(n)}</h2><dl>${rows.join('')}</dl>
+  $('mapinfo').innerHTML = `<h2>${esc(n)}</h2><dl>${rows.join('')}</dl>${view}
     ${cmds.length ? `<div class="cmds">${cmds.map(x => `<button data-cmd="${esc(x)}">${esc(x)}</button>`).join('')}</div>` : ''}
     ${pings.length ? `<div class="cmds">${pings.map(x => `<button data-ping="${esc(x)}" title="ping ${esc(ST.nodes[x].lan_ip.split('/')[0])} from ${esc(n)}">ping ${esc(x)}</button>`).join('')}</div>` : ''}`;
   $('mapinfo').querySelectorAll('[data-cmd]').forEach(b => b.onclick = () => runMapCommand(n, b.dataset.cmd));
+  $('mapinfo').querySelectorAll('[data-focus]').forEach(b => b.onclick = () => setFocus(MAPFOCUS === n ? null : n));
+  $('mapinfo').querySelectorAll('[data-pdf]').forEach(b => b.onclick = () => downloadCustomerPdf(n, b));
   $('mapinfo').querySelectorAll('[data-ping]').forEach(b => b.onclick = () => runMapPing(n, b.dataset.ping));
 }
 
@@ -455,5 +515,10 @@ $('mapcmd-close').onclick = () => { MAPCMD_SEQ++; $('mapcmd').hidden = true; };
 $('mapcmd-copy').onclick = async () => { try { await navigator.clipboard.writeText(`${$('mapcmd-title').textContent}\n${$('mapout').textContent}`);
   $('mapcmd-copy').textContent = 'Copied'; setTimeout(() => $('mapcmd-copy').textContent = 'Copy', 1500); } catch (e) {} };
 
-renderTasks(); show(location.hash.slice(1) || 'cloud'); load(); setInterval(() => { if (!watching) load(); }, 30000);
+if (PRINT) {
+  document.documentElement.dataset.theme = 'light'; document.body.classList.add('print');
+  MAPFOCUS = PRINT; MAPSEL = PRINT; show('map'); load();
+} else {
+  renderTasks(); show(location.hash.slice(1) || 'cloud'); load(); setInterval(() => { if (!watching) load(); }, 30000);
+}
 </script></body></html>

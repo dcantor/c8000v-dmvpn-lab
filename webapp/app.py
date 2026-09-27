@@ -22,7 +22,7 @@ import time
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from labportal import RunBase, RunRegistry, exposition, install_runs_api, metric_line, metrics_generated, run_metrics
 from pydantic import BaseModel, Field
@@ -295,6 +295,33 @@ def api_query(node: str, command: str):
     if not command.startswith("show ") or any(ch in command for ch in "\n\r"):
         raise HTTPException(400, "only a single `show ...` command is allowed")
     return {"node": node, "command": command, "output": ios(nodes[node]["mgmt_ip"], command)[command]}
+
+
+@app.get("/api/customers/{name}/map.pdf", tags=["provisioning"], summary="A customer's view of the network map, as a PDF",
+         response_class=Response, responses={200: {"content": {"application/pdf": {}}}})
+def api_customer_map_pdf(name: str):
+    """Headless Chrome (Playwright, the system google-chrome) opens this portal's own page in print mode
+    (`/?print=<customer>`): the Network map focused on the customer — the hubs, the provider, its site and host,
+    its shortcuts — coloured from the live state, with the customer's details under it. A4 landscape."""
+    nodes = C.facts()["nodes"]
+    if name not in nodes or nodes[name]["role"] != "spoke":
+        raise HTTPException(404, f"{name} is not a customer of this lab")
+    from playwright.sync_api import sync_playwright
+    try:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(channel="chrome", headless=True)
+            try:
+                page = browser.new_page(viewport={"width": 1400, "height": 1000})
+                page.goto(f"http://127.0.0.1:{WEBAPP_PORT}/?print={name}#map", wait_until="domcontentloaded")
+                page.wait_for_function("window.__mapReady === true", timeout=120_000)
+                pdf = page.pdf(format="A4", landscape=True, print_background=True,
+                               margin={"top": "10mm", "bottom": "10mm", "left": "10mm", "right": "10mm"})
+            finally:
+                browser.close()
+    except Exception as e:                                        # noqa: BLE001
+        raise HTTPException(500, f"the PDF could not be rendered: {e.__class__.__name__}: {str(e)[:300]}")
+    fname = f"{LAB_NAME}-{name}-network-map-{time.strftime('%Y%m%d-%H%M')}.pdf"
+    return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="{fname}"'})
 
 
 @app.get("/api/hosts/{host}/ping", tags=["state"], summary="Ping one LAN host from another, over the overlay")

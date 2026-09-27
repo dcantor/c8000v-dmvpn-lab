@@ -72,3 +72,15 @@ Every LAN host pings every other one from the Network map, and only hosts can be
     END
     ${bad}=    GET On Session    portal    /api/hosts/${HOSTS}[0]/ping    params=target=${HUBS}[0]    expected_status=404
     ${self}=    GET On Session    portal    /api/hosts/${HOSTS}[0]/ping    params=target=${HOSTS}[0]    expected_status=400
+
+Each customer's view of the Network map downloads as a one-page PDF
+    [Documentation]    The portal's headless Chrome renders the map in print mode, focused on the customer.
+    FOR    ${c}    IN    @{SPOKES}
+        ${r}=    GET On Session    portal    /api/customers/${c}/map.pdf
+        Should Be Equal    ${r.headers}[content-type]    application/pdf
+        Should Contain    ${r.headers}[content-disposition]    ${c}-network-map-
+        Should Start With    ${r.content}    ${{b"%PDF"}}
+        ${pages}=    Evaluate    len(__import__("re").findall(rb"/Type\s*/Page[^s]", $r.content))
+        Should Be Equal As Integers    ${pages}    1    msg=${c}'s map PDF runs to ${pages} pages
+    END
+    GET On Session    portal    /api/customers/${HUBS}[0]/map.pdf    expected_status=404
