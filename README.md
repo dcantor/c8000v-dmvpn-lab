@@ -114,6 +114,26 @@ index `10+N` (which fixes `100.70.<idx>.0/30`, `172.28.0.<idx>` and `10.255.5.<i
 4. The provider's port is released: the push removes its address and disables it.
 5. The customer is removed from Nautobot.
 
+## Monitoring
+
+The shared stack on the NMS (`lab-portal/monitoring`: Prometheus, VictoriaMetrics, VictoriaLogs, vmalert, Grafana) covers
+this lab. The NMS sits on `c8d-oob` as **10.5.0.10**; that sixth NIC is in the `cat9000v` lab's NMS definition.
+
+| Source | How it arrives |
+|---|---|
+| C8000vs | IOS-XE has no exporter, so the **portal measures them**. Its live state (NHRP, IPsec, BGP, CPU over SSH) is refreshed every minute in the background and served on `/metrics` as `lab_dmvpn_*`, `lab_bgp_*`, `lab_ipsec_*` and `lab_router_cpu_pct` |
+| C8000v syslog | `logging host 10.5.0.10 vrf Mgmt-vrf transport udp port 5514` plus `origin-id hostname` (NAC `global.nac.yaml`) → VictoriaLogs |
+| Provider (`mpls`) | node-exporter `:9100` and frr-exporter `:9342` (scraped), Telegraf push to VictoriaMetrics, syslog to VictoriaLogs |
+| LAN hosts | node-exporter `:9100` |
+| Discovery | Prometheus job `c8000v-dmvpn-lab` reads the portal's `/api/sd` (http://10.5.0.1:8094/api/sd) |
+
+- **Alerts:** `DmvpnCustomerNotRegistered`, `DmvpnProviderSessionDown`, `DmvpnOverlayBgpDown`, `DmvpnRouterUnreachable`,
+  `DmvpnLanHostDown`, `DmvpnRouterCpuHigh` (metrics), and `DmvpnBgpNeighborDownLogged`, `DmvpnNhsDownLogged`,
+  `DmvpnIkeSaDownLogged` (syslog). Each is gated on the lab running.
+- **Tested:** disabling cust3's provider port raised `DmvpnProviderSessionDown` for cust3, and re-enabling it cleared it.
+- **Dashboard:** "C8000v DMVPN: overview" at http://192.168.50.231:3001/d/c8000v-dmvpn-lab-overview.
+- **The portal is a service:** `systemctl --user status c8d-webapp`. Prometheus expects portals to be up at all times.
+
 ## Design notes
 
 - **One renderer.** `lab.conf` → `lab.sh inventory` → `tools/render.py` produces every configuration file. Nothing

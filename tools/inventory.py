@@ -67,7 +67,8 @@ for name in lists["ALL_NODES"]:
 
 inv = {
     "lab": scalar["LAB_NAME"],
-    "oob": {"network": scalar["OOB_NET"], "gateway": scalar["OOB_GATEWAY"], "prefix": scalar["OOB_PREFIX"]},
+    "oob": {"network": scalar["OOB_NET"], "gateway": scalar["OOB_GATEWAY"], "prefix": scalar["OOB_PREFIX"],
+            "nms": scalar["NMS_IP"]},
     "mac_oui": scalar["MAC_OUI"],
     "service": {
         "as": int(scalar["DMVPN_AS"]), "overlay": scalar["DMVPN_OVERLAY"],

@@ -14,14 +14,17 @@ drives the pipelines:
 
 Adding a customer never touches a hub: it registers with NHRP and arrives on the hubs' BGP listen range. Runs execute
 one at a time; their state is mirrored to runs/<id>.json. Start with ./lab.sh webapp."""
+import os
+import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
-from labportal import RunBase, RunRegistry, install_runs_api
+from labportal import RunBase, RunRegistry, exposition, install_runs_api, metric_line, metrics_generated, run_metrics
 from pydantic import BaseModel, Field
 
 import customers as C
@@ -54,7 +57,8 @@ STEP_TITLES = {
     "plan": "terraform plan: what Network-as-Code would change",
     "check": "Compare Nautobot's rendering with lab.conf's",
 }
-TAGS = [{"name": "state", "description": "The cloud, the model and the live state of every router."},
+TAGS = [{"name": "monitoring", "description": "Prometheus: /metrics and /api/sd, scraped by the NMS."},
+        {"name": "state", "description": "The cloud, the model and the live state of every router."},
         {"name": "provisioning", "description": "Suggest, validate and plan a customer; plan a removal."},
         {"name": "runs", "description": "Pipeline runs: add a customer, remove one, deploy, plan, test."}]
 app = FastAPI(title="c8000v-dmvpn-lab Provisioning Portal API", version="1.0", openapi_tags=TAGS,
@@ -303,6 +307,119 @@ def api_run(req: RunRequest):
     if req.mode == "remove" and not (spec or {}).get("name"):
         raise HTTPException(400, "mode remove needs a name")
     return registry.start(Run(req.mode, spec, req.options))
+
+
+
+# ---- monitoring (Prometheus on the NMS: lab-portal/monitoring) ------------------------------------------------------
+LAB_NAME = "c8000v-dmvpn-lab"
+LAB_HOST_IP = os.environ.get("LAB_HOST_IP", "10.5.0.1")        # this host on the lab's OOB network, where the NMS reaches us
+WEBAPP_PORT = os.environ.get("WEBAPP_PORT", "8094")
+_snap = {"snap": None}
+
+
+def _refresher():
+    """Keep the live state warm: collecting it is ~10 s of SSH, far too long for a scrape. Only while the lab runs."""
+    while True:
+        try:
+            if any(st == "running" for st in _vm_states().values()):
+                _snap["snap"] = state.get(refresh=True)
+            else:
+                _snap["snap"] = None
+        except Exception:                                       # noqa: BLE001 — never let the refresher die
+            pass
+        time.sleep(60)
+
+
+@app.on_event("startup")
+def _start_refresher():
+    threading.Thread(target=_refresher, daemon=True).start()
+
+
+def _vm_states():
+    """node -> libvirt state, for this lab's VMs (a stopped lab is a normal state, not an error)."""
+    f = C.facts()
+    try:
+        running = set(subprocess.run(["sg", "libvirt", "-c", "virsh -q -c qemu:///system list --name"],
+                                     capture_output=True, text=True, timeout=20).stdout.split())
+    except Exception:                                           # noqa: BLE001
+        running = set()
+    return {name: ("running" if n["domain"] in running else "shut off") for name, n in f["nodes"].items()}
+
+
+def _g(name, help_):
+    return [f"# HELP {name} {help_}", f"# TYPE {name} gauge"]
+
+
+@app.get("/metrics", tags=["monitoring"], summary="Prometheus metrics: VMs, the cloud per router, the provider, hosts, runs",
+         response_class=PlainTextResponse)
+def prometheus_metrics():
+    """IOS-XE has no Prometheus exporter, so the C8000vs are measured here, from the portal's live state (show dmvpn,
+    show crypto session, show ip bgp summary, show processes cpu over SSH, refreshed every minute in the background).
+    The VyOS provider and the Alpine hosts are scraped directly (see /api/sd); the provider also pushes Telegraf."""
+    L = LAB_NAME
+    out = metrics_generated(L)
+    roles = {n: x["role"] for n, x in C.facts()["nodes"].items()}
+    out += _g("lab_vm_running", "1 if the lab VM is running (virsh)")
+    out += [metric_line("lab_vm_running", {"lab": L, "node": n, "role": roles[n]}, int(st == "running")) for n, st in _vm_states().items()]
+    snap = _snap["snap"]
+    if snap:
+        out += _g("lab_router_reachable", "1 if the portal could read the router's live state over SSH")
+        out += _g("lab_dmvpn_nhs_up", "Hubs a customer is registered with (NHRP NHS up)")
+        out += _g("lab_dmvpn_nhs_expected", "Hubs a customer should be registered with")
+        out += _g("lab_dmvpn_registrations", "Customers registered with the hub (NHRP dynamic entries up)")
+        out += _g("lab_dmvpn_shortcuts", "Customer-to-customer shortcut tunnels NHRP has resolved (phase 3)")
+        out += _g("lab_ipsec_sessions_up", "IPsec sessions on Tunnel0 that are UP-ACTIVE")
+        out += _g("lab_bgp_overlay_up", "Overlay iBGP sessions Established")
+        out += _g("lab_bgp_overlay_sessions", "Overlay iBGP sessions configured or dynamically accepted")
+        out += _g("lab_bgp_underlay_up", "eBGP sessions with the provider Established")
+        out += _g("lab_router_cpu_pct", "IOS-XE CPU utilisation, one-minute average")
+        hubs = snap["hubs"]
+        for r, st in (snap.get("cloud") or {}).items():
+            lab = {"lab": L, "router": r, "role": st["role"], "region": snap["nodes"][r].get("region") or ""}
+            out.append(metric_line("lab_router_reachable", lab, int(not st.get("error"))))
+            if st.get("error"):
+                continue
+            if st["role"] == "hub":
+                out.append(metric_line("lab_dmvpn_registrations", lab, len(st.get("registered") or [])))
+            else:
+                out.append(metric_line("lab_dmvpn_nhs_up", lab, len(st.get("nhs_up") or [])))
+                out.append(metric_line("lab_dmvpn_nhs_expected", lab, len(hubs)))
+                out.append(metric_line("lab_dmvpn_shortcuts", lab, len(st.get("shortcuts") or [])))
+            out.append(metric_line("lab_ipsec_sessions_up", lab, st.get("sa", 0)))
+            out.append(metric_line("lab_bgp_overlay_up", lab, st.get("overlay_up", 0)))
+            out.append(metric_line("lab_bgp_overlay_sessions", lab, st.get("overlay", 0)))
+            out.append(metric_line("lab_bgp_underlay_up", lab, st.get("underlay_up", 0)))
+            if st.get("cpu_1m") is not None:
+                out.append(metric_line("lab_router_cpu_pct", lab, st["cpu_1m"]))
+        out += _g("lab_provider_customers_up", "Sites with an Established eBGP session to the provider")
+        out += _g("lab_provider_customers_expected", "Sites the model attaches to the provider")
+        for p_, st in (snap.get("provider_state") or {}).items():
+            out.append(metric_line("lab_provider_customers_up", {"lab": L, "provider": p_}, st.get("customers_up", 0)))
+            out.append(metric_line("lab_provider_customers_expected", {"lab": L, "provider": p_}, len(hubs) + len(snap["customers"])))
+        out += _g("lab_host_up", "1 if the LAN host answers SSH")
+        out += [metric_line("lab_host_up", {"lab": L, "host": h}, int(ok)) for h, ok in (snap.get("hosts_up") or {}).items()]
+        h = snap.get("health") or {}
+        out += _g("lab_health_ok", "1 if everything the model expects is true")
+        out.append(metric_line("lab_health_ok", {"lab": L}, int(bool(h.get("ok")))))
+        out += _g("lab_health_problems", "Problems the portal's health check reports")
+        out.append(metric_line("lab_health_problems", {"lab": L}, len(h.get("problems") or [])))
+        out += _g("lab_collector_last_refresh_seconds", "When the live state behind these gauges was collected")
+        out.append(metric_line("lab_collector_last_refresh_seconds", {"lab": L}, int(snap["generated"])))
+    return PlainTextResponse(exposition(out + run_metrics(L, registry.list())), media_type="text/plain; version=0.0.4")
+
+
+@app.get("/api/sd", tags=["monitoring"], summary="Prometheus HTTP service discovery: the portal, the provider's exporters, the hosts")
+def prometheus_sd():
+    f = C.facts()
+    sd = [{"targets": [f"{LAB_HOST_IP}:{WEBAPP_PORT}"], "labels": {"lab": LAB_NAME, "job": "portal", "role": "portal", "node": "portal"}}]
+    for name, n in f["nodes"].items():
+        if n["role"] == "provider":
+            sd.append({"targets": [f"{n['mgmt_ip']}:9100"], "labels": {"lab": LAB_NAME, "job": "node", "role": "provider", "node": name, "dc": "provider"}})
+            sd.append({"targets": [f"{n['mgmt_ip']}:9342"], "labels": {"lab": LAB_NAME, "job": "frr", "role": "provider", "node": name, "dc": "provider"}})
+        elif n["role"] == "host":
+            dc = f["nodes"][n["router"]].get("region") or ""
+            sd.append({"targets": [f"{n['mgmt_ip']}:9100"], "labels": {"lab": LAB_NAME, "job": "node", "role": "host", "node": name, "dc": dc}})
+    return sd
 
 
 install_runs_api(app, registry, resume_factory)

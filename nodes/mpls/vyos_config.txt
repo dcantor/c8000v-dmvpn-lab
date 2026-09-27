@@ -11,6 +11,22 @@ set service https api rest
 set service https api keys id lab key c8000v-dmvpn-lab
 set service https allow-client address 10.5.0.1
 #
+# monitoring: exporters on the OOB address, scraped from the NMS (the portal's /api/sd lists them);
+# Telegraf pushes host / FRR / service metrics to VictoriaMetrics, syslog goes to VictoriaLogs
+set service monitoring prometheus node-exporter listen-address 10.5.0.31
+set service monitoring prometheus frr-exporter listen-address 10.5.0.31
+set service monitoring telegraf influxdb url http://10.5.0.10
+set service monitoring telegraf influxdb port 8428
+set service monitoring telegraf influxdb bucket c8000v-dmvpn-lab
+set service monitoring telegraf influxdb authentication organization lab
+set service monitoring telegraf influxdb authentication token c8dlab-telegraf_______________________________________________________________________==
+set service monitoring telegraf global-tag lab value c8000v-dmvpn-lab
+set service monitoring telegraf global-tag role value provider
+set service monitoring telegraf global-tag dc value provider
+set system syslog remote 10.5.0.10 port 5514
+set system syslog remote 10.5.0.10 protocol udp
+set system syslog remote 10.5.0.10 facility all level info
+#
 # access links: one /30 per site, the provider is .1
 set interfaces ethernet eth1 hw-id 52:54:00:c9:15:01
 set interfaces ethernet eth1 address 100.70.1.1/30

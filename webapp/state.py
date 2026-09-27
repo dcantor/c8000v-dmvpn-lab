@@ -63,7 +63,8 @@ class State:
     def router_state(self, node, n, m):
         out = {"name": node, "role": n["role"], "error": None, "tunnel_ip": n["tunnel_ip"], "nbma": n["nbma"]}
         try:
-            r = ios(n["mgmt_ip"], "show dmvpn", "show crypto session brief", "show ip bgp summary")
+            r = ios(n["mgmt_ip"], "show dmvpn", "show crypto session brief", "show ip bgp summary",
+                    "show processes cpu | include CPU utilization")
         except Exception as e:                                    # noqa: BLE001
             out["error"] = e.__class__.__name__
             return out
@@ -83,6 +84,8 @@ class State:
         sa = re.findall(r"^(\d+\.\d+\.\d+\.\d+)\s+Tu0\s+.*\s(\S+)\s*$", r["show crypto session brief"], re.M)
         out["sa"] = sum(1 for _, st in sa if st == "UA")
         out["sa_peers"] = sorted(p for p, st in sa if st == "UA")
+        cpu = re.search(r"five seconds: (\d+)%.*one minute: (\d+)%", r["show processes cpu | include CPU utilization"])
+        out["cpu_5s"], out["cpu_1m"] = (int(cpu[1]), int(cpu[2])) if cpu else (None, None)
         overlay = ipaddress.ip_network(m["service"]["overlay"])
         sess = [{"peer": p, "as": int(a), "state": s} for p, a, s in BGP_ROW.findall(r["show ip bgp summary"])]
         ov = [s for s in sess if ipaddress.ip_address(s["peer"]) in overlay]

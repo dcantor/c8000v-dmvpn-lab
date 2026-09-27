@@ -21,6 +21,8 @@ import sys
 import yaml
 
 API_KEY = "c8000v-dmvpn-lab"
+VM_PORT, VL_SYSLOG_PORT = 8428, 5514                 # on the NMS: VictoriaMetrics (InfluxDB write API), VictoriaLogs (syslog)
+TELEGRAF_TOKEN = "c8dlab-telegraf".ljust(86, "_") + "=="   # VyOS insists on an InfluxDB-shaped token; VictoriaMetrics ignores it
 
 
 def mask(prefix):
@@ -117,8 +119,24 @@ class Renderer:
                # no default route: management is the directly connected OOB /24
                "set service https api rest",
                f"set service https api keys id lab key {API_KEY}",
-               f"set service https allow-client address {self.inv['oob']['gateway']}",
-               "#", "# access links: one /30 per site, the provider is .1"]
+               f"set service https allow-client address {self.inv['oob']['gateway']}"]
+        nms = self.inv["oob"]["nms"]
+        out += ["#", "# monitoring: exporters on the OOB address, scraped from the NMS (the portal's /api/sd lists them);",
+                "# Telegraf pushes host / FRR / service metrics to VictoriaMetrics, syslog goes to VictoriaLogs",
+                f"set service monitoring prometheus node-exporter listen-address {n['mgmt_ip']}",
+                f"set service monitoring prometheus frr-exporter listen-address {n['mgmt_ip']}",
+                f"set service monitoring telegraf influxdb url http://{nms}",
+                f"set service monitoring telegraf influxdb port {VM_PORT}",
+                f"set service monitoring telegraf influxdb bucket {self.inv['lab']}",
+                "set service monitoring telegraf influxdb authentication organization lab",
+                f"set service monitoring telegraf influxdb authentication token {TELEGRAF_TOKEN}",
+                f"set service monitoring telegraf global-tag lab value {self.inv['lab']}",
+                f"set service monitoring telegraf global-tag role value {n['role']}",
+                "set service monitoring telegraf global-tag dc value provider",
+                f"set system syslog remote {nms} port {VL_SYSLOG_PORT}",
+                f"set system syslog remote {nms} protocol udp",
+                f"set system syslog remote {nms} facility all level info",
+                "#", "# access links: one /30 per site, the provider is .1"]
         for p in n["ports"]:
             out.append(f"set interfaces ethernet {p['name']} hw-id {self.mac(n, p['num'])}")
             if p["ip"]:

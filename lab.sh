@@ -458,7 +458,7 @@ cmd_status() {
 cmd_inventory() {  # the lab as JSON — the one contract the renderer, the tests, Nautobot and the portal all read
   local var k n p
   {
-    for var in LAB_NAME DOMAIN_PREFIX OOB_NET OOB_GATEWAY OOB_PREFIX DMVPN_AS DMVPN_OVERLAY DMVPN_NETWORK_ID DMVPN_TUNNEL_KEY \
+    for var in LAB_NAME DOMAIN_PREFIX OOB_NET OOB_GATEWAY OOB_PREFIX NMS_IP DMVPN_AS DMVPN_OVERLAY DMVPN_NETWORK_ID DMVPN_TUNNEL_KEY \
                DMVPN_HOLDTIME DMVPN_MTU DMVPN_MSS DMVPN_PSK NHRP_SECRET BGP_KEEPALIVE BGP_HOLDTIME PROVIDER_AS WAN_NET \
                ROUTER_ID_NET LAN_PORT MAC_OUI; do
       printf 'scalar\t%s\t%s\n' "$var" "${!var}"
