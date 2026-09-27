@@ -88,7 +88,7 @@ on drift. The pre-shared key and NHRP secret are deliberately not in Nautobot; t
 ## The provisioning portal
 
 `./lab.sh webapp` serves **http://192.168.50.231:8094** (Swagger at `/docs`), built on the shared
-[lab-portal](../lab-portal) run engine and registered with the lab hub on :8088.
+[lab-portal](https://github.com/dcantor/lab-portal) run engine and registered with the lab hub on :8088.
 
 | View | What it does |
 |---|---|
