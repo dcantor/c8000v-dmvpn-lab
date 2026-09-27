@@ -12,6 +12,7 @@ from pptx.util import Emu, Inches, Pt
 D = Path(__file__).resolve().parent
 SHOTS = D / "shots"
 BOXES = json.loads((SHOTS / "boxes.json").read_text())
+VER = (D.parents[1] / "VERSION").read_text().strip()
 
 NAVY = RGBColor(0x0B, 0x1B, 0x2E)
 TEAL = RGBColor(0x0E, 0x74, 0x90)
@@ -89,7 +90,7 @@ def header(sl, title, kicker=None, n=None):
     text(sl, 0.45, 0.5, 12.2, 0.6, title, size=26, color=NAVY, bold=True)
     if n:
         text(sl, 12.2, 7.08, 0.9, 0.3, str(n), size=10, color=MUTED, align=PP_ALIGN.RIGHT)
-    text(sl, 0.45, 7.08, 6, 0.3, "C8000v DMVPN Portal · v0.21.0", size=10, color=MUTED)
+    text(sl, 0.45, 7.08, 6, 0.3, f"C8000v DMVPN Portal · v{VER}", size=10, color=MUTED)
 
 
 def notes(sl, t):
@@ -120,7 +121,7 @@ def title_slide():
          "for the operators who run it and the customers who use it.", size=18, color=RGBColor(0xCB, 0xD5, 0xE1))
     text(sl, 0.8, 5.55, 11, 0.4, "Three Catalyst 8000v hubs · C8000v and VyOS customers · two providers · Nautobot · Terraform (NAC) · VictoriaMetrics",
          size=13, color=RGBColor(0x94, 0xA3, 0xB8))
-    text(sl, 0.8, 6.0, 8, 0.4, "Version 0.21.0 · September 2026", size=13, color=RGBColor(0x94, 0xA3, 0xB8))
+    text(sl, 0.8, 6.0, 8, 0.4, f"Version {VER} · September 2026", size=13, color=RGBColor(0x94, 0xA3, 0xB8))
     notes(sl, "Title. The portal runs on the lab host at :8094 and fronts the whole lab: lab.conf is the source of truth, "
               "Network-as-Code pushes the Catalyst 8000v routers, SSH pushes the VyOS routers, Nautobot mirrors the model.")
 
@@ -262,16 +263,17 @@ def shot_slide(n, name, kicker, title, points, takeaway, extra_boxes=None, drop=
         cy = min(max(y - d / 2, IMG_Y - d / 2 + 0.02), IMG_Y + IMG_H - d)
         b = box(sl, cx, cy, d, d, fill=ORANGE, line=WHITE, lw=1.5, shape=MSO_SHAPE.OVAL)
         shape_text(b, str(i + 1), size=12)
-    # explanation panel
+    # explanation panel: the points, then the takeaway pinned to the bottom of the screenshot
+    ty = IMG_Y + IMG_H - 1.0
+    hs = [0.26 + (max(1, -(-len(p[1]) // 40)) * 0.2 if isinstance(p, tuple) and p[1] else 0) for p in points]
+    gap = max(0.08, min(0.3, (ty - 0.1 - IMG_Y - sum(hs)) / max(1, len(points) - 1)))
     py = IMG_Y
     for i, p in enumerate(points):
         head, body = p if isinstance(p, tuple) else (p, "")
         b = box(sl, PX, py + 0.02, 0.3, 0.3, fill=ORANGE, shape=MSO_SHAPE.OVAL)
         shape_text(b, str(i + 1), size=11)
-        tb = text(sl, PX + 0.42, py - 0.02, SW - PX - 0.75, 0.9, [[(head, {"bold": True, "color": NAVY, "size": 13})], [(body, {"size": 11.5})]], size=11.5)
-        lines = 1 + max(1, -(-len(body) // 40)) if body else 1
-        py += 0.28 + lines * 0.2 + 0.12
-    ty = max(py + 0.05, IMG_Y + IMG_H - 1.05)
+        text(sl, PX + 0.42, py - 0.02, SW - PX - 0.75, hs[i] + 0.05, [[(head, {"bold": True, "color": NAVY, "size": 13})], [(body, {"size": 11.5})]], size=11.5)
+        py += hs[i] + gap
     box(sl, PX, ty, SW - PX - 0.4, IMG_Y + IMG_H - ty, fill=TEAL_L, shape=MSO_SHAPE.ROUNDED_RECTANGLE, radius=0.08)
     text(sl, PX + 0.15, ty + 0.08, SW - PX - 0.7, IMG_Y + IMG_H - ty - 0.16, [[("Why it matters  ", {"bold": True, "color": TEAL, "size": 11.5})],
          [(takeaway, {"size": 11.5})]], anchor=MSO_ANCHOR.MIDDLE)
@@ -347,14 +349,46 @@ def summary_slide(n):
     text(sl, 12.2, 7.08, 0.9, 0.3, str(n), size=10, color=RGBColor(0x94, 0xA3, 0xB8), align=PP_ALIGN.RIGHT)
 
 
+def tasks_slide(n):
+    sl = prs.slides.add_slide(BLANK)
+    header(sl, "Every Provision task, at a glance", "Provision in depth", n)
+    rows = [
+        ("Add a customer", "A new site: router (C8000v or VyOS) and LAN host, provider link, tunnels to all three hubs, Nautobot. No hub changes.", "~15 min", "operator", "no"),
+        ("Modify a customer", "Company, applications, preferred hub, site LAN, second provider, or router type (rebuilds the router).", "1–15 min", "operator", "yes"),
+        ("Remove a customer", "Terraform forgets it, VMs deleted, out of lab.conf and Nautobot, provider port released.", "~3 min", "operator", "yes"),
+        ("Deploy the model", "Re-render from lab.conf, terraform apply, push providers and VyOS, seed Nautobot, compare.", "~4 min", "operator", "yes"),
+        ("Dry run", "terraform plan and Nautobot's rendering compared with lab.conf. Changes nothing.", "read only", "operator", "no"),
+        ("Check for drift", "Every router's running configuration compared with the model.", "1–2 min", "operator", "no"),
+        ("Fix drift", "Put every router back to the model, then check again.", "a few min", "operator", "yes"),
+        ("Back up the lab", "One .tar.gz: lab.conf, customers, renders, Nautobot, running configs, Terraform state.", "~30 s", "operator", "no"),
+        ("Restore from a backup", "Upload, see exactly what would change, then rebuild the lab to it.", "varies", "operator", "yes"),
+        ("Rotate the pre-shared key", "A random 40-character key on every router; every IKE session re-made and verified.", "~7 min", "admin", "yes"),
+        ("Run the tests", "The Robot Framework suites against the live lab, with the evidence kept.", "~10 min", "operator", "no"),
+    ]
+    cols = [(0.45, 2.45, "Task"), (2.95, 6.45, "What it does"), (9.45, 1.2, "Time"), (10.7, 1.1, "Who"), (11.85, 1.05, "Approval")]
+    y = 1.3
+    box(sl, 0.45, y, 12.45, 0.42, fill=NAVY)
+    for x, w, t in cols:
+        text(sl, x + 0.08, y + 0.07, w - 0.1, 0.3, t, size=12, color=WHITE, bold=True)
+    y += 0.42
+    rh = 0.445
+    for i, r in enumerate(rows):
+        box(sl, 0.45, y, 12.45, rh, fill=BG if i % 2 == 0 else WHITE)
+        for j, ((x, w, _), v) in enumerate(zip(cols, r)):
+            col = NAVY if j == 0 else (ORANGE if (j == 4 and v == "yes") or (j == 3 and v == "admin") else INK)
+            text(sl, x + 0.08, y + 0.05, w - 0.12, rh - 0.06, v, size=12 if j == 0 else 10.5, color=col, bold=j == 0 or col == ORANGE)
+        y += rh
+    text(sl, 0.45, y + 0.12, 12.4, 0.4, "Approval follows the change policy (Jobs → Change policy…): four eyes, optional change windows, emergencies with a reason. "
+         "Viewers and customers never start a job.", size=11, color=MUTED)
+    notes(sl, "The eleven Provision tasks. Anything that could take something away needs a second person; adding and reading never do.")
+
+
 # ---------- build ----------
 title_slide()
 n = 2
 problem_slide(n); n += 1
 what_slide(n); n += 1
 caps_slide(n); n += 1
-divider("A tour of the portal", "Numbered callouts on each screenshot match the explanations beside it.", n); n += 1
-
 TOUR = [
     ("01_login", "Access", "Everyone signs in, and the role decides what they see", [
         ("Sign in", "Staff roles are viewer, operator, approver and admin. A customer account sees only its own service. Sessions are signed cookies, passwords are PBKDF2 hashes.")],
@@ -395,7 +429,7 @@ TOUR = [
         ("Each flow", "The verdict and an outage timeline for every host pair, so you can see which paths moved and which were cut.")],
      "You can see exactly which customers a failure affects, and for how long."),
     ("09_provision", "Change", "Provision: every change is a job", [
-        ("Tasks", "Add, modify and remove customers, deploy, check for and fix drift, back up, restore, dry run and tests."),
+        ("Tasks", "Eleven tasks: each shows what it does, how long it takes and who may run it. The next slides walk through them."),
         ("Pre-shared key", "Admins rotate the DMVPN key. The system picks a random 40-character key, and only its fingerprint is ever shown.")],
      "Operators pick what they want done, and the portal carries it out consistently on every router."),
     ("10_modify", "Change", "Modify a customer, with the plan shown first", [
@@ -431,13 +465,92 @@ TOUR = [
         ("Tests from its LAN host", "The customer tests its applications, the hubs, or traces a path."),
         ("Every application, every hub", "Round-trip time, loss and HTTP status, run on demand.")],
      "The first-line diagnosis is done by the customer in seconds, with no ticket needed."),
+    ("20_add", "Provision in depth", "Add a customer: everything allocated for you", [
+        ("Router type", "Catalyst 8000v (NAC) or VyOS."),
+        ("Preferred hub", "Or none: any hub."),
+        ("Dual-homed", "A backup link into mpls2 and cloud 2."),
+        ("Name and addresses", "The next free name, management IP and LAN."),
+        ("Index, port, host", "Tunnel index, provider port, LAN host."),
+        ("The company", "Pre-filled; goes to Nautobot as a tenant.")],
+     "Nothing to look up or calculate: every address and port is allocated and checked free."),
+    ("21_add_plan", "Provision in depth", "Add a customer: the plan, before anything runs", [
+        ("Applications", "What the customer subscribes to; application checks start for them."),
+        ("The plan", "Router, cloud, hub, WAN, LAN and what changes: here a new VyOS router, both providers and Nautobot. No hub changes."),
+        ("Provision", "Starts the job, or files a change request if the policy asks for approval.")],
+     "Onboarding a customer takes one form and about 15 minutes, with the whole impact visible up front."),
+    ("22_remove", "Provision in depth", "Remove a customer, safely", [
+        ("Which customer", "Its router type, region and addressing are shown."),
+        ("What goes with it", "The company and its subscriptions are removed from customers.json and Nautobot."),
+        ("The plan", "The router and host deleted, Terraform state, the provider port released, lab.conf and Nautobot updated."),
+        ("Remove", "Destructive: it needs an approver under the default policy.")],
+     "Decommissioning leaves nothing behind: no orphaned ports, config, Terraform state or Nautobot records."),
+    ("23_restore", "Provision in depth", "Restore from a backup: see the difference first", [
+        ("The backup", "A .tar.gz made by Back up the lab, uploaded here."),
+        ("What is in it", "Version, date, host, files, every checksum verified, and its customers."),
+        ("What would change", "Customers changed, added or removed, other settings, then NAC, pushes, Nautobot and verification."),
+        ("Restore", "Only after approval; nothing changes before.")],
+     "A known-good state is always one approved job away, and you know exactly what it will undo."),
+    ("24_psk", "Provision in depth", "The DMVPN pre-shared key", [
+        ("Key", "Where it is kept (secrets/ on the lab host) and its fingerprint. The key itself is never shown."),
+        ("Set", "When it was last rotated, by whom, and the job."),
+        ("Used by", "Every hub and customer router."),
+        ("Rotate", "Admins only, with a confirmation, and through change control.")],
+     "Rotating the key becomes routine: one button, a random key, and proof that every session uses it."),
+    ("26_deploy", "Provision in depth", "Deploy the model: lab.conf onto every router", [
+        ("The job", "Who started it, who approved it, 7 of 7 steps, 4 minutes."),
+        ("The steps", "Snapshot, render, Terraform apply (NAC), the providers, Nautobot seeded, Nautobot's rendering compared with lab.conf, snapshot and compare. The log is kept below.")],
+     "The same pipeline builds, fixes and restores the lab, so the result is always the model."),
+    ("27_tests", "Provision in depth", "Run the tests: the lab proves itself", [
+        ("The job", "Robot Framework suites against the live lab."),
+        ("The result", "73 of 73 passed, in about 11 minutes."),
+        ("The evidence", "The Robot report and log, and every router's configuration before and after.")],
+     "Every change can end with a full test run, and the evidence is one click away."),
+    ("29_maint", "Provision in depth", "Maintenance and the job list", [
+        ("Maintenance", "Declared here or started automatically by disruptive jobs and simulated failures. Alerts are muted, customers told, and SLA leaves it out."),
+        ("Declare", "What, and which nodes it affects."),
+        ("Every job", "Status, a progress bar, duration and test results. A failed job resumes from the step that failed.")],
+     "Planned work does not page anyone or count against the SLA, and customers see it coming."),
+    ("28_policy", "Change control", "The change policy, edited in the portal", [
+        ("The policy", "Which tasks need approval, four eyes, emergency approvals with a reason, expiry after 72 h, and change windows by day and time."),
+        ("In one line", "The current policy is always shown above the requests.")],
+     "The rules for change are visible and adjustable, not tribal knowledge."),
+    ("30_history", "See", "A router's configuration history", [
+        ("Router details", "Its live state: addresses, NHRP, IPsec, BGP, and its actions."),
+        ("Every job that changed it", "Each job's diff for this router, newest first, with masked secrets.")],
+     "When something changed on a router, you can see which job did it and exactly what it changed."),
+    ("31_api", "Automate", "Everything is an API", [
+        ("REST API", "Every screen in the portal is built on the same API, documented with Swagger."),
+        ("By area", "Monitoring, state, customers, jobs, changes, SLA, and more.")],
+     "Other tools and pipelines can drive the lab the way the portal does."),
+    ("32_dark", "Access", "Light or dark, and roles everywhere", [
+        ("Dark mode", "Every page, including the live map."),
+        ("An operator", "It sees and changes the lab, but admin tasks such as key rotation and accounts are hidden.")],
+     "The portal fits the user, and each role only sees the actions it may take."),
 ]
-EXTRA = {"12_job": [{"label": "steps", "box": [0.05, 0.085, 0.45, 0.375]}]}
-for name, kicker, title, pts, take in TOUR:
-    # 12: order the manual "steps" box last (matches the explanation order)
-    shot_slide(n, name, kicker, title, pts, take, extra_boxes=EXTRA.get(name)); n += 1
 
-lifecycle_slide(n); n += 1
+SECTIONS = [
+    ("divider", "A tour of the portal", "Numbered callouts on each screenshot match the explanations beside it."),
+    "01_login", "02_cloud", "03_drift", "04_map", "05_path", "30_history", "06_sla", "07_resilience", "08_failover",
+    ("divider", "Provision in depth", "Every change is a job: planned, approved, run, verified and recorded."),
+    "09_provision", tasks_slide, "20_add", "21_add_plan", "10_modify", "22_remove", "26_deploy", "23_restore",
+    "24_psk", "12_job", "27_tests", "29_maint",
+    ("divider", "Change control", "A second pair of eyes, change windows, and a record of everything."),
+    "11_changes", "28_policy", lifecycle_slide,
+    ("divider", "Customers, access and the API", "Each customer sees its own service; staff see what their role allows."),
+    "14_customer", "15_requests", "16_diag", "13_tools", "31_api", "32_dark",
+]
+BYNAME = {t[0]: t for t in TOUR}
+EXTRA = {"12_job": [{"label": "steps", "box": [0.05, 0.085, 0.45, 0.375]}]}
+for item in SECTIONS:
+    if isinstance(item, tuple):
+        divider(item[1], item[2], n)
+    elif callable(item):
+        item(n)
+    else:
+        name, kicker, title, pts, take = BYNAME[item]
+        shot_slide(n, name, kicker, title, pts, take, extra_boxes=EXTRA.get(name))
+    n += 1
+
 results_slide(n); n += 1
 summary_slide(n)
 

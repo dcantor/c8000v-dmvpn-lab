@@ -408,5 +408,373 @@
     0.512375
    ]
   }
+ ],
+ "20_add": [
+  {
+   "label": "C8000v or VyOS",
+   "box": [
+    0.231875,
+    0.130125,
+    0.174580078125,
+    0.032
+   ]
+  },
+  {
+   "label": "Preferred hub",
+   "box": [
+    0.412705078125,
+    0.130125,
+    0.17458984375,
+    0.032
+   ]
+  },
+  {
+   "label": "Dual-homed onto provider 2",
+   "box": [
+    0.593544921875,
+    0.109734375,
+    0.174580078125,
+    0.052390625
+   ]
+  },
+  {
+   "label": "Name, region, addresses: allocated",
+   "box": [
+    0.231875,
+    0.191515625,
+    0.129375,
+    0.0315625
+   ]
+  },
+  {
+   "label": "Tunnel index, provider port, LAN host",
+   "box": [
+    0.231875,
+    0.25246875,
+    0.129375,
+    0.0315625
+   ]
+  },
+  {
+   "label": "The customer company",
+   "box": [
+    0.231875,
+    0.34471875,
+    0.174580078125,
+    0.0315625
+   ]
+  }
+ ],
+ "21_add_plan": [
+  {
+   "label": "Applications it subscribes to",
+   "box": [
+    0.231875,
+    0.460765625,
+    0.53625,
+    0.122375
+   ]
+  },
+  {
+   "label": "The plan: every router it touches",
+   "box": [
+    0.231875,
+    0.595140625,
+    0.53625,
+    0.247
+   ]
+  },
+  {
+   "label": "Provision: a change request or a job",
+   "box": [
+    0.231875,
+    0.92928125,
+    0.11775390625,
+    0.03375
+   ]
+  }
+ ],
+ "22_remove": [
+  {
+   "label": "Which customer",
+   "box": [
+    0.231875,
+    0.19625,
+    0.53625,
+    0.032
+   ]
+  },
+  {
+   "label": "What goes with it",
+   "box": [
+    0.231875,
+    0.41084375,
+    0.174580078125,
+    0.0315625
+   ]
+  },
+  {
+   "label": "The plan",
+   "box": [
+    0.231875,
+    0.578328125,
+    0.53625,
+    0.194875
+   ]
+  },
+  {
+   "label": "Remove: needs approval",
+   "box": [
+    0.231875,
+    0.86034375,
+    0.112783203125,
+    0.03375
+   ]
+  }
+ ],
+ "23_restore": [
+  {
+   "label": "A backup made by Back up the lab",
+   "box": [
+    0.231875,
+    0.367140625,
+    0.53625,
+    0.033
+   ]
+  },
+  {
+   "label": "What is in it, checksums verified",
+   "box": [
+    0.231875,
+    0.412140625,
+    0.53625,
+    0.10325
+   ]
+  },
+  {
+   "label": "What restoring would change",
+   "box": [
+    0.231875,
+    0.523890625,
+    0.53625,
+    0.1488125
+   ]
+  },
+  {
+   "label": "Restore: needs approval",
+   "box": [
+    0.231875,
+    0.71759375,
+    0.1472265625,
+    0.03375
+   ]
+  }
+ ],
+ "24_psk": [
+  {
+   "label": "Only a fingerprint, never the key",
+   "box": [
+    0.051875,
+    0.66875,
+    0.89625,
+    0.0320625
+   ]
+  },
+  {
+   "label": "When, by whom, which job",
+   "box": [
+    0.051875,
+    0.7008125,
+    0.89625,
+    0.0325625
+   ]
+  },
+  {
+   "label": "Every router that uses it",
+   "box": [
+    0.051875,
+    0.733375,
+    0.89625,
+    0.0325625
+   ]
+  },
+  {
+   "label": "Admins only",
+   "box": [
+    0.81037109375,
+    0.635,
+    0.13775390625,
+    0.03375
+   ]
+  }
+ ],
+ "25_jobs": [
+  {
+   "label": "One job at a time; progress for each",
+   "box": [
+    0.051875,
+    0.01225,
+    0.89625,
+    0.98775
+   ]
+  }
+ ],
+ "26_deploy": [
+  {
+   "label": "Deploy the model",
+   "box": [
+    0.051875,
+    0.1128125,
+    0.89625,
+    0.02175
+   ]
+  },
+  {
+   "label": "Render, NAC, providers, VyOS, Nautobot, verify",
+   "box": [
+    0.051875,
+    0.1895625,
+    0.89625,
+    0.287578125
+   ]
+  }
+ ],
+ "27_tests": [
+  {
+   "label": "Run the tests",
+   "box": [
+    0.051875,
+    0.3758125,
+    0.89625,
+    0.02175
+   ]
+  },
+  {
+   "label": "Each suite, with its result",
+   "box": [
+    0.051875,
+    0.4525625,
+    0.89625,
+    0.036796875
+   ]
+  },
+  {
+   "label": "The Robot report and log",
+   "box": [
+    0.13646484375,
+    0.501859375,
+    0.023056640625,
+    0.017
+   ]
+  }
+ ],
+ "28_policy": [
+  {
+   "label": "What needs approval, four eyes, windows, emergencies",
+   "box": [
+    0.051875,
+    0.191484375,
+    0.89625,
+    0.2244375
+   ]
+  },
+  {
+   "label": "The policy in one line",
+   "box": [
+    0.1378125,
+    0.137609375,
+    0.373642578125,
+    0.017
+   ]
+  }
+ ],
+ "29_maint": [
+  {
+   "label": "Maintenance: declared, or automatic",
+   "box": [
+    0.04125,
+    0.012359375,
+    0.9175,
+    0.212140625
+   ]
+  },
+  {
+   "label": "Declare it",
+   "box": [
+    0.051875,
+    0.151625,
+    0.109521484375,
+    0.03375
+   ]
+  },
+  {
+   "label": "Every job: progress, duration, tests",
+   "box": [
+    0.051875,
+    0.28525,
+    0.89625,
+    0.71475
+   ]
+  }
+ ],
+ "30_history": [
+  {
+   "label": "A router's live details",
+   "box": [
+    0.75875,
+    0.0,
+    0.2,
+    0.479984375
+   ]
+  },
+  {
+   "label": "Every job that changed it",
+   "box": [
+    0.04125,
+    0.493984375,
+    0.9175,
+    0.486375
+   ]
+  }
+ ],
+ "31_api": [
+  {
+   "label": "Everything the portal does, as an API",
+   "box": [
+    0.04375,
+    0.058,
+    0.9125,
+    0.112
+   ]
+  },
+  {
+   "label": "Grouped by what it acts on",
+   "box": [
+    0.05625,
+    0.22,
+    0.8875,
+    0.18
+   ]
+  }
+ ],
+ "32_dark": [
+  {
+   "label": "The same live map, dark",
+   "box": [
+    0.051875,
+    0.226359375,
+    0.6875,
+    0.733328125
+   ]
+  },
+  {
+   "label": "An operator: no admin tasks",
+   "box": [
+    0.585009765625,
+    0.073484375,
+    0.214658203125,
+    0.017
+   ]
+  }
  ]
 }

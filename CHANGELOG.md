@@ -11,6 +11,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 While the version is 0.x, the lab's interfaces are still settling. The current version is in [`VERSION`](VERSION), in
 the portal's header, and in git as a `v<version>` tag.
 
+## [0.21.2] — 2026-09-27
+
+### Changed
+- **The portal presentation now covers more of the portal: 40 slides, up from 24.**
+  - A new section, **Provision in depth**, has a table of all eleven tasks (what each does, how long it takes, who
+    may run it, and whether it needs approval). It then walks through each one:
+    - adding a customer: the allocated fields, then the plan;
+    - modifying and removing a customer;
+    - deploying the model;
+    - restoring from a backup, showing what it would change;
+    - the pre-shared key and its rotation job;
+    - running the tests;
+    - maintenance and the job list.
+  - New slides show the change policy editor, a router's configuration history, the API (Swagger) and dark mode.
+  - `capture.py` has two parts that can run separately, `tour` and `more`.
+  - The footer shows the version from `VERSION`.
+
 ## [0.21.1] — 2026-09-27
 
 ### Added
@@ -496,6 +513,7 @@ the portal's header, and in git as a `v<version>` tag.
   - `nac/`, Network-as-Code for the C8000vs.
   - Robot suites, the README, and the first Nautobot seed.
 
+[0.21.2]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.21.1...v0.21.2
 [0.21.1]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.21.0...v0.21.1
 [0.21.0]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.19.1...v0.20.0
