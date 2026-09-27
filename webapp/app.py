@@ -257,7 +257,7 @@ def resume_factory(rec):
 # ---- API ---------------------------------------------------------------------------------------------------------
 @app.get("/", include_in_schema=False)
 def index():
-    return FileResponse(str(HERE / "static" / "index.html"))
+    return FileResponse(str(HERE / "static" / "index.html"), headers={"Cache-Control": "no-store"})   # a UI change shows on the next load
 
 
 @app.get("/api/state", tags=["state"], summary="The cloud: the model, and what every router in it is doing")

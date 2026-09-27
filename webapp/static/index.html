@@ -70,7 +70,7 @@ pre.out { background:#0c2129; color:#d7e3e8; padding:12px 14px; border-radius:8p
 #mapinfo dl { display:grid; grid-template-columns:auto 1fr; gap:3px 10px; margin:0; font-size:13px } #mapinfo dt { color:var(--muted) }
 #mapinfo dd { margin:0; font-family:"DejaVu Sans Mono",Consolas,monospace; font-size:12.5px; word-break:break-word }
 #mapinfo .cmds { display:flex; gap:6px; flex-wrap:wrap; margin:10px 0 6px } #mapinfo .cmds button { font-size:12px; padding:3px 8px }
-#mapinfo pre.out { max-height:300px; font-size:11.5px }
+#mapcmd pre.out { max-height:560px; margin:0; font-size:12.5px; white-space:pre; overflow:auto }
 </style></head><body>
 <header>
   <div><h1>C8000v DMVPN Portal</h1>
@@ -114,6 +114,9 @@ pre.out { background:#0c2129; color:#d7e3e8; padding:12px 14px; border-radius:8p
       </div></div>
     <div class="card" id="mapinfo"><h2>Details</h2><p class="hint">Select a router, the provider or a host on the map.</p></div>
   </div>
+  <div class="card" id="mapcmd" hidden><h2><span class="mono" id="mapcmd-title"></span> <small id="mapcmd-when"></small>
+    <span style="float:right"><button id="mapcmd-copy">Copy</button> <button id="mapcmd-close">Close</button></span></h2>
+    <pre class="out" id="mapout"></pre></div>
 </section>
 
 <section id="v-provision" class="view">
@@ -396,8 +399,6 @@ function drawMap() {
 
 function selectNode(n) { MAPSEL = n; drawMap(); renderInfo(n, true); }
 function renderInfo(n, fresh) {
-  // a refresh redraws the panel; keep the command output the operator is reading (a new selection clears it)
-  const keep = !fresh && $('mapout') && !$('mapout').hidden ? $('mapout').textContent : null;
   const m = ST.nodes[n] || {}, c = (ST.cloud || {})[n] || {}, st = nodeStatus(n), rows = [];
   const add = (k, v) => { if (v !== undefined && v !== null && v !== '') rows.push(`<dt>${esc(k)}</dt><dd>${v}</dd>`); };
   add('Role', esc(m.role === 'spoke' ? 'customer' : m.role) + (m.region ? ' · ' + esc(m.region) : ''));
@@ -422,14 +423,26 @@ function renderInfo(n, fresh) {
   }
   const cmds = (m.role === 'hub' || m.role === 'spoke') ? ['show dmvpn', 'show crypto session brief', 'show ip bgp summary', 'show ip route bgp', 'show ip nhrp'] : [];
   $('mapinfo').innerHTML = `<h2>${esc(n)}</h2><dl>${rows.join('')}</dl>
-    ${cmds.length ? `<div class="cmds">${cmds.map(x => `<button data-cmd="${esc(x)}">${esc(x)}</button>`).join('')}</div><pre class="out" id="mapout" hidden></pre>` : ''}`;
-  if (keep !== null && $('mapout')) { $('mapout').hidden = false; $('mapout').textContent = keep; }
-  $('mapinfo').querySelectorAll('[data-cmd]').forEach(b => b.onclick = async () => {
-    const out = $('mapout'); out.hidden = false; out.textContent = `${n}# ${b.dataset.cmd}\n…`;
-    try { const r = await fetch(`/api/query/${encodeURIComponent(n)}?command=${encodeURIComponent(b.dataset.cmd)}`); const j = await r.json();
-      out.textContent = `${n}# ${b.dataset.cmd}\n` + (r.ok ? j.output : (j.detail || 'failed')); }
-    catch (e) { out.textContent = String(e); } });
+    ${cmds.length ? `<div class="cmds">${cmds.map(x => `<button data-cmd="${esc(x)}">${esc(x)}</button>`).join('')}</div>` : ''}`;
+  $('mapinfo').querySelectorAll('[data-cmd]').forEach(b => b.onclick = () => runMapCommand(n, b.dataset.cmd));
 }
+
+// a show command's output: its own full-width card under the map, so wide IOS tables read without wrapping
+let MAPCMD_SEQ = 0;
+async function runMapCommand(n, cmd) {
+  const seq = ++MAPCMD_SEQ, card = $('mapcmd'), out = $('mapout');
+  card.hidden = false; $('mapcmd-title').textContent = `${n}# ${cmd}`; $('mapcmd-when').textContent = 'running…'; out.textContent = '…';
+  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  let text;
+  try { const r = await fetch(`/api/query/${encodeURIComponent(n)}?command=${encodeURIComponent(cmd)}`); const j = await r.json();
+    text = r.ok ? j.output : (j.detail || 'failed'); }
+  catch (e) { text = String(e); }
+  if (seq !== MAPCMD_SEQ) return;                     // a later command was started meanwhile: its output wins
+  out.textContent = text; $('mapcmd-when').textContent = new Date().toLocaleTimeString();
+}
+$('mapcmd-close').onclick = () => { MAPCMD_SEQ++; $('mapcmd').hidden = true; };
+$('mapcmd-copy').onclick = async () => { try { await navigator.clipboard.writeText(`${$('mapcmd-title').textContent}\n${$('mapout').textContent}`);
+  $('mapcmd-copy').textContent = 'Copied'; setTimeout(() => $('mapcmd-copy').textContent = 'Copy', 1500); } catch (e) {} };
 
 renderTasks(); show(location.hash.slice(1) || 'cloud'); load(); setInterval(() => { if (!watching) load(); }, 30000);
 </script></body></html>
