@@ -11,6 +11,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 While the version is 0.x, the lab's interfaces are still settling. The current version is in [`VERSION`](VERSION), in
 the portal's header, and in git as a `v<version>` tag.
 
+## [0.21.1] — 2026-09-27
+
+### Added
+- **The portal presentation** in `docs/presentation/`, as a .pptx and a .pdf (24 slides). It covers the problem,
+  what the portal does, its capabilities, and a tour of 16 live screenshots. On each screenshot, numbered callouts
+  match the explanations beside it. The folder also holds the scripts that rebuild it:
+  - `capture.py`: the screenshots and the callout positions;
+  - `build.py`: the slides;
+  - `topdf.py`: the PDF, without an office suite.
+
 ## [0.21.0] — 2026-09-27
 
 ### Added
@@ -486,6 +496,7 @@ the portal's header, and in git as a `v<version>` tag.
   - `nac/`, Network-as-Code for the C8000vs.
   - Robot suites, the README, and the first Nautobot seed.
 
+[0.21.1]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.21.0...v0.21.1
 [0.21.0]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.19.1...v0.20.0
 [0.19.1]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.19.0...v0.19.1

@@ -62,6 +62,7 @@ Version and changes: [`VERSION`](VERSION) and [`CHANGELOG.md`](CHANGELOG.md), wh
 | `nautobot/` | `seed.py` (lab.conf → Nautobot), `render.py` (Nautobot → the same renderer, `--check`), `remove_customer.py`, the saved GraphQL query |
 | `webapp/` | the portal: `app.py` (the runs), `customers.py` (allocate, validate, plan, modify), `labconf.py` (edit `lab.conf`), `state.py` (what the routers are doing), `drift.py` (configuration drift), `sla.py` (probes and SLA reports), `backup.py` (backup / restore), `chaos.py` (simulated failures, failover timing), `changes.py` (change control), `cportal.py` (the customer portal), `static/index.html` |
 | `results/` | one folder per test run: `configs/pre-run`, `configs/post-run`, the diff, Robot report / log |
+| `docs/presentation/` | the portal presentation, as a .pptx and a .pdf, and the scripts that rebuild it from live screenshots |
 
 ## Customer router type: Catalyst 8000v or VyOS
 

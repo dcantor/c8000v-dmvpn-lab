@@ -1,0 +1,412 @@
+{
+ "01_login": [
+  {
+   "label": "Sign in: every account has a role",
+   "box": [
+    0.38125,
+    0.3269375,
+    0.2375,
+    0.346125
+   ]
+  }
+ ],
+ "02_cloud": [
+  {
+   "label": "Live KPIs",
+   "box": [
+    0.04125,
+    0.119609375,
+    0.9175,
+    0.075640625
+   ]
+  },
+  {
+   "label": "Every router, read live",
+   "box": [
+    0.051875,
+    0.258,
+    0.89625,
+    0.413015625
+   ]
+  },
+  {
+   "label": "Both providers",
+   "box": [
+    0.051875,
+    0.770890625,
+    0.89625,
+    0.09690625
+   ]
+  },
+  {
+   "label": "Signed-in account and role",
+   "box": [
+    0.602646484375,
+    0.073484375,
+    0.196923828125,
+    0.017
+   ]
+  }
+ ],
+ "03_drift": [
+  {
+   "label": "Health: everything the model expects",
+   "box": [
+    0.051875,
+    0.479546875,
+    0.89625,
+    0.02175
+   ]
+  },
+  {
+   "label": "Configuration drift vs the model",
+   "box": [
+    0.04125,
+    0.530296875,
+    0.9175,
+    0.44978125
+   ]
+  }
+ ],
+ "04_map": [
+  {
+   "label": "Topology drawn from live state",
+   "box": [
+    0.051875,
+    0.226359375,
+    0.6875,
+    0.733328125
+   ]
+  },
+  {
+   "label": "Layers",
+   "box": [
+    0.051875,
+    0.166359375,
+    0.4446484375,
+    0.052
+   ]
+  },
+  {
+   "label": "Export SVG / PNG",
+   "box": [
+    0.61966796875,
+    0.143609375,
+    0.11970703125,
+    0.017
+   ]
+  },
+  {
+   "label": "Details: company, applications, live state",
+   "box": [
+    0.75875,
+    0.119609375,
+    0.2,
+    0.880390625
+   ]
+  }
+ ],
+ "05_path": [
+  {
+   "label": "First via a hub, then the direct shortcut",
+   "box": [
+    0.051875,
+    0.012359375,
+    0.6875,
+    0.733328125
+   ]
+  },
+  {
+   "label": "Trace / watch the shortcut form",
+   "box": [
+    0.769375,
+    0.425953125,
+    0.17875,
+    0.107640625
+   ]
+  },
+  {
+   "label": "Every trace, hop by hop",
+   "box": [
+    0.04125,
+    0.8670625,
+    0.9175,
+    0.1329375
+   ]
+  }
+ ],
+ "06_sla": [
+  {
+   "label": "Availability, latency, loss vs targets",
+   "box": [
+    0.051875,
+    0.192109375,
+    0.89625,
+    0.10553125
+   ]
+  },
+  {
+   "label": "Latency to each hub over time",
+   "box": [
+    0.051875,
+    0.3339375,
+    0.89625,
+    0.31546875
+   ]
+  },
+  {
+   "label": "Customer, window, monthly PDF",
+   "box": [
+    0.534326171875,
+    0.134609375,
+    0.413798828125,
+    0.03375
+   ]
+  }
+ ],
+ "07_resilience": [
+  {
+   "label": "Choose a failure",
+   "box": [
+    0.051875,
+    0.18675,
+    0.128125,
+    0.032
+   ]
+  },
+  {
+   "label": "Measure failover",
+   "box": [
+    0.117421875,
+    0.281,
+    0.0897265625,
+    0.03375
+   ]
+  },
+  {
+   "label": "Every measurement",
+   "box": [
+    0.051875,
+    0.484375,
+    0.89625,
+    0.12925
+   ]
+  }
+ ],
+ "08_failover": [
+  {
+   "label": "One experiment",
+   "box": [
+    0.051875,
+    0.011625,
+    0.89625,
+    0.02175
+   ]
+  },
+  {
+   "label": "Each flow: verdict and outage timeline",
+   "box": [
+    0.051875,
+    0.09125,
+    0.89625,
+    0.90875
+   ]
+  }
+ ],
+ "09_provision": [
+  {
+   "label": "Every change is a job",
+   "box": [
+    0.051875,
+    0.166359375,
+    0.89625,
+    0.424640625
+   ]
+  },
+  {
+   "label": "Pre-shared key: rotate on demand",
+   "box": [
+    0.04125,
+    0.62,
+    0.9175,
+    0.2036875
+   ]
+  }
+ ],
+ "10_modify": [
+  {
+   "label": "Router type",
+   "box": [
+    0.231875,
+    0.24396875,
+    0.10224609375,
+    0.032
+   ]
+  },
+  {
+   "label": "Preferred hub",
+   "box": [
+    0.34037109375,
+    0.24396875,
+    0.102255859375,
+    0.032
+   ]
+  },
+  {
+   "label": "Second provider",
+   "box": [
+    0.448876953125,
+    0.223578125,
+    0.10224609375,
+    0.052390625
+   ]
+  },
+  {
+   "label": "The plan, before anything runs",
+   "box": [
+    0.231875,
+    0.6821875,
+    0.53625,
+    0.1228125
+   ]
+  }
+ ],
+ "11_changes": [
+  {
+   "label": "Change requests: four eyes",
+   "box": [
+    0.051875,
+    0.191484375,
+    0.89625,
+    0.808515625
+   ]
+  }
+ ],
+ "12_job": [
+  {
+   "label": "Who started it, who approved it",
+   "box": [
+    0.051875,
+    0.0118125,
+    0.89625,
+    0.02175
+   ]
+  },
+  {
+   "label": "Progress and duration",
+   "box": [
+    0.051875,
+    0.0435625,
+    0.89625,
+    0.0325
+   ]
+  },
+  {
+   "label": "What changed on each router",
+   "box": [
+    0.051875,
+    0.514859375,
+    0.89625,
+    0.485140625
+   ]
+  }
+ ],
+ "13_tools": [
+  {
+   "label": "Accounts and roles (admin)",
+   "box": [
+    0.04125,
+    0.119609375,
+    0.9175,
+    0.426265625
+   ]
+  },
+  {
+   "label": "Every tool, with its login",
+   "box": [
+    0.051875,
+    0.7264375,
+    0.89625,
+    0.2735625
+   ]
+  }
+ ],
+ "14_customer": [
+  {
+   "label": "Service status, incidents, maintenance",
+   "box": [
+    0.04125,
+    0.081484375,
+    0.9175,
+    0.05575
+   ]
+  },
+  {
+   "label": "Only its own site",
+   "box": [
+    0.051875,
+    0.197984375,
+    0.6875,
+    0.733328125
+   ]
+  },
+  {
+   "label": "Its site and applications, live",
+   "box": [
+    0.75875,
+    0.151234375,
+    0.2,
+    0.848765625
+   ]
+  },
+  {
+   "label": "Its own pages",
+   "box": [
+    0.17322265625,
+    0.01659375,
+    0.25716796875,
+    0.030296875
+   ]
+  }
+ ],
+ "15_requests": [
+  {
+   "label": "Ask for a change",
+   "box": [
+    0.051875,
+    0.128234375,
+    0.89625,
+    0.2148125
+   ]
+  },
+  {
+   "label": "Progress of its requests",
+   "box": [
+    0.051875,
+    0.418796875,
+    0.89625,
+    0.1078125
+   ]
+  }
+ ],
+ "16_diag": [
+  {
+   "label": "Tests from its own LAN host",
+   "box": [
+    0.051875,
+    0.128234375,
+    0.89625,
+    0.0555
+   ]
+  },
+  {
+   "label": "Every application, every hub",
+   "box": [
+    0.051875,
+    0.193734375,
+    0.89625,
+    0.512375
+   ]
+  }
+ ]
+}
