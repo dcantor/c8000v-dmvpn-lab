@@ -11,6 +11,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 While the version is 0.x, the lab's interfaces are still settling. The current version is in [`VERSION`](VERSION), in
 the portal's header, and in git as a `v<version>` tag.
 
+## [0.16.0] — 2026-09-27
+
+### Changed
+- **Network map, a host's details:** one **ping all hosts** button replaces the per-host ping buttons. It pings every
+  other LAN host in parallel and fills the output box as each answers: a section per target marked reachable or
+  UNREACHABLE, then an `n / n reachable` summary. The API is unchanged (`GET /api/hosts/{host}/ping`, one call per
+  target).
+
 ## [0.15.1] — 2026-09-27
 
 ### Fixed
@@ -207,6 +215,7 @@ the portal's header, and in git as a `v<version>` tag.
   - `nac/`, Network-as-Code for the C8000vs.
   - Robot suites, the README, and the first Nautobot seed.
 
+[0.16.0]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.15.1...v0.16.0
 [0.15.1]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.13.0...v0.14.0

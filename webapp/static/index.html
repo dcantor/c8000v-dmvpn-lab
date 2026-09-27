@@ -637,12 +637,12 @@ function renderInfo(n, fresh) {
   }
   $('mapinfo').innerHTML = `<h2>${esc(n)}</h2>${company}${apps}<dl>${rows.join('')}</dl>${view}
     <div class="cmds">${cmds.map(x => `<button data-cmd="${esc(x)}">${esc(x)}</button>`).join('')}<button data-config title="read the configuration live from ${esc(n)}">show configuration</button></div>
-    ${pings.length ? `<div class="cmds">${pings.map(x => `<button data-ping="${esc(x)}" title="ping ${esc(ST.nodes[x].lan_ip.split('/')[0])} from ${esc(n)}">ping ${esc(x)}</button>`).join('')}</div>` : ''}`;
+    ${pings.length ? `<div class="cmds"><button data-pingall title="ping ${esc(pings.join(', '))} from ${esc(n)}">ping all hosts (${pings.length})</button></div>` : ''}`;
   $('mapinfo').querySelectorAll('[data-cmd]').forEach(b => b.onclick = () => runMapCommand(n, b.dataset.cmd));
   $('mapinfo').querySelectorAll('[data-config]').forEach(b => b.onclick = () => runMapConfig(n));
   $('mapinfo').querySelectorAll('[data-focus]').forEach(b => b.onclick = () => setFocus(MAPFOCUS === n ? null : n));
   $('mapinfo').querySelectorAll('[data-pdf]').forEach(b => b.onclick = () => downloadCustomerPdf(n, b));
-  $('mapinfo').querySelectorAll('[data-ping]').forEach(b => b.onclick = () => runMapPing(n, b.dataset.ping));
+  $('mapinfo').querySelectorAll('[data-pingall]').forEach(b => b.onclick = () => runMapPingAll(n, pings));
 }
 
 // a show command's output: its own full-width card under the map, so wide IOS tables read without wrapping
@@ -665,10 +665,25 @@ function runMapConfig(n) {
   const what = { hub: 'show running-config', spoke: 'show running-config', provider: 'show configuration commands', host: 'network configuration' }[(ST.nodes[n] || {}).role] || 'configuration';
   return runMapOutput(`${n} — configuration (${what})`, `/api/config/${encodeURIComponent(n)}`, j => [j.output, `<span class="hint">${esc(j.lines)} lines</span>`]);
 }
-function runMapPing(host, target) {
-  const addr = ST.nodes[target].lan_ip.split('/')[0];
-  return runMapOutput(`${host}$ ping -c 4 ${addr}   (${target})`, `/api/hosts/${encodeURIComponent(host)}/ping?target=${encodeURIComponent(target)}`,
-    j => [j.output, pill(j.ok, j.ok ? 'reachable' : 'unreachable')]);
+// ping every other LAN host at once: one section per target, filled in as each answers, then a summary
+async function runMapPingAll(host, targets) {
+  const seq = ++MAPCMD_SEQ, card = $('mapcmd'), out = $('mapout');
+  const addr = t => ST.nodes[t].lan_ip.split('/')[0], res = {};
+  card.hidden = false; $('mapcmd-title').textContent = `${host}$ ping -c 4 — every other host (${targets.length})`;
+  $('mapcmd-when').textContent = 'running…'; card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  const draw = () => { out.textContent = targets.map(t => `=== ${t} (${addr(t)}) ${!(t in res) ? '— pinging…' : res[t].ok ? '— reachable' : '— UNREACHABLE'}\n${(res[t] || {}).text || ''}`).join('\n'); };
+  draw();
+  await Promise.all(targets.map(async t => {
+    let r = { ok: false, text: '' };
+    try { const q = await fetch(`/api/hosts/${encodeURIComponent(host)}/ping?target=${encodeURIComponent(t)}`); const j = await q.json();
+      r = q.ok ? { ok: !!j.ok, text: j.output } : { ok: false, text: typeof j.detail === 'string' ? j.detail : JSON.stringify(j.detail) }; }
+    catch (e) { r.text = String(e); }
+    if (seq !== MAPCMD_SEQ) return;
+    res[t] = r; draw();
+  }));
+  if (seq !== MAPCMD_SEQ) return;
+  const up = targets.filter(t => res[t].ok).length;
+  $('mapcmd-when').innerHTML = esc(new Date().toLocaleTimeString()) + ' ' + pill(up === targets.length, `${up} / ${targets.length} reachable`);
 }
 $('mapcmd-dl').onclick = () => {
   const title = $('mapcmd-title').textContent, stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
