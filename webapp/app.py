@@ -29,9 +29,12 @@ from labportal import RunBase, RunRegistry, exposition, install_runs_api, metric
 from pydantic import BaseModel, Field
 
 import customers as C
+import auth as A
 import backup as B
 import changes as CH
+import confighist as CFG
 import cportal as CP
+import maint as M
 import chaos as X
 import drift as D
 import sla as SLA
@@ -80,6 +83,8 @@ STEP_TITLES = {
     "fo_restore": "Take the fault out",
     "fo_recover": "Wait for the lab to be healthy again",
     "fo_report": "Collect every flow's replies and measure the outages",
+    "cfg_before": "Snapshot every router's configuration (before)",
+    "cfg_after": "Snapshot every router's configuration (after) and compare",
     "render": "Render the configuration from lab.conf",
     "plan": "terraform plan: what Network-as-Code would change",
     "check": "Compare Nautobot's rendering with lab.conf's",
@@ -91,7 +96,8 @@ TAGS = [{"name": "monitoring", "description": "Prometheus: /metrics and /api/sd,
         {"name": "backup", "description": "Back up the whole lab state as one download; upload one to restore it."},
         {"name": "resilience", "description": "Simulated failures, and failover measured flow by flow."},
         {"name": "change control", "description": "Change requests, four-eyes approval, change windows."},
-        {"name": "customer portal", "description": "A customer's own read-only view, behind a per-customer link."}]
+        {"name": "customer portal", "description": "A customer's own view: a secret link (read-only), or a customer account (also self-service)."},
+        {"name": "auth", "description": "Sign in, accounts and roles."}]
 app = FastAPI(title="c8000v-dmvpn-lab Provisioning Portal API", version="1.0", openapi_tags=TAGS,
               docs_url="/docs", redoc_url="/redoc",
               description="REST API behind the C8000v DMVPN lab's portal. Every change goes **lab.conf → rendered "
@@ -99,6 +105,166 @@ app = FastAPI(title="c8000v-dmvpn-lab Provisioning Portal API", version="1.0", o
                           "are asynchronous (`POST /api/runs`, poll `GET /api/runs/{id}`). UI: [/](/)")
 registry = RunRegistry(RUNS_DIR)
 state = State()
+
+
+# ---- logins and roles (auth.py) ---------------------------------------------------------------------------------------
+OPEN = {"/", "/api/version", "/api/sd", "/metrics", "/api/auth/login", "/api/auth/logout", "/api/auth/me", "/docs", "/redoc",
+        "/openapi.json", "/favicon.ico"}
+OPEN_PREFIX = ("/static/", "/c/", "/api/c/", "/docs/")
+
+
+def _local(request):
+    """The lab host itself (the lab hub polls GET /api/runs from here)."""
+    ip = request.client.host if request.client else ""
+    return ip in ("127.0.0.1", "::1", os.environ.get("LAB_HOST_IP", "10.5.0.1"), os.environ.get("LAB_PUBLIC_HOST", "192.168.50.231"))
+
+
+def _need(method, path):
+    """The roles a request needs (any of them), or None for any signed-in staff account."""
+    if path.startswith("/api/auth/users"):
+        return ("admin",)
+    if method in ("GET", "HEAD"):
+        return None
+    if path == "/api/auth/password":
+        return None
+    if path == "/api/policy":
+        return ("admin",)
+    if re.fullmatch(r"/api/changes/[^/]+/(approve|reject)", path):
+        return ("approver",)
+    if re.fullmatch(r"/api/changes/[^/]+/cancel", path):
+        return ("operator", "approver")
+    if path == "/api/customers/validate" or re.fullmatch(r"/api/customers/[^/]+/modify/validate", path):
+        return ("viewer", "operator", "approver")
+    return ("operator",)
+
+
+@app.middleware("http")
+async def _auth(request: Request, call_next):
+    path, method = request.url.path, request.method
+    user = A.from_cookie(request.cookies.get(A.COOKIE))
+    request.state.user = user
+    if path in OPEN or path.startswith(OPEN_PREFIX):
+        return await call_next(request)
+    if method == "GET" and path == "/api/runs" and user is None and _local(request):
+        return await call_next(request)
+    if not (path.startswith("/api/") or path.startswith("/results/")):
+        return await call_next(request)
+    if user is None:
+        return JSONResponse({"detail": "sign in first"}, status_code=401)
+    if "customer" in user["roles"]:
+        return JSONResponse({"detail": "a customer account sees its own service only (/api/c/me/…)"}, status_code=403)
+    need = _need(method, path)
+    if need is not None and not A.has(user, *need):
+        return JSONResponse({"detail": f"{user['username']} may not do this: it needs the {' or '.join(need)} role"}, status_code=403)
+    return await call_next(request)
+
+
+def _user(request) -> dict:
+    return getattr(request.state, "user", None) or {}
+
+
+class Login(BaseModel):
+    username: str
+    password: str
+
+
+@app.post("/api/auth/login", tags=["auth"], summary="Sign in (sets the session cookie)")
+def api_login(body: Login, response: Response):
+    u = A.authenticate(body.username.strip().lower(), body.password)
+    if u is None:
+        time.sleep(1)                                   # every failed guess costs a second
+        raise HTTPException(401, "wrong username or password")
+    response.set_cookie(A.COOKIE, A.make_cookie(body.username.strip().lower(), u), httponly=True, samesite="lax",
+                        max_age=A.SESSION_H * 3600)
+    return A.public(body.username.strip().lower(), u)
+
+
+@app.post("/api/auth/logout", tags=["auth"], summary="Sign out")
+def api_logout(response: Response):
+    response.delete_cookie(A.COOKIE)
+    return {"ok": True}
+
+
+@app.get("/api/auth/me", tags=["auth"], summary="Who is signed in (401 if nobody)")
+def api_me(request: Request):
+    u = _user(request)
+    if not u:
+        raise HTTPException(401, "not signed in")
+    return {**u, "defaults": A.seeded_defaults() if A.has(u, "admin") else []}
+
+
+class PasswordChange(BaseModel):
+    old: str
+    new: str
+
+
+@app.post("/api/auth/password", tags=["auth"], summary="Change your own password")
+def api_password(body: PasswordChange, request: Request, response: Response):
+    u = _user(request)
+    if not u or u["username"] == A.RENDERER:
+        raise HTTPException(401, "not signed in")
+    if A.authenticate(u["username"], body.old) is None:
+        raise HTTPException(403, "the current password is wrong")
+    try:
+        A.update(u["username"], password=body.new)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    response.set_cookie(A.COOKIE, A.make_cookie(u["username"], A.users()[u["username"]]), httponly=True, samesite="lax",
+                        max_age=A.SESSION_H * 3600)
+    return {"ok": True}
+
+
+class NewUser(BaseModel):
+    username: str
+    name: str = ""
+    roles: list[str]
+    password: str
+    customer: str | None = None
+
+
+class UserPatch(BaseModel):
+    name: str | None = None
+    roles: list[str] | None = None
+    password: str | None = None
+    disabled: bool | None = None
+
+
+@app.get("/api/auth/users", tags=["auth"], summary="Every account (admin)")
+def api_users():
+    return [A.public(n, u) for n, u in sorted(A.users().items())]
+
+
+@app.post("/api/auth/users", tags=["auth"], summary="Make an account (admin)")
+def api_user_create(body: NewUser):
+    if body.customer and C.current(body.customer) is None:
+        raise HTTPException(400, f"{body.customer} is not a customer of this lab")
+    try:
+        return A.create(body.username.strip().lower(), body.name, body.roles, body.password, body.customer)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.patch("/api/auth/users/{username}", tags=["auth"], summary="Change an account (admin)")
+def api_user_update(username: str, body: UserPatch):
+    try:
+        return A.update(username, **body.model_dump())
+    except KeyError:
+        raise HTTPException(404, f"no account {username}")
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.delete("/api/auth/users/{username}", tags=["auth"], summary="Delete an account (admin)")
+def api_user_delete(username: str, request: Request):
+    if username == _user(request).get("username"):
+        raise HTTPException(400, "you cannot delete yourself")
+    try:
+        A.delete(username)
+    except KeyError:
+        raise HTTPException(404, f"no account {username}")
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"ok": True}
 
 
 class CustomerSpec(BaseModel):
@@ -154,7 +320,22 @@ class Run(RunBase):
     LAB = "c8000v-dmvpn-lab"
     STEP_TITLES = STEP_TITLES
     EXTRA = {"customer": "customer", "spec": "spec", "removal": "removal", "modification": "modification", "drift": "drift",
-             "restore": "restore", "change": "change", "failover": "failover"}
+             "restore": "restore", "change": "change", "failover": "failover", "started_by": "started_by",
+             "config_changes": "config_changes"}
+    CHANGING = ("customer", "remove", "modify", "deploy", "fixdrift", "restore")       # jobs that change routers
+    MAINTENANCE = ("remove", "modify", "deploy", "fixdrift", "restore", "failover")   # jobs that disturb the service
+
+    def execute(self):
+        """A disruptive job runs under a maintenance record: its routers' alerts are muted, its customers are told."""
+        self.maint_id = None
+        if self.mode in self.MAINTENANCE:
+            try:
+                routers, custs = _job_scope(self)
+                self.maint_id = M.open_(C.facts(), "job", self.id, f"{self.mode} {self.customer or ''}".strip()
+                                        + (f" ({self.change})" if self.change else ""), routers, custs, self.started_by or "?", self.change)["id"]
+            except Exception:                      # noqa: BLE001 — a record that cannot open must not stop the work
+                pass
+        super().execute()
 
     # the steps that read differently for a VyOS router (the defaults above describe a Catalyst 8000v)
     VYOS_TITLES = {
@@ -172,6 +353,8 @@ class Run(RunBase):
         self.modification = (resume_of or {}).get("modification")
         self.drift = None
         self.change = (resume_of or {}).get("change")        # the change request that started it, if any
+        self.started_by = (resume_of or {}).get("started_by")
+        self.config_changes = (resume_of or {}).get("config_changes")
         self.failover = (resume_of or {}).get("failover")
         self.restore = (resume_of or {}).get("restore")
         if mode == "restore" and not self.restore:
@@ -210,6 +393,13 @@ class Run(RunBase):
                 st["title"] = "Power off and delete the C8000v and its host"
 
     def plan(self):
+        steps = self._plan()
+        if self.mode in self.CHANGING:              # the configuration before, and after (before the tests)
+            i = steps.index("test") if "test" in steps else len(steps)
+            steps = ["cfg_before"] + steps[:i] + ["cfg_after"] + steps[i:]
+        return steps
+
+    def _plan(self):
         if self.mode == "test":
             return ["test"]
         if self.mode == "plan":
@@ -249,8 +439,30 @@ class Run(RunBase):
             steps.append("test")
         return steps
 
+    def do_cfg_before(self, s):
+        errs = CFG.snapshot(C.facts()["inv"], self.id, "before")
+        s["summary"] = "every router saved" + (f"; not read: {', '.join(errs)}" if errs else "")
+
+    def do_cfg_after(self, s):
+        errs = CFG.snapshot(C.facts()["inv"], self.id, "after")
+        d = CFG.compare(self.id)
+        self.config_changes = {r: {k: v[k] for k in ("added", "removed", "new", "gone")} for r, v in d.items()}
+        s["summary"] = ("; ".join(f"{r} +{v['added']}/−{v['removed']}" for r, v in d.items()) or "no router's configuration changed") + (
+            f"; not read: {', '.join(errs)}" if errs else "")
+
     def after(self):
         state._cache.clear()
+        if getattr(self, "maint_id", None):
+            M.close(mid=self.maint_id, reason=f"job {self.status}")
+        if self.mode in self.CHANGING and self.config_changes is None:     # failed before cfg_after: compare what is there
+            try:
+                if any(st["name"] == "cfg_before" and st["status"] == "success" for st in self.steps):
+                    CFG.snapshot(C.facts()["inv"], self.id, "after")
+                    d = CFG.compare(self.id)
+                    self.config_changes = {r: {k: v[k] for k in ("added", "removed", "new", "gone")} for r, v in d.items()}
+                    self.persist()
+            except Exception:                      # noqa: BLE001
+                pass
         fo = self.failover or {}
         if self.mode == "failover" and fo.get("fault_id") and any(x["id"] == fo["fault_id"] for x in X.active()):
             try:                                   # a failed or interrupted experiment never leaves its fault in
@@ -490,18 +702,18 @@ class Run(RunBase):
         for name, r in sorted(rep["nodes"].items()):
             if r.get("platform") != "c8000v" or name not in nodes:
                 continue
-            tpl = {i["where"] for i in r["items"] if i.get("where", "").startswith(("tunnel0_", "tunnel1_", "bgp_hub_"))}
+            tpl = {i["where"] for i in r["items"] if i.get("where", "").startswith(("tunnel0_", "tunnel1_", "bgp_hub_", "vips_"))}
             self._replace += [f'module.iosxe.iosxe_cli.cli_0["{name}/{t}"]' for t in sorted(tpl)]
-            for tun in ("0", "1"):
-                extra = [i["line"] for i in r["items"] if i["kind"] == "extra" and i.get("where", "").startswith(f"tunnel{tun}_")]
+            for pre, itf in (("tunnel0_", "Tunnel0"), ("tunnel1_", "Tunnel1"), ("vips_", "Loopback10")):
+                extra = [i["line"] for i in r["items"] if i["kind"] == "extra" and i.get("where", "").startswith(pre)]
                 if extra:
                     from netmiko import ConnectHandler
                     c = ConnectHandler(device_type="cisco_xe", host=nodes[name]["mgmt_ip"], username="admin", password="admin", fast_cli=False)
                     try:
-                        self.say(c.send_config_set([f"interface Tunnel{tun}", *[f"no {l}" for l in extra]]))
+                        self.say(c.send_config_set([f"interface {itf}", *[f"no {l}" for l in extra]]))
                     finally:
                         c.disconnect()
-                    undone.append(f"{name} Tunnel{tun}: {len(extra)} line(s) removed")
+                    undone.append(f"{name} {itf}: {len(extra)} line(s) removed")
         for a in self._replace:
             self.say(f"will write again: {a}")
         s["summary"] = "; ".join(undone + [f"{len(self._replace)} template(s) to write again"]) if (undone or self._replace) else "no template drift"
@@ -689,7 +901,8 @@ def index():
 @app.get("/api/state", tags=["state"], summary="The cloud: the model, and what every router in it is doing")
 def api_state(refresh: bool = False, live: bool = True):
     snap = state.get(refresh=refresh, live=live)
-    return {**snap, "faults": X.active(), "changes_open": sum(1 for c in CH.all_requests(200) if c["status"] in ("pending", "scheduled"))}
+    return {**snap, "faults": X.active(), "maintenance": M.active(), "app_status": prober.app_status(),
+            "changes_open": sum(1 for c in CH.all_requests(200) if c["status"] in ("pending", "scheduled"))}
 
 
 @app.get("/api/customers/suggest", tags=["provisioning"], summary="The next customer, every value allocated")
@@ -746,7 +959,8 @@ def api_faults():
 
 @app.post("/api/faults", tags=["resilience"], summary="Simulate a failure (or file a change request for one)",
           responses={202: {"description": "change control covers failures: a change request was filed"}})
-def api_fault(req: FaultRequest):
+def api_fault(req: FaultRequest, request: Request):
+    req.requested_by = _user(request).get("username") or req.requested_by
     f = C.facts()
     try:
         X._describe(f, req.kind, req.target)
@@ -765,14 +979,21 @@ def api_fault(req: FaultRequest):
         raise HTTPException(409, str(e))
     except Exception as e:                                          # noqa: BLE001
         raise HTTPException(502, f"{e.__class__.__name__}: {e}")
+    _fault_maint(item, req.requested_by)
     state._cache.clear()
     return item
+
+
+def _fault_maint(item, by, change=None):
+    M.open_(C.facts(), "fault", item["id"], f"simulated failure: {item['title']} on {item['target']}", item["nodes"],
+            _fault_affects(item["kind"], item["target"]), by or "?", change)
 
 
 @app.delete("/api/faults/{fid}", tags=["resilience"], summary="Take a simulated failure out (never needs approval)")
 def api_fault_restore(fid: str):
     try:
         rec = X.restore(C.facts(), fid)
+        M.close(ref=fid, reason="restored")
     except KeyError:
         raise HTTPException(404, f"no active fault {fid}")
     except Exception as e:                                          # noqa: BLE001
@@ -784,6 +1005,8 @@ def api_fault_restore(fid: str):
 @app.post("/api/faults/restore-all", tags=["resilience"], summary="Take every simulated failure out")
 def api_fault_restore_all():
     out = X.restore_all(C.facts())
+    for x in out:
+        M.close(ref=x["id"], reason="restored")
     state._cache.clear()
     return out
 
@@ -803,7 +1026,7 @@ def api_failover(run_id: str):
 
 # ---- change control --------------------------------------------------------------------------------------------------
 class Decision(BaseModel):
-    by: str = Field(description="who decides (must not be the requester when four-eyes is on)")
+    by: str = Field("", description="ignored: the signed-in account decides (and must not be the requester when four-eyes is on)")
     comment: str = ""
     emergency: bool = Field(False, description="approve and start now, outside the change window (needs a comment)")
 
@@ -821,7 +1044,8 @@ def api_change(cid: str):
     return cr
 
 
-def _decide(cid, d: Decision, approve):
+def _decide(cid, d: Decision, approve, request=None):
+    d.by = _user(request).get("username") or d.by if request is not None else d.by
     try:
         cr = CH.decide(cid, d.by, approve, d.comment, d.emergency)
     except KeyError:
@@ -836,19 +1060,23 @@ def _decide(cid, d: Decision, approve):
 
 
 @app.post("/api/changes/{cid}/approve", tags=["change control"], summary="Approve: it starts now, or in the next change window")
-def api_change_approve(cid: str, d: Decision):
-    return _decide(cid, d, True)
+def api_change_approve(cid: str, d: Decision, request: Request):
+    return _decide(cid, d, True, request)
 
 
 @app.post("/api/changes/{cid}/reject", tags=["change control"], summary="Reject a change request")
-def api_change_reject(cid: str, d: Decision):
-    return _decide(cid, d, False)
+def api_change_reject(cid: str, d: Decision, request: Request):
+    return _decide(cid, d, False, request)
 
 
 @app.post("/api/changes/{cid}/cancel", tags=["change control"], summary="Withdraw a pending or scheduled change request")
-def api_change_cancel(cid: str, d: Decision):
+def api_change_cancel(cid: str, d: Decision, request: Request):
+    u = _user(request)
+    cr = CH.get(cid)
+    if cr and u and cr["requested_by"] != u["username"] and not A.has(u, "approver"):
+        raise HTTPException(403, "only the requester or an approver can withdraw a change request")
     try:
-        return CH.cancel(cid, d.by)
+        return CH.cancel(cid, u.get("username") or d.by)
     except KeyError:
         raise HTTPException(404, f"no change request {cid}")
     except ValueError as e:
@@ -882,6 +1110,11 @@ def _changes_scheduler():
             for cr in old:
                 CH.mark(cr["id"], "expired", f"nobody decided within {CH.policy()['expire_hours']} h")
             X.expire(C.facts())
+            live_faults = {x["id"] for x in X.active()}
+            live_jobs = {r.id for r in registry.runs.values() if r.status in ("running", "queued")}
+            for m in M.active():
+                if (m["kind"] == "fault" and m["ref"] not in live_faults) or (m["kind"] == "job" and m["ref"] not in live_jobs):
+                    M.close(mid=m["id"], reason="its fault or job ended")
         except Exception:                                           # noqa: BLE001
             pass
         time.sleep(30)
@@ -904,8 +1137,15 @@ def api_portal_rotate(name: str):
     return {"customer": name, "path": f"/c/{t}", "url": f"http://{PUBLIC_HOST}:{WEBAPP_PORT}/c/{t}"}
 
 
-def _cust(token):
-    c = CP.customer_of(token)
+def _cust(token, request=None):
+    """The customer a link or a session speaks for: /api/c/<secret token>/… or, signed in as a customer, /api/c/me/…"""
+    if token == "me":
+        u = _user(request) if request is not None else {}
+        if not u or "customer" not in (u.get("roles") or []):
+            raise HTTPException(401, "sign in with a customer account")
+        c = u.get("customer")
+    else:
+        c = CP.customer_of(token)
     if c is None or C.current(c) is None:
         raise HTTPException(404, "this link is not (or no longer) valid")
     return c
@@ -918,20 +1158,154 @@ def customer_page(token: str):
 
 
 @app.get("/api/c/{token}/state", tags=["customer portal"], summary="The service as one customer sees it")
-def api_c_state(token: str, refresh: bool = False):
-    c = _cust(token)
-    return CP.view(state.get(refresh=refresh), c, X.active(), CH.all_requests(200), X.KINDS)
+def api_c_state(token: str, request: Request, refresh: bool = False):
+    c = _cust(token, request)
+    v = CP.view(state.get(refresh=refresh), c, X.active(), CH.all_requests(200), X.KINDS, M.active())
+    v["app_status"] = {c: prober.app_status(c)}
+    return v
 
 
 @app.get("/api/c/{token}/sla", tags=["customer portal"], summary="The customer's service levels")
-def api_c_sla(token: str, window: str = "30d"):
-    return api_customer_sla(_cust(token), window)
+def api_c_sla(token: str, request: Request, window: str = "30d"):
+    return api_customer_sla(_cust(token, request), window)
 
 
 @app.get("/api/c/{token}/map.pdf", tags=["customer portal"], summary="The customer's network view and monthly report, as a PDF",
          response_class=Response, responses={200: {"content": {"application/pdf": {}}}})
-def api_c_pdf(token: str):
-    return api_customer_map_pdf(_cust(token))
+def api_c_pdf(token: str, request: Request):
+    return api_customer_map_pdf(_cust(token, request))
+
+
+# ---- maintenance ----------------------------------------------------------------------------------------------------
+class MaintenanceRequest(BaseModel):
+    summary: str = Field(examples=["replacing hub-west's uplink"])
+    routers: list[str] = Field(default_factory=list, description="routers worked on (their alerts are muted)")
+    customers: list[str] = Field(default_factory=list, description="customers affected, or [\"all\"]")
+
+
+@app.get("/api/maintenance", tags=["change control"], summary="Maintenance under way, and recent")
+def api_maintenance():
+    return {"active": M.active(), "history": M.history()}
+
+
+@app.post("/api/maintenance", tags=["change control"], summary="Declare maintenance by hand (alerts muted, customers told)")
+def api_maintenance_open(req: MaintenanceRequest, request: Request):
+    f = C.facts()
+    bad = [r for r in req.routers if r not in f["nodes"]] + [c for c in req.customers if c != "all" and c not in f["customers"]]
+    if bad or not (req.routers or req.customers) or not req.summary.strip():
+        raise HTTPException(400, "say what, and name routers or customers of this lab" + (f" (not in the lab: {', '.join(bad)})" if bad else ""))
+    return M.open_(f, "manual", None, req.summary.strip(), req.routers, req.customers, _user(request).get("username", "?"))
+
+
+@app.delete("/api/maintenance/{mid}", tags=["change control"], summary="End a maintenance")
+def api_maintenance_close(mid: str):
+    if not M.close(mid=mid, reason="ended by hand"):
+        raise HTTPException(404, f"no maintenance {mid} under way")
+    return {"ok": True}
+
+
+# ---- configuration history ------------------------------------------------------------------------------------------
+@app.get("/api/runs/{run_id}/config", tags=["runs"], summary="What a job changed in each router's configuration (unified diffs)")
+def api_run_config(run_id: str):
+    d = CFG.diff(run_id)
+    if d is None:
+        raise HTTPException(404, "no configuration snapshots for this job (it changes no router, or is still running)")
+    return d
+
+
+@app.get("/api/config-history", tags=["state"], summary="Jobs that changed configurations, newest first (optionally one router's)")
+def api_config_history(router: str | None = None):
+    return CFG.history(router)
+
+
+@app.get("/api/config-history/{job}/{router}", tags=["state"], summary="A router's configuration before or after a job",
+         response_class=PlainTextResponse)
+def api_config_snapshot(job: str, router: str, which: str = Query("after", description="before | after")):
+    t = CFG.config(job, router, which)
+    if t is None:
+        raise HTTPException(404, "no such snapshot")
+    return PlainTextResponse(t)
+
+
+# ---- customer self-service -----------------------------------------------------------------------------------------
+class CustomerRequest(BaseModel):
+    applications: list[str] | None = Field(None, description="the applications to subscribe to (the whole list)")
+    prefer_hub: str | None = Field(None, description="a hub, or empty for none")
+    dual_homed: bool | None = Field(None, description="ask for (or give up) a second provider")
+    reason: str = ""
+
+
+@app.post("/api/c/{token}/requests", tags=["customer portal"], summary="A customer asks for a change (a change request for the operators)")
+def api_c_request(token: str, body: CustomerRequest, request: Request):
+    """Only a signed-in customer account (token `me`) can ask. What it may change: its applications, its preferred hub,
+    dual-homing. The request always waits for an approver, whatever the change policy — it is a customer asking."""
+    if token != "me":
+        raise HTTPException(401, "sign in with your customer account to ask for changes")
+    c, u = _cust(token, request), _user(request)
+    ch = {}
+    if body.applications is not None:
+        ch["customer"] = {"applications": sorted(set(body.applications))}
+    if body.prefer_hub is not None:
+        ch["prefer_hub"] = body.prefer_hub
+    if body.dual_homed is not None:
+        ch["dual_homed"] = body.dual_homed
+    if not ch:
+        raise HTTPException(400, "nothing asked for")
+    req = RunRequest(mode="modify", name=c, changes=CustomerChange(**ch), options={"test": False}, requested_by=u["username"],
+                     reason=body.reason)
+    run = _new_run(req)                                   # validates, and plans the change
+    summary, affects = _change_summary(req, run)
+    return CH.create("modify", req.model_dump(exclude_none=True), summary, u["username"], body.reason, affects, source="customer")
+
+
+@app.get("/api/c/{token}/catalogue", tags=["customer portal"], summary="Every application on offer (to subscribe to)")
+def api_c_catalogue(token: str, request: Request):
+    _cust(token, request)
+    return [{k: a.get(k) for k in ("id", "name", "description", "url", "protocol", "port", "hubs")} for a in C.facts()["inv"].get("applications") or []]
+
+
+@app.get("/api/c/{token}/requests", tags=["customer portal"], summary="The customer's own requests")
+def api_c_requests(token: str, request: Request):
+    c = _cust(token, request)
+    return [{k: cr.get(k) for k in ("id", "summary", "status", "requested_by", "requested_at", "decided_at", "comment", "reason", "run_id")}
+            for cr in CH.all_requests(200) if cr.get("source") == "customer" and (cr.get("request") or {}).get("name") == c]
+
+
+class Diagnostic(BaseModel):
+    kind: str = Field("apps", description="apps: every subscribed application at every hub · hubs: every hub's LAN · trace: a path")
+    app: str | None = None
+    hub: str | None = None
+
+
+@app.post("/api/c/{token}/diagnostics", tags=["customer portal"], summary="Test the service from the customer's own LAN host")
+def api_c_diag(token: str, body: Diagnostic, request: Request):
+    """Pings (and HTTPS connects) from the customer's LAN host to its own applications and the hubs, or a traceroute
+    to one application's VIP. Only its own applications and the hubs: never another customer's site."""
+    c = _cust(token, request)
+    f = C.facts()
+    inv, nodes = f["inv"], f["nodes"]
+    host = nodes[nodes[c]["host"]]
+    if body.kind == "trace":
+        app_ = next((a for a in inv.get("applications") or [] if a["id"] == body.app), None)
+        subs = set((nodes[c].get("customer") or {}).get("applications") or [])
+        if not app_ or body.app not in subs or body.hub not in app_.get("vips", {}):
+            raise HTTPException(404, "not one of your applications at that hub")
+        v = app_["vips"][body.hub]
+        out = _ssh(host["mgmt_ip"], f"traceroute -n -q 2 -w 2 -m 8 {v} 2>&1", HOST_USER, HOST_PASS, timeout=60)
+        own = _owners(nodes)
+        hops = []
+        for line in out.splitlines():
+            m = re.match(r"^\s*(\d+)\s+(.*)$", line)
+            if m:
+                ip = re.search(r"(\d+\.\d+\.\d+\.\d+)", m[2])
+                n_ = own.get(ip[1], (None, None))[0] if ip else None
+                hops.append({"hop": int(m[1]), "ip": ip[1] if ip else None, "node": n_ if n_ in (c, body.hub) or (n_ and nodes[n_]["role"] in ("hub", "provider")) else ("another site" if n_ else None)})
+        return {"kind": "trace", "target": f"{body.app} at {body.hub} ({v})", "hops": hops}
+    hubs = {h: str(__import__("ipaddress").ip_network(nodes[h]["lan"]).network_address + 1) for h in f["hubs"]}
+    vips = SLA.Prober.app_targets(inv, c) if body.kind == "apps" else {}
+    p = SLA.Prober()
+    res = p.probe_host(c, host["mgmt_ip"], hubs if body.kind == "hubs" else {}, vips)
+    return {"kind": body.kind, "hubs": res if body.kind == "hubs" else {}, "apps": p.app_status(c), "at": time.time()}
 
 
 @app.get("/api/drift", tags=["state"], summary="The latest configuration drift report")
@@ -1011,7 +1385,9 @@ def api_customer_map_pdf(name: str):
         with sync_playwright() as pw:
             browser = pw.chromium.launch(channel="chrome", headless=True)
             try:
-                page = browser.new_page(viewport={"width": 1400, "height": 1000})
+                ctx = browser.new_context(viewport={"width": 1400, "height": 1000})
+                ctx.add_cookies([{"name": A.COOKIE, "value": A.renderer_cookie(), "domain": "127.0.0.1", "path": "/"}])
+                page = ctx.new_page()
                 page.goto(f"http://127.0.0.1:{WEBAPP_PORT}/?print={name}#map", wait_until="domcontentloaded")
                 page.wait_for_function("window.__mapReady === true", timeout=120_000)
                 pdf = page.pdf(format="A4", landscape=True, print_background=True,
@@ -1239,6 +1615,17 @@ def _change_summary(req, run):
     return {"deploy": "deploy the model to every router", "fixdrift": "put every router back to the model (fix drift)"}.get(m, m), ["all"]
 
 
+def _job_scope(run):
+    """(routers, customers) a disruptive job works on — for its maintenance record."""
+    m = run.mode
+    if m in ("modify", "remove"):
+        return [run.spec["name"]], [run.spec["name"]]
+    if m == "failover":
+        fl = run.spec["fault"]
+        return X._describe(C.facts(), fl["kind"], fl["target"])["nodes"], _fault_affects(fl["kind"], fl["target"])
+    return ["all"], ["all"]
+
+
 def _fault_affects(kind, target):
     f = C.facts()
     if kind in ("site-wan", "tunnel-down"):
@@ -1281,10 +1668,12 @@ def _start_change(cr):
     try:
         if cr["kind"] == "fault":
             item = X.apply(C.facts(), cr["request"]["kind"], cr["request"]["target"], by=cr["requested_by"], note=cr["id"])
+            _fault_maint(item, cr["requested_by"], cr["id"])
             state._cache.clear()
             return CH.mark(cr["id"], "started", f"fault {item['id']} applied", fault_id=item["id"])
         run = _new_run(RunRequest(**cr["request"]))
         run.change = cr["id"]
+        run.started_by = f"{cr['requested_by']}, approved by {cr.get('decided_by')}"
         registry.start(run)
         return CH.mark(cr["id"], "started", f"run {run.id} started", run_id=run.id)
     except HTTPException as e:
@@ -1295,10 +1684,12 @@ def _start_change(cr):
 
 @app.post("/api/runs", tags=["runs"], summary="Start a run (or file a change request, when change control covers it)",
           responses={202: {"description": "change control covers this: a change request was filed instead"}})
-def api_run(req: RunRequest):
+def api_run(req: RunRequest, request: Request):
     """A run the change policy covers (GET /api/policy) does not start: it becomes a change request, answered with 202
     and `{"change": ...}`; it starts when someone else approves it (inside a change window)."""
+    req.requested_by = _user(request).get("username") or req.requested_by        # the signed-in account, never a typed name
     run = _new_run(req)
+    run.started_by = req.requested_by
     if CH.covered(req.mode):
         summary, affects = _change_summary(req, run)
         try:
@@ -1443,6 +1834,7 @@ def prometheus_metrics():
         out += _g("lab_collector_last_refresh_seconds", "When the live state behind these gauges was collected")
         out.append(metric_line("lab_collector_last_refresh_seconds", {"lab": L}, int(snap["generated"])))
     out += prober.metrics(L, metric_line)
+    out += M.metrics(L, metric_line, C.facts())
     rep = D.latest()
     if rep:
         out += _g("lab_config_drift", "1 if the router's running configuration differs from the model (latest drift check)")
@@ -1468,10 +1860,11 @@ def api_lab_tools():
     inv, pub = f["inv"], PUBLIC_HOST
     nb = f"http://{pub}:8080"
     tools = [
-        {"group": "This lab", "name": "Provisioning portal", "url": f"http://{pub}:{WEBAPP_PORT}", "login": "none",
-         "what": "the cloud, the Network map, provisioning runs"},
-        {"group": "This lab", "name": "Portal API (Swagger)", "url": f"http://{pub}:{WEBAPP_PORT}/docs", "login": "none",
-         "what": "every endpoint the portal offers; /metrics and /api/sd for Prometheus"},
+        {"group": "This lab", "name": "Provisioning portal", "url": f"http://{pub}:{WEBAPP_PORT}",
+         "login": "an account: admin / operator / approver / viewer, lab defaults in webapp/users.seed.json",
+         "what": "the cloud, the Network map, provisioning jobs; customers sign in to their own view"},
+        {"group": "This lab", "name": "Portal API (Swagger)", "url": f"http://{pub}:{WEBAPP_PORT}/docs", "login": "the portal's session (sign in first)",
+         "what": "every endpoint the portal offers; /metrics and /api/sd for Prometheus stay open"},
         {"group": "This lab", "name": "Lab hub", "url": f"http://{pub}:8088", "login": "none",
          "what": "every lab on this host, VM power, host CPU / memory"},
         {"group": "This lab", "name": "GitHub repository", "url": "https://github.com/dcantor/c8000v-dmvpn-lab", "login": "public",

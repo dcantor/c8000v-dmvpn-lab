@@ -27,3 +27,6 @@ webapp/faults/
 webapp/failover/
 webapp/changes/
 webapp/customer_portal/
+webapp/auth/
+webapp/confighist/
+webapp/maintenance/

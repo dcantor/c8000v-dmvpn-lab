@@ -37,6 +37,10 @@ for l in lines:
 running = vyos_ssh.op(host, "show configuration commands", timeout=180)
 if "set system host-name" not in running:
     print("FAILED: could not read the running configuration:", running[-400:]); sys.exit(1)
+# the login password: VyOS stores a fresh hash every time it is given one, so set it only on a router without one — or every
+# push would be a change (and a new line in the configuration history)
+if re.search(r"^set system login user vyos authentication encrypted-password ", running, re.M):
+    lines = [l for l in lines if not l.startswith("set system login user vyos authentication plaintext-password")]
 MANAGED = ("policy", "protocols bgp", "protocols nhrp", "protocols static", "vpn ipsec", "interfaces tunnel", "interfaces dummy")
 deletes = [f"delete {sec}" for sec in MANAGED
            if any(l.startswith(f"set {sec} ") for l in lines) and re.search(rf"^set {sec} ", running, re.M)]

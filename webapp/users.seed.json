@@ -1,0 +1,9 @@
+{
+ "_comment": "The portal's lab-default staff accounts, created in webapp/auth/users.json (hashed) the first time the portal starts. Lab defaults like every other credential of this lab (admin/admin on the routers, vyos/vyos, lab/lab): change them in Lab Tools -> Users. Customer accounts are made there too.",
+ "users": [
+  {"username": "admin", "name": "Lab administrator", "roles": ["admin"], "password": "admin-c8d"},
+  {"username": "operator", "name": "Network operator", "roles": ["operator"], "password": "operator-c8d"},
+  {"username": "approver", "name": "Change approver", "roles": ["approver"], "password": "approver-c8d"},
+  {"username": "viewer", "name": "Read-only viewer", "roles": ["viewer"], "password": "viewer-c8d"}
+ ]
+}

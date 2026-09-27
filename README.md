@@ -338,18 +338,66 @@ a failure and measuring a failover (the default policy; adding a customer, dry r
 held). Such a request answers `202` with a **change request** (CR-0001 …) instead of starting. Someone other than the
 requester approves it — four eyes — or rejects it; with **change windows** on, an approved change is scheduled and the
 portal starts it when the next window opens, unless the approver declares an **emergency** (with a reason). Requests
-nobody decides on expire after 72 h. Names are typed in the header, not authenticated: the portal has no logins, so
-this keeps the process honest, not secure. `GET/PUT /api/policy`, `/api/changes`, `POST /api/changes/{id}/approve|reject|cancel`.
+nobody decides on expire after 72 h. The requester and the approver are signed-in accounts (an operator files, an
+approver decides — see *Signing in*); a customer's own requests are change requests too. `GET/PUT /api/policy`, `/api/changes`, `POST /api/changes/{id}/approve|reject|cancel`.
 
 ### The customer portal
 
-**Customer portal link** on a customer's details gives that customer a read-only page of its own, `/c/<token>` — a
+**Customer portal link** on a customer's details gives that customer a read-only page of its own (a customer account
+— see *Customer self-service* — gets the same view with requests and diagnostics), `/c/<token>` — a
 random token per customer, kept on the lab host (`webapp/customer_portal/`, not in git), rotated from the same button,
 and dropped when the customer is removed. The page shows its service status, its site on the map with the hubs and
 providers as its service sees them, its applications, its service levels, its monthly report (PDF), **planned
 maintenance** (change requests that touch it) and **incidents** (simulated failures that touch it). Everything it reads
 comes from `/api/c/<token>/…`, which answers only about that customer: no other customer's name, company, addresses or
 shortcuts.
+
+### Signing in: accounts and roles
+
+The portal asks for an account. Roles: **viewer** reads everything; **operator** also starts jobs, files change requests,
+simulates failures and hands out customer links; **approver** approves or rejects change requests (never their own);
+**admin** does all of that and manages accounts and the change policy (Lab Tools → Users); **customer** sees one
+customer's own service and nothing else. The lab-default staff accounts are in `webapp/users.seed.json` — lab defaults
+like every other credential here — and are created, hashed, in `webapp/auth/users.json` on first start; the portal
+reminds an admin of any still on its default password. Sessions are signed cookies (12 h); changing a password ends
+them. Open without an account: the sign-in page, `/api/version`, Prometheus' `/metrics` and `/api/sd`, a customer's
+secret link, and `GET /api/runs` from the lab host (the lab hub polls it). Change requests now carry the signed-in
+account, so four eyes means two accounts.
+
+### Maintenance
+
+A disruptive job (remove, modify, restore, deploy, fix drift, a failover measurement) or a simulated failure runs
+under a **maintenance record**; an operator can also declare one (Jobs → Maintenance). While it is open its nodes —
+and the routers and hosts of the customers it affects — are exported as `lab_maintenance{router} = 1`, and this lab's
+alert rules in lab-portal/monitoring do not fire for them; the map and Jobs page show it; the affected customers'
+portals say "maintenance in progress" instead of an incident; and the SLA leaves the time out of availability and loss
+(`lab_maintenance_customer`), reporting it as minutes of announced maintenance.
+
+### Configuration history
+
+Every changing job (add, modify, remove or restore customers, deploy, fix drift) snapshots every router before its
+first step and after its last (before the tests; if it fails midway, when it ends). The job page lists what changed per
+router (+ / − lines) with the unified diffs; a router's details have **configuration history**: the jobs that changed
+it. Timestamps, byte counts and VyOS password hashes are left out. Kept in `webapp/confighist/`, the newest 150 jobs.
+`GET /api/runs/{id}/config`, `/api/config-history[?router=]`, `/api/config-history/{job}/{router}?which=before|after`.
+
+### Application checks
+
+Every hub carries the VIPs of the applications it hosts — `/32` secondary addresses on Loopback10, from a CLI template
+(`vips_<hub>`; Network-as-Code has no secondary addresses), rendered from `applications.json` and, identically, from
+Nautobot's Virtual Servers. Every minute each customer's LAN host pings its subscribed applications' VIPs at every
+hosting hub and connects to the HTTPS ones on 443 (the hubs' HTTPS server answers; other services are only pinged).
+The results are on the map (a dot and the round trip next to each VIP), in the SLA view and the PDF (availability per
+application, any hub and per hub — page four), in the customer's portal, and on `/metrics` (`lab_app_up`,
+`lab_app_rtt_ms`).
+
+### Customer self-service
+
+A customer account (Lab Tools → Users, role customer) signs in to its own view with two more pages. **Requests**: ask
+for different applications, a preferred hub, or a second provider; the request becomes a change request that always
+waits for an approver, and the page shows its progress (waiting, being carried out, done, declined). **Diagnostics**:
+test its applications or the hubs now, from its own LAN host, or trace the path to an application's VIP — only its own
+applications and the hubs, never another customer's site. The secret link stays read-only; requests need the account.
 
 ## Monitoring
 

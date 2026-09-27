@@ -82,17 +82,11 @@ Customer-to-customer traffic builds a dynamic shortcut tunnel
         ${p}=    Show    ${a}    ping ${ROUTERS}[${b}][lan_ip] source ${ROUTERS}[${a}][lan_ip] repeat 10
         Should Match Regexp    ${p}    Success rate is (100|90|80|70) percent
         Wait Until Keyword Succeeds    45s    3s    Customer Has Dynamic Peer    ${a}    ${b}
-        ${tr}=    Show    ${a}    traceroute ${ROUTERS}[${b}][lan_ip] source ${ROUTERS}[${a}][lan_ip] numeric probe 1 timeout 2
-        Should Match Regexp    ${tr}    (?m)^\\s*1\\s+${ROUTERS}[${b}][tunnel]\\s    msg=${a} -> ${b} still goes via a hub
+        # the NHRP entry can precede the shortcut taking the traffic by a moment: keep traffic flowing until it is direct
+        Wait Until Keyword Succeeds    60s    5s    Path Is Direct    ${a}    ${b}
         ${sa}=    Show    ${a}    show crypto ikev2 sa
         Should Match Regexp    ${sa}    (?m)^\\d+\\s+${ROUTERS}[${a}][nbma]/500\\s+${ROUTERS}[${b}][nbma]/500\\s+none/none\\s+READY
     END
-
-*** Keywords ***
-Customer Has Dynamic Peer
-    [Arguments]    ${customer}    ${peer}
-    ${dm}=    Show    ${customer}    show dmvpn | begin Interface
-    Should Match Regexp    ${dm}    (?m)^\\s*\\d+\\s+${ROUTERS}[${peer}][nbma]\\s+${ROUTERS}[${peer}][tunnel]\\s+UP\\s+\\S+\\s+D
 
 The second cloud: every hub and every dual-homed customer runs Tunnel1, registered with every hub, IPsec up
     [Documentation]    Cloud 2 (172.29.0.0/24, network-id 2, key 200) over the second provider: the backup path.
@@ -119,3 +113,15 @@ The second cloud: every hub and every dual-homed customer runs Tunnel1, register
             Should Match Regexp    ${cs}    (?m)^${ROUTERS}[${s}][nbma2]\\s+Tu1\\s+.*\\sUA\\s*$
         END
     END
+
+*** Keywords ***
+Path Is Direct
+    [Arguments]    ${a}    ${b}
+    Show    ${a}    ping ${ROUTERS}[${b}][lan_ip] source ${ROUTERS}[${a}][lan_ip] repeat 5
+    ${tr}=    Show    ${a}    traceroute ${ROUTERS}[${b}][lan_ip] source ${ROUTERS}[${a}][lan_ip] numeric probe 1 timeout 2
+    Should Match Regexp    ${tr}    (?m)^\\s*1\\s+${ROUTERS}[${b}][tunnel]\\s    msg=${a} -> ${b} still goes via a hub
+
+Customer Has Dynamic Peer
+    [Arguments]    ${customer}    ${peer}
+    ${dm}=    Show    ${customer}    show dmvpn | begin Interface
+    Should Match Regexp    ${dm}    (?m)^\\s*\\d+\\s+${ROUTERS}[${peer}][nbma]\\s+${ROUTERS}[${peer}][tunnel]\\s+UP\\s+\\S+\\s+D

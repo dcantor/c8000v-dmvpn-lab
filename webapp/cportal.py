@@ -43,7 +43,7 @@ def forget(customer):
             TOKENS.write_text(json.dumps(t, indent=1))
 
 
-def view(snap, c, faults, changes, kinds):
+def view(snap, c, faults, changes, kinds, maintenance=()):
     """The state snapshot, reduced to what customer `c` may see."""
     nodes = snap["nodes"]
     host = nodes[c].get("host")
@@ -80,10 +80,13 @@ def view(snap, c, faults, changes, kinds):
         pstate[p] = s
     subs = set(((nodes[c].get("customer")) or {}).get("applications") or [])
     touching = lambda aff: "all" in aff or c in aff    # noqa: E731
+    in_maint = [{"summary": m["summary"] if c in m.get("customers", []) and not m.get("all") else "network-wide maintenance",
+                 "since": m["started"], "change": m.get("change")} for m in maintenance if m.get("all") or c in m.get("customers", [])]
+    maint_refs = {m["ref"] for m in maintenance if m.get("kind") == "fault"}
     incidents = [{"title": kinds[x["kind"]]["title"], "since": x["started"],
                   "what": ("your site: " if c in x.get("nodes", []) or any(l.startswith(c + ":") for l in x.get("links", [])) else "the network: ")
                           + kinds[x["kind"]]["what"]}
-                 for x in faults if _fault_touches(x, c, nodes, hubs)]
+                 for x in faults if _fault_touches(x, c, nodes, hubs) and x["id"] not in maint_refs]   # announced work is not an incident
     planned = [{"id": cr["id"], "summary": cr["summary"] if c in cr.get("affects", []) else cr["title"] + " (network-wide)",
                 "status": cr["status"], "scheduled_for": cr.get("scheduled_for"), "requested_at": cr["requested_at"]}
                for cr in changes if cr["status"] in ("pending", "scheduled") and touching(cr.get("affects") or [])]
@@ -96,7 +99,8 @@ def view(snap, c, faults, changes, kinds):
             "cloud": cloud, "provider_state": pstate, "hosts_up": {host: (snap.get("hosts_up") or {}).get(host)} if host else {},
             "health": {"ok": bool(full), "service": "up" if full else ("degraded" if ok else "down"), "problems": [],
                        "hubs": len(hubs), "customers": 1, "shortcuts": len(mine.get("shortcuts") or [])},
-            "generated": snap.get("generated"), "live": snap.get("live"), "faults": [], "incidents": incidents, "planned": planned}
+            "generated": snap.get("generated"), "live": snap.get("live"), "faults": [], "incidents": incidents, "planned": planned,
+            "maintenance_now": in_maint}
 
 
 def _fault_touches(x, c, nodes, hubs):

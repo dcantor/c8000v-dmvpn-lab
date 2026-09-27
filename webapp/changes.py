@@ -6,7 +6,8 @@ approves it (four eyes) or rejects it. An approved change starts at once if a ch
 or the approver declares an emergency with a reason); otherwise it is scheduled and the portal starts it when the next
 window opens. Adding a customer, dry runs, tests and drift checks never need approval: they take nothing away.
 
-Names are typed, not authenticated — the lab portal has no logins. It keeps the process honest, not secure.
+Requesters and approvers are the signed-in accounts (auth.py): an operator files, an approver decides, never their own.
+A customer's own requests (its portal) are change requests too, always waiting for an approver.
 
    policy.json   the policy (defaults below; edited in the portal)
    requests/     one JSON per change request"""
@@ -128,14 +129,15 @@ def all_requests(limit=50):
     return out
 
 
-def create(kind, request, summary, by, reason="", affects=None):
+def create(kind, request, summary, by, reason="", affects=None, source="staff"):
     """A change request for work the policy covers. `request` is what starts it later (a RunRequest or a fault)."""
     if not str(by or "").strip():
         raise ValueError("say who is asking (requested_by)")
     with _lock:
         cr = {"id": _next_id(), "kind": kind, "title": COVERABLE.get(kind, kind), "summary": summary, "request": request,
               "requested_by": by.strip(), "requested_at": time.time(), "reason": reason, "status": "pending",
-              "affects": affects or [], "events": [{"t": time.time(), "by": by.strip(), "what": "requested", "note": reason}]}
+              "affects": affects or [], "source": source,
+              "events": [{"t": time.time(), "by": by.strip(), "what": "requested", "note": reason}]}
         _save(cr)
         return cr
 

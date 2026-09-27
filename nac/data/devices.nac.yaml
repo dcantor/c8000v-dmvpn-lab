@@ -99,6 +99,22 @@ iosxe:
       \ 172.29.0.0/24 peer-group CUSTOMERS2\n address-family ipv4\n  neighbor CUSTOMERS2 activate\n  neighbor CUSTOMERS2 route-reflector-client\n\
       \  neighbor CUSTOMERS2 route-map OVERLAY2-IN in\n  neighbor CUSTOMERS2 route-map OVERLAY out\n  neighbor CUSTOMERS2\
       \ next-hop-self all\n exit-address-family\n"
+  - name: vips_hub-east
+    type: cli
+    content: "interface Loopback10\n ip address 192.168.71.10 255.255.255.255 secondary\n ip address 192.168.71.11 255.255.255.255\
+      \ secondary\n ip address 192.168.71.12 255.255.255.255 secondary\n ip address 192.168.71.13 255.255.255.255 secondary\n\
+      \ ip address 192.168.71.14 255.255.255.255 secondary\n"
+  - name: vips_hub-central
+    type: cli
+    content: "interface Loopback10\n ip address 192.168.72.10 255.255.255.255 secondary\n ip address 192.168.72.11 255.255.255.255\
+      \ secondary\n ip address 192.168.72.12 255.255.255.255 secondary\n ip address 192.168.72.13 255.255.255.255 secondary\n\
+      \ ip address 192.168.72.14 255.255.255.255 secondary\n ip address 192.168.72.15 255.255.255.255 secondary\n ip address\
+      \ 192.168.72.16 255.255.255.255 secondary\n"
+  - name: vips_hub-west
+    type: cli
+    content: "interface Loopback10\n ip address 192.168.73.10 255.255.255.255 secondary\n ip address 192.168.73.11 255.255.255.255\
+      \ secondary\n ip address 192.168.73.12 255.255.255.255 secondary\n ip address 192.168.73.13 255.255.255.255 secondary\n\
+      \ ip address 192.168.73.14 255.255.255.255 secondary\n ip address 192.168.73.15 255.255.255.255 secondary\n"
   devices:
   - name: hub-east
     host: 10.5.0.11
@@ -110,6 +126,7 @@ iosxe:
     - tunnel0_hub-east
     - tunnel1_hub-east
     - bgp_hub_hub-east
+    - vips_hub-east
     variables:
       router_id: 10.255.5.1
       nbma: 100.70.1.2
@@ -330,6 +347,7 @@ iosxe:
     - tunnel0_hub-central
     - tunnel1_hub-central
     - bgp_hub_hub-central
+    - vips_hub-central
     variables:
       router_id: 10.255.5.2
       nbma: 100.70.2.2
@@ -550,6 +568,7 @@ iosxe:
     - tunnel0_hub-west
     - tunnel1_hub-west
     - bgp_hub_hub-west
+    - vips_hub-west
     variables:
       router_id: 10.255.5.3
       nbma: 100.70.3.2
@@ -1140,6 +1159,27 @@ iosxe:
           action: permit
           prefix: 10.255.5.0/24
           greater_equal: 32
+      - name: HUB-PREFIXES
+        description: 'the hubs'' own LANs and router-ids: reached at the hub itself'
+        seqs:
+        - seq: 10
+          action: permit
+          prefix: 192.168.71.0/24
+        - seq: 15
+          action: permit
+          prefix: 10.255.5.1/32
+        - seq: 20
+          action: permit
+          prefix: 192.168.72.0/24
+        - seq: 25
+          action: permit
+          prefix: 10.255.5.2/32
+        - seq: 30
+          action: permit
+          prefix: 192.168.73.0/24
+        - seq: 35
+          action: permit
+          prefix: 10.255.5.3/32
       route_maps:
       - name: WAN-OUT
         entries:
@@ -1162,6 +1202,54 @@ iosxe:
           match:
             ipv4_address_prefix_lists:
             - OVERLAY-ROUTES
+      - name: OVERLAY-HUB-EAST
+        entries:
+        - seq: 10
+          operation: permit
+          match:
+            ipv4_address_prefix_lists:
+            - HUB-PREFIXES
+        - seq: 20
+          operation: permit
+          match:
+            ipv4_address_prefix_lists:
+            - OVERLAY-ROUTES
+          set:
+            ipv4_next_hop_addresses:
+            - 172.28.0.1
+            local_preference: 100
+      - name: OVERLAY-HUB-CENTRAL
+        entries:
+        - seq: 10
+          operation: permit
+          match:
+            ipv4_address_prefix_lists:
+            - HUB-PREFIXES
+        - seq: 20
+          operation: permit
+          match:
+            ipv4_address_prefix_lists:
+            - OVERLAY-ROUTES
+          set:
+            ipv4_next_hop_addresses:
+            - 172.28.0.2
+            local_preference: 200
+      - name: OVERLAY-HUB-WEST
+        entries:
+        - seq: 10
+          operation: permit
+          match:
+            ipv4_address_prefix_lists:
+            - HUB-PREFIXES
+        - seq: 20
+          operation: permit
+          match:
+            ipv4_address_prefix_lists:
+            - OVERLAY-ROUTES
+          set:
+            ipv4_next_hop_addresses:
+            - 172.28.0.3
+            local_preference: 100
       routing:
         bgp:
           as_number: 65100
@@ -1202,21 +1290,21 @@ iosxe:
                 activate: true
                 route_maps:
                 - direction: in
-                  name: OVERLAY
+                  name: OVERLAY-HUB-EAST
                 - direction: out
                   name: OVERLAY
               - ip: 172.28.0.2
                 activate: true
                 route_maps:
                 - direction: in
-                  name: OVERLAY
+                  name: OVERLAY-HUB-CENTRAL
                 - direction: out
                   name: OVERLAY
               - ip: 172.28.0.3
                 activate: true
                 route_maps:
                 - direction: in
-                  name: OVERLAY
+                  name: OVERLAY-HUB-WEST
                 - direction: out
                   name: OVERLAY
               networks:

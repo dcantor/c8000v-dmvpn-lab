@@ -79,7 +79,7 @@ A dual-homed customer has every other site over both clouds, the second one rank
             ${out}=    Show    ${c}    show ip bgp ${ROUTERS}[${other}][lan]
         END
         Should Contain    ${out}    localpref 50
-        ${best}=    Evaluate    [b for b in __import__('re').split(r'\\n(?=\\s{2}(?:Local|Refresh))', $out) if ', best' in b]
+        ${best}=    Evaluate    [b for b in __import__('re').split(r'\\n(?=\\s{2}(?:Local|Refresh))', $out) if ', best' in b and 'localpref' in b]
         Should Not Be Empty    ${best}
         Should Not Contain    ${best}[0]    localpref 50    msg=${c} prefers the backup cloud for ${ROUTERS}[${other}][lan]
     END
@@ -121,13 +121,6 @@ A host's traffic to another customer leaves over the direct tunnel
     On Host    ${HOST_PAIR}[0]    ping -c 5 -W 2 ${HOST_VMS}[${HOST_PAIR}[1]][lan_ip]
     Wait Until Keyword Succeeds    45s    5s    Host Path Is Direct    ${HOST_PAIR}[0]    ${HOST_PAIR}[1]
 
-*** Keywords ***
-Host Path Is Direct
-    [Arguments]    ${h}    ${o}
-    ${res}=    On Host    ${h}    traceroute -n -q 1 -w 2 ${HOST_VMS}[${o}][lan_ip]
-    ${far}=    Set Variable    ${HOST_VMS}[${o}][router]
-    Should Match Regexp    ${res}[1]    (?m)^\\s*2\\s+${ROUTERS}[${far}][tunnel]\\s
-
 A customer that prefers a hub takes the other customers' routes through it, and only its own preference applies
     [Documentation]    PREFER_HUB in lab.conf: the preferred hub's copy of every other customer's LAN is best with
     ...                local-preference 200 and the hub as next hop; a customer without a preference has no such policy.
@@ -141,7 +134,7 @@ A customer that prefers a hub takes the other customers' routes through it, and 
         ELSE
             ${out}=    Show    ${c}    show ip bgp ${lan}
         END
-        ${best}=    Evaluate    [b for b in __import__('re').split(r'\\n(?=\\s{2}Local)', $out) if 'best' in b.split('\\n')[2] or ', best' in b]
+        ${best}=    Evaluate    [b for b in __import__('re').split(r'\\n(?=\\s{2}(?:Local|Refresh))', $out) if ', best' in b and 'localpref' in b]
         Should Not Be Empty    ${best}    msg=${c} has no best path to ${lan}
         Should Contain    ${best}[0]    ${hub} from ${hub}    msg=${c}'s best path to ${lan} is not through ${PREFER}[${c}]
         Should Contain    ${best}[0]    localpref 200
@@ -151,3 +144,11 @@ A customer that prefers a hub takes the other customers' routes through it, and 
         ${rm}=    Show    ${c}    show running-config | include ^route-map OVERLAY-HUB
         Should Be Empty    ${rm.strip()}    msg=${c} prefers no hub but has a per-hub policy
     END
+
+*** Keywords ***
+Host Path Is Direct
+    [Arguments]    ${h}    ${o}
+    On Host    ${h}    ping -c 5 -i 0.2 -W 1 ${HOST_VMS}[${o}][lan_ip]
+    ${res}=    On Host    ${h}    traceroute -n -q 2 -w 2 -m 6 ${HOST_VMS}[${o}][lan_ip]
+    ${far}=    Set Variable    ${HOST_VMS}[${o}][router]
+    Should Match Regexp    ${res}[1]    (?m)^\\s*2\\s+${ROUTERS}[${far}][tunnel]\\s

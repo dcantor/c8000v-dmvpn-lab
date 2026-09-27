@@ -10,7 +10,8 @@ scrape since 0.5.0 — how many hubs it is registered with, and how many it shou
 
 Reporting. `report()` asks VictoriaMetrics for a window (the last 24 h / 7 d / 30 d, or a calendar month): availability
 (registered with at least one hub), full registration (all hubs), latency average and 95th percentile and loss per hub,
-how much of the window was monitored at all, and time series for the charts. Targets are the lab's own — a lab SLA."""
+how much of the window was monitored at all, and time series for the charts. Targets are the lab's own — a lab SLA.
+Announced maintenance (lab_maintenance_customer) is left out of availability and loss and reported as minutes."""
 import re
 import threading
 import time
@@ -28,11 +29,24 @@ LINE = re.compile(r"(\d+) packets transmitted, (\d+) (?:packets )?received.*?(?:
 class Prober:
     def __init__(self):
         self.latest, self.lock = {}, threading.Lock()   # customer -> hub -> {rtt_avg, rtt_max, loss, t}
+        self.apps = {}                                  # customer -> app -> hub -> {loss, rtt_avg, tcp, t}
 
-    def probe_host(self, customer, host, hubs):
-        """hubs: {hub: lan gateway}. One SSH login, five pings to every hub at once."""
-        cmd = " ".join(f'(ping -c 5 -i 0.2 -W 1 -q {ip} 2>&1 | tail -2 | tr "\\n" " "; echo "@{ip}") &' for ip in hubs.values()) + " wait"
-        out = _ssh(host, cmd, HOST_USER, HOST_PASS, timeout=30)
+    def probe_host(self, customer, host, hubs, vips=None):
+        """hubs: {hub: lan gateway}; vips: {(app, hub): (vip, tcp port or None)}. One SSH login: five pings to every hub
+        and every subscribed application's VIP at once, and a TCP connect to the VIPs whose service the hub answers."""
+        vips = vips or {}
+        pings = list(hubs.values()) + sorted({v for v, _ in vips.values()})
+        # each ping's summary and its target leave in one write: printed in two, the parallel pings' lines interleave and a
+        # summary lands next to another target's name (it read as loss)
+        cmd = " ".join(f'(r=$(ping -c 5 -i 0.2 -W 1 -q {ip} 2>&1 | tail -2 | tr "\\n" " "); echo "$r @{ip}") &' for ip in pings)
+        # the TCP connects one after the other, each retried once: the hubs' HTTPS server takes only a few connections
+        # at a time, and every customer probes at the same moment
+        tcp = sorted({x for x in vips.values() if x[1]})
+        if tcp:
+            cmd += " (" + "; ".join(f'(nc -z -w 2 {v} {port} || (sleep 0.5; nc -z -w 2 {v} {port})) && echo "TCP {v}:{port} ok" '
+                                    f'|| echo "TCP {v}:{port} failed"' for v, port in tcp) + ") &"
+        out = _ssh(host, cmd + " wait", HOST_USER, HOST_PASS, timeout=30)
+        self._apps(customer, out, vips)
         by_ip = {ip: h for h, ip in hubs.items()}
         res = {}
         for m in LINE.finditer(out):
@@ -44,6 +58,32 @@ class Prober:
             res.setdefault(h, {"loss": 1.0, "rtt_avg": None, "rtt_max": None, "t": time.time()})
         return res
 
+    def _apps(self, customer, out, vips):
+        got = {}
+        for m in LINE.finditer(out):
+            got[m[5]] = (int(m[1]), int(m[2]), m[3])
+        tcp = {k: v == "ok" for k, v in re.findall(r"TCP (\S+) (ok|failed)", out)}
+        res = {}
+        for (app, hub), (v, port) in vips.items():
+            sent, recv, avg = got.get(v, (5, 0, None))
+            res.setdefault(app, {})[hub] = {"vip": v, "loss": (sent - recv) / sent if sent else 1.0, "rtt_avg": float(avg) if avg else None,
+                                            "tcp": tcp.get(f"{v}:{port}") if port else None, "port": port, "t": time.time()}
+        with self.lock:
+            self.apps[customer] = res
+
+    @staticmethod
+    def app_targets(inv, customer):
+        """{(app, hub): (vip, port to connect to)} for the applications the customer subscribes to. The lab's hubs answer
+        TCP only on 443 (their HTTPS server): an HTTPS application's port is connected to, any other is pinged only."""
+        nodes = {n["name"]: n for n in inv["nodes"]}
+        subs = set(((nodes[customer].get("customer")) or {}).get("applications") or [])
+        out = {}
+        for a in inv.get("applications") or []:
+            if a["id"] in subs:
+                for h, v in a.get("vips", {}).items():
+                    out[(a["id"], h)] = (v, 443 if a.get("port") == 443 else None)
+        return out
+
     def run_once(self, inv):
         nodes = {n["name"]: n for n in inv["nodes"]}
         hubs = {h: str(__import__("ipaddress").ip_network(nodes[h]["lan"]).network_address + 1) for h in inv["service"]["hubs"]}
@@ -51,7 +91,7 @@ class Prober:
 
         def one(c):
             try:
-                return c, self.probe_host(c, nodes[nodes[c]["host"]]["mgmt_ip"], hubs)
+                return c, self.probe_host(c, nodes[nodes[c]["host"]]["mgmt_ip"], hubs, self.app_targets(inv, c))
             except Exception:                                   # noqa: BLE001 — an unreachable host is total loss
                 return c, {h: {"loss": 1.0, "rtt_avg": None, "rtt_max": None, "t": time.time(), "error": True} for h in hubs}
 
@@ -73,7 +113,24 @@ class Prober:
                 if r["rtt_avg"] is not None:
                     out.append(metric_line("lab_sla_rtt_ms", lab_, r["rtt_avg"]))
                 out.append(metric_line("lab_sla_loss_ratio", lab_, round(r["loss"], 3)))
+        out += ["# HELP lab_app_up 1 if the application's VIP at the hub answers the customer's LAN host (and its HTTPS port, for HTTPS)",
+                "# TYPE lab_app_up gauge",
+                "# HELP lab_app_rtt_ms Round trip from the customer's LAN host to the application's VIP at the hub",
+                "# TYPE lab_app_rtt_ms gauge"]
+        with self.lock:
+            apps = dict(self.apps)
+        for c, per in sorted(apps.items()):
+            for app, hubs in sorted(per.items()):
+                for h, r in sorted(hubs.items()):
+                    lab_ = {"lab": lab, "customer": c, "app": app, "hub": h}
+                    out.append(metric_line("lab_app_up", lab_, int(r["loss"] < 1 and r["tcp"] is not False)))
+                    if r["rtt_avg"] is not None:
+                        out.append(metric_line("lab_app_rtt_ms", lab_, r["rtt_avg"]))
         return out
+
+    def app_status(self, customer=None):
+        with self.lock:
+            return dict(self.apps) if customer is None else dict(self.apps.get(customer) or {})
 
 
 # ---- reports from VictoriaMetrics ------------------------------------------------------------------------------------
@@ -123,8 +180,10 @@ def report(vm_url, lab, customer, hubs, window="30d"):
     vm = VM(vm_url)
     sel = f'lab="{lab}",router="{customer}"'
     one = lambda res: float(res[0]["value"][1]) if res else None   # noqa: E731
-    reg_up = f'(lab_dmvpn_nhs_up{{{sel}}} > bool 0)'
-    reg_full = f'(lab_dmvpn_nhs_up{{{sel}}} >= bool on(router) lab_dmvpn_nhs_expected{{{sel}}})'
+    # announced maintenance (maint.py) is left out of availability and loss, as a service contract would
+    maint = f'(lab_maintenance_customer{{lab="{lab}",customer="{customer}"}} == 1)'
+    reg_up = f'((lab_dmvpn_nhs_up{{{sel}}} > bool 0) unless on(lab) {maint})'
+    reg_full = f'((lab_dmvpn_nhs_up{{{sel}}} >= bool on(router) lab_dmvpn_nhs_expected{{{sel}}}) unless on(lab) {maint})'
     step = max(60, span // 240)
     out = {"customer": customer, "window": window, "label": label, "start": start, "end": end, "targets": TARGETS, "hubs": {},
            "series": {}}
@@ -132,6 +191,7 @@ def report(vm_url, lab, customer, hubs, window="30d"):
     scrape = 30.0                                  # the NMS scrapes the portal every 30 s
     out["coverage"] = min(1.0, (samples or 0) * scrape / span)
     out["availability"] = one(vm.q(f"avg_over_time({reg_up}[{rng}:1m])", end))
+    out["maintenance_minutes"] = one(vm.q(f"sum_over_time({maint}[{rng}:1m])", end)) or 0
     out["full_registration"] = one(vm.q(f"avg_over_time({reg_full}[{rng}:1m])", end))
     rtt_samples = one(vm.q(f'sum(count_over_time(lab_sla_rtt_ms{{lab="{lab}",customer="{customer}"}}[{rng}]))', end))
     out["probe_coverage"] = min(1.0, (rtt_samples or 0) * scrape / (span * max(len(hubs), 1)))
@@ -141,7 +201,7 @@ def report(vm_url, lab, customer, hubs, window="30d"):
             "rtt_avg": one(vm.q(f"avg_over_time(lab_sla_rtt_ms{{{s}}}[{rng}])", end)),
             "rtt_p95": one(vm.q(f"quantile_over_time(0.95, lab_sla_rtt_ms{{{s}}}[{rng}])", end)),
             "rtt_max": one(vm.q(f"max_over_time(lab_sla_rtt_ms{{{s}}}[{rng}])", end)),
-            "loss": one(vm.q(f"avg_over_time(lab_sla_loss_ratio{{{s}}}[{rng}])", end)),
+            "loss": one(vm.q(f"avg_over_time((lab_sla_loss_ratio{{{s}}} unless on(lab) {maint})[{rng}:1m])", end)),
         }
     vals = [x for x in out["hubs"].values() if x["rtt_avg"] is not None]
     out["rtt_avg"] = sum(x["rtt_avg"] for x in vals) / len(vals) if vals else None
@@ -153,6 +213,14 @@ def report(vm_url, lab, customer, hubs, window="30d"):
         s = f'lab="{lab}",customer="{customer}",hub="{h}"'
         out["series"][f"rtt:{h}"] = pts(vm.qr(f"avg_over_time(lab_sla_rtt_ms{{{s}}}[{step}s])", start, end, step))
         out["series"][f"loss:{h}"] = pts(vm.qr(f"avg_over_time(lab_sla_loss_ratio{{{s}}}[{step}s])", start, end, step))
+    apps = {}
+    for r in vm.q(f'avg_over_time((max by (app) (lab_app_up{{lab="{lab}",customer="{customer}"}}) unless on() (sum({maint}) > 0))[{rng}:1m])', end):
+        apps.setdefault(r["metric"]["app"], {})["availability"] = float(r["value"][1])
+    for r in vm.q(f'avg_over_time(lab_app_up{{lab="{lab}",customer="{customer}"}}[{rng}])', end):
+        apps.setdefault(r["metric"]["app"], {}).setdefault("hubs", {})[r["metric"]["hub"]] = float(r["value"][1])
+    for r in vm.q(f'avg_over_time(lab_app_rtt_ms{{lab="{lab}",customer="{customer}"}}[{rng}])', end):
+        apps.setdefault(r["metric"]["app"], {}).setdefault("rtt", {})[r["metric"]["hub"]] = float(r["value"][1])
+    out["applications"] = apps
     out["series"]["nhs_up"] = pts(vm.qr(f"min_over_time(lab_dmvpn_nhs_up{{{sel}}}[{step}s])", start, end, step))
     out["series"]["nhs_expected"] = pts(vm.qr(f"max_over_time(lab_dmvpn_nhs_expected{{{sel}}}[{step}s])", start, end, step))
     out["step"] = step

@@ -11,6 +11,77 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 While the version is 0.x, the lab's interfaces are still settling. The current version is in [`VERSION`](VERSION), in
 the portal's header, and in git as a `v<version>` tag.
 
+## [0.20.0] — 2026-09-27
+
+### Added
+- **Logins and roles.**
+  - The portal now asks for an account. There are five roles:
+    - viewer: reads everything;
+    - operator: starts jobs, files change requests, simulates failures;
+    - approver: approves or rejects change requests;
+    - admin: all of that, plus accounts and the change policy;
+    - customer: its own service only.
+  - Passwords are PBKDF2-hashed. Sessions are HMAC-signed cookies lasting 12 h, and changing a password ends them.
+  - Lab-default staff accounts come from `webapp/users.seed.json`. Admins are reminded while one keeps its default
+    password.
+  - A Users card in Lab Tools, a sign-in form, and the account and role in the header.
+  - Change requests carry the signed-in account, so four eyes means two accounts.
+  - Still open without an account: `/metrics`, `/api/sd`, `/api/version`, customer links, and `GET /api/runs` from the
+    lab host (the lab hub).
+  - Endpoints: `/api/auth/login|logout|me|password|users`.
+- **Maintenance.**
+  - Disruptive jobs and simulated failures run under a maintenance record, and operators can declare one (Jobs →
+    Maintenance).
+  - Its nodes, and those of the customers it affects, are exported as `lab_maintenance{router}`. This lab's alert rules
+    (lab-portal/monitoring, deployed) don't fire for them.
+  - The map and Jobs page show it. The affected customers' portals say "maintenance in progress" rather than calling it
+    an incident.
+  - The SLA leaves maintenance out of availability and loss, and reports its minutes.
+  - Endpoints: `/api/maintenance`.
+- **Configuration history.**
+  - Every changing job snapshots every router before its first step and after its last, or at the end if it fails
+    midway.
+  - The job page shows per-router +/− counts and colored unified diffs. A router's details have "configuration history".
+  - Endpoints: `/api/runs/{id}/config`, `/api/config-history`.
+- **Application checks.**
+  - The hubs carry their applications' VIPs: /32 secondaries on Loopback10, from a `vips_<hub>` CLI template. They
+    render identically from Nautobot's Virtual Servers, and the drift check covers them.
+  - Every minute each customer's LAN host pings its subscribed VIPs, and connects to the HTTPS ones on 443.
+  - Results appear on the map (a dot and the round trip per VIP) and in the SLA view (availability per application).
+    The PDF gets a fourth page for it; the customer portal shows it too.
+  - Metrics: `lab_app_up`, `lab_app_rtt_ms`.
+- **Customer self-service** (a customer account).
+  - **Requests:** a customer asks for applications, a preferred hub, or a second provider. The request becomes a change
+    request that always waits for an approver, and the customer sees its progress.
+  - **Diagnostics:** it tests its applications or the hubs from its own LAN host, or traces the path to one of its
+    applications. It never reaches another customer's site.
+  - Endpoints: `/api/c/me/…`.
+- **Jobs** show who started them ("prairie, approved by approver").
+- **Tests (07_portal):** logins and roles, maintenance, configuration history, application checks, a customer account's
+  view, requests and diagnostics. The suite signs in with the lab-default accounts.
+
+### Changed
+- **The customer PDF has four pages.** The applications' availability is page four.
+- **The VyOS push no longer re-sets the login password** once the account has one. VyOS stored a fresh hash every time,
+  so every push changed the configuration.
+
+### Fixed
+- **Two tests had never run.** The preferred-hub test (0.18.0) and the second-cloud test (0.19.0) were appended after
+  their suite's keywords section, so Robot read them as keywords. They now run.
+  - Both BGP best-path checks also picked the "Paths: … best #N" header, so the dual-homing check had passed without
+    checking anything. They now select real path entries.
+  - The C8000v and host shortcut tests now keep traffic flowing until the path is direct. Otherwise they could trace in
+    the moment between the NHRP entry and the shortcut taking the traffic.
+- **The SLA probe misread some results as 100% loss.** Its parallel pings printed each result in two writes, and those
+  lines interleaved. This inflated the loss numbers since 0.18.0. Each result is now one write.
+
+### Lab state
+- **Accounts:** the lab-default staff accounts were created. A test customer account, "prairie" for cust2, was added;
+  its password is in `webapp/auth/test-accounts.json`, on the lab host only.
+- **CR-0011:** deployed the VIPs (operator, approved by approver).
+- **CR-0012:** filed by the customer account and approved. cust2 subscribes to APP-1004 and prefers hub-central.
+- **Tests:** 72 of 72.
+
 ## [0.19.1] — 2026-09-27
 
 ### Changed
@@ -383,6 +454,7 @@ the portal's header, and in git as a `v<version>` tag.
   - `nac/`, Network-as-Code for the C8000vs.
   - Robot suites, the README, and the first Nautobot seed.
 
+[0.20.0]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.19.1...v0.20.0
 [0.19.1]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.19.0...v0.19.1
 [0.19.0]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.17.0...v0.18.0

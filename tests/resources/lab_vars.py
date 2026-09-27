@@ -43,6 +43,7 @@ HUB_FIRST_PAIR = next(([a, b] for a in HOSTS for b in HOSTS
                        if NODES[a]["router"] != NODES[b]["router"]
                        and (PLATFORM[NODES[a]["router"]] == "vyos" or NODES[a]["router"] in PREFER)), [])
 APPLICATIONS = INV.get("applications") or []
+APP_HUBS = {a["id"]: a["hubs"] for a in APPLICATIONS}
 HOST_PAIR = [HOSTS[0], HOSTS[-1]] if len(HOSTS) >= 2 else []                 # a host and the one furthest from it
 HOST_VMS = {h: {"host": NODES[h]["mgmt_ip"], "lan_ip": NODES[h]["lan_ip"].split("/")[0],
                 "gateway": NODES[h]["gateway"], "router": NODES[h]["router"]} for h in HOSTS}
@@ -62,6 +63,10 @@ DUAL_C8K_SPOKES = [s for s in DUAL_SPOKES if PLATFORM[s] == "c8000v"]
 DUAL_VYOS_SPOKES = [s for s in DUAL_SPOKES if PLATFORM[s] == "vyos"]
 DUAL_HUBS = [h for h in HUBS if NODES[h].get("wan2")]
 HUB_TUNNELS_RE = "(?:" + "|".join(re.escape(NODES[h]["tunnel_ip"]) for h in HUBS) + ")"   # any hub's Tunnel0 address
+
+# the portal's lab-default accounts (webapp/users.seed.json) — the suites sign in with them
+_seed = json.loads((LAB_DIR / "webapp" / "users.seed.json").read_text())["users"]
+PORTAL_LOGIN = {u["username"]: {"username": u["username"], "password": u["password"]} for u in _seed}
 
 OOB_GATEWAY = INV["oob"]["gateway"]
 DOMAIN_NAME = "lab.local"

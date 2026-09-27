@@ -119,7 +119,24 @@ def inventory_from_nautobot():
 
     svc = {**ctx["dmvpn"], "psk": SECRETS["psk"], "nhrp_secret": SECRETS["nhrp_secret"]}
     return {"lab": ctx["lab"], "oob": ctx["oob"], "mac_oui": ctx["mac_oui"], "service": svc,
-            "provider": ctx["provider"], "provider2": ctx.get("provider2"), "nodes": nodes}
+            "provider": ctx["provider"], "provider2": ctx.get("provider2"), "nodes": nodes, "applications": applications(pre)}
+
+
+def applications(pre):
+    """The applications' VIPs from the hubs' Virtual Servers (seed.py): what the hubs' VIP templates are rendered from."""
+    r = requests.get(f"{a.url}/api/load-balancers/virtual-servers/", params={"limit": 1000, "depth": 1}, headers=H, timeout=60)
+    r.raise_for_status()
+    apps = {}
+    for vs in r.json()["results"]:
+        aid = (vs.get("custom_fields") or {}).get("application_id")
+        dev = ((vs.get("device") or {}).get("name") or "")
+        if not aid or not dev.startswith(pre) or not vs.get("vip"):
+            continue
+        hub = dev[len(pre):]
+        x = apps.setdefault(aid, {"id": aid, "hubs": [], "vips": {}})
+        x["hubs"].append(hub)
+        x["vips"][hub] = vs["vip"]["address"].split("/")[0]
+    return [apps[k] for k in sorted(apps)]
 
 
 inv = inventory_from_nautobot()

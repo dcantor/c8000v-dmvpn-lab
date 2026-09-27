@@ -4,7 +4,7 @@ Documentation     The provisioning portal (:8094): it answers, its live view agr
 Resource          ../resources/common.resource
 Library           RequestsLibrary
 Force Tags        portal
-Suite Setup       Create Session    portal    http://127.0.0.1:8094    timeout=180
+Suite Setup       Sign In
 
 *** Test Cases ***
 The portal answers and says the cloud is healthy
@@ -73,17 +73,18 @@ Every LAN host pings every other one from the Network map, and only hosts can be
     ${bad}=    GET On Session    portal    /api/hosts/${HOSTS}[0]/ping    params=target=${HUBS}[0]    expected_status=404
     ${self}=    GET On Session    portal    /api/hosts/${HOSTS}[0]/ping    params=target=${HOSTS}[0]    expected_status=400
 
-Each customer's view of the Network map downloads as a three-page PDF
+Each customer's view of the Network map downloads as a PDF: the map, the applications, the service report
     [Documentation]    The portal's headless Chrome renders the map in print mode, focused on the customer: page one the
     ...                company and its view of the network, page two its applications and the technical details, page
-    ...                three this month's service report.
+    ...                three this month's service report, page four its applications' availability (if it has any).
     FOR    ${c}    IN    @{SPOKES}
         ${r}=    GET On Session    portal    /api/customers/${c}/map.pdf
         Should Be Equal    ${r.headers}[content-type]    application/pdf
         Should Contain    ${r.headers}[content-disposition]    ${c}-network-map-
         Should Start With    ${r.content}    ${{b"%PDF"}}
         ${pages}=    Pdf Page Count    ${r.content}
-        Should Be Equal As Integers    ${pages}    3    msg=${c}'s map PDF runs to ${pages} pages
+        ${want}=    Evaluate    4 if $COMPANIES[$c].get('applications') else 3
+        Should Be Equal As Integers    ${pages}    ${want}    msg=${c}'s map PDF runs to ${pages} pages
     END
     GET On Session    portal    /api/customers/${HUBS}[0]/map.pdf    expected_status=404
 
@@ -240,11 +241,12 @@ Change control: a covered change waits for someone else's approval, and a simula
     Skip If    not ($p.json()['approval']['enabled'] and 'fault' in $p.json()['approval']['covers'])    the policy does not cover failures
     Skip If    not $DUAL_SPOKES    no dual-homed customer: no harmless failure to simulate
     ${target}=    Set Variable    ${DUAL_SPOKES}[0]:wan2
-    ${r}=    POST On Session    portal    /api/faults    json=${{{"kind": "site-wan", "target": $target, "requested_by": "robot", "reason": "suite 07"}}}    expected_status=202
+    ${r}=    POST On Session    portal    /api/faults    json=${{{"kind": "site-wan", "target": $target, "reason": "suite 07"}}}    expected_status=202
     ${cr}=    Set Variable    ${r.json()}[change][id]
     Should Be Equal    ${r.json()}[change][status]    pending
-    POST On Session    portal    /api/changes/${cr}/approve    json=${{{"by": "robot"}}}    expected_status=403
-    ${ok}=    POST On Session    portal    /api/changes/${cr}/approve    json=${{{"by": "robot-approver", "comment": "suite 07"}}}
+    Should Be Equal    ${r.json()}[change][requested_by]    operator
+    POST On Session    portal    /api/changes/${cr}/approve    json=${{{}}}    expected_status=403
+    ${ok}=    POST On Session    approver    /api/changes/${cr}/approve    json=${{{"comment": "suite 07"}}}
     Should Be Equal    ${ok.json()}[status]    started    msg=${ok.json()}
     ${fid}=    Set Variable    ${ok.json()}[fault_id]
     ${f}=    GET On Session    portal    /api/faults
@@ -255,7 +257,7 @@ Change control: a covered change waits for someone else's approval, and a simula
     Should Contain    ${back.json()}[undone]    delete
     ${f}=    GET On Session    portal    /api/faults
     Should Be Empty    ${f.json()}[active]
-    ${again}=    POST On Session    portal    /api/changes/${cr}/approve    json=${{{"by": "someone-else"}}}    expected_status=409
+    ${again}=    POST On Session    approver    /api/changes/${cr}/approve    json=${{{}}}    expected_status=409
 
 The failure catalogue offers every kind of failure, and the failover measurements are listed
     ${f}=    GET On Session    portal    /api/faults
@@ -288,3 +290,101 @@ A customer's own link shows its service and nothing of any other customer
     Should Be Equal    ${s.json()}[customer]    ${c}
     GET On Session    portal    /api/c/not-a-token/state    expected_status=404
     GET On Session    portal    /c/not-a-token    expected_status=404
+
+Nobody gets in without an account, and a role only does what it may
+    Create Session    anon    http://127.0.0.1:8094    timeout=60
+    GET On Session    anon    /api/state    expected_status=401
+    GET On Session    anon    /metrics
+    GET On Session    anon    /api/version
+    POST On Session    anon    /api/auth/login    json=${{{"username": "operator", "password": "wrong"}}}    expected_status=401
+    ${me}=    GET On Session    portal    /api/auth/me
+    Should Be Equal    ${me.json()}[username]    operator
+    Create Session    viewer    http://127.0.0.1:8094    timeout=60
+    POST On Session    viewer    /api/auth/login    json=${PORTAL_LOGIN}[viewer]
+    GET On Session    viewer    /api/state
+    POST On Session    viewer    /api/runs    json=${{{"mode": "drift"}}}    expected_status=403
+    GET On Session    viewer    /api/auth/users    expected_status=403
+    GET On Session    portal    /api/auth/users    expected_status=403
+    POST On Session    portal    /api/policy    json=${{{}}}    expected_status=403
+
+Maintenance mutes a customer's nodes and tells the customer, and ends
+    ${c}=    Set Variable    ${SPOKES}[-1]
+    ${m}=    POST On Session    portal    /api/maintenance    json=${{{"summary": "suite 07: a maintenance", "customers": [$c]}}}
+    ${met}=    GET On Session    portal    /metrics
+    Should Contain    ${met.text}    lab_maintenance{lab="c8000v-dmvpn-lab",router="${c}"} 1
+    Should Contain    ${met.text}    lab_maintenance_customer{lab="c8000v-dmvpn-lab",customer="${c}"} 1
+    ${st}=    GET On Session    portal    /api/state
+    Length Should Be    ${st.json()}[maintenance]    1
+    ${l}=    GET On Session    portal    /api/customers/${c}/portal-link
+    ${token}=    Evaluate    $l.json()['path'].split('/')[-1]
+    ${v}=    GET On Session    portal    /api/c/${token}/state
+    Length Should Be    ${v.json()}[maintenance_now]    1
+    DELETE On Session    portal    /api/maintenance/${m.json()}[id]
+    ${met}=    GET On Session    portal    /metrics
+    Should Contain    ${met.text}    lab_maintenance{lab="c8000v-dmvpn-lab",router="${c}"} 0
+
+Every changing job keeps each router's configuration before and after
+    ${h}=    GET On Session    portal    /api/config-history
+    Skip If    not $h.json()    no changing job has run since 0.20.0
+    ${job}=    Set Variable    ${h.json()}[0][job]
+    ${d}=    GET On Session    portal    /api/runs/${job}/config
+    FOR    ${r}    IN    @{d.json()}
+        Should Contain    ${d.json()}[${r}][diff]    --- ${r} before
+    END
+    ${r}=    Evaluate    next(iter($d.json()))
+    ${cfg}=    GET On Session    portal    /api/config-history/${job}/${r}    params=which=after
+    Should Not Be Empty    ${cfg.text}
+    Should Not Contain    ${cfg.text}    Last configuration change at
+
+Every customer's applications answer at every hub that serves them
+    [Documentation]    The hubs carry the applications' VIPs (a CLI template on Loopback10); every customer's LAN host
+    ...                pings its subscribed applications' VIPs every minute, and connects to the HTTPS ones.
+    FOR    ${h}    IN    @{HUBS}
+        ${lo}=    Show    ${h}    show running-config interface Loopback10
+        FOR    ${a}    IN    @{APPLICATIONS}
+            IF    $h in $a['vips']
+                Should Contain    ${lo}    ip address ${a}[vips][${h}] 255.255.255.255 secondary
+            END
+        END
+    END
+    ${met}=    GET On Session    portal    /metrics
+    FOR    ${c}    IN    @{SPOKES}
+        FOR    ${aid}    IN    @{COMPANIES}[${c}][applications]
+            FOR    ${h}    IN    @{APP_HUBS}[${aid}]
+                Should Contain    ${met.text}    lab_app_up{lab="c8000v-dmvpn-lab",customer="${c}",app="${aid}",hub="${h}"} 1
+            END
+        END
+    END
+
+A customer account sees only its own service, asks for changes, and runs its own diagnostics
+    ${c}=    Set Variable    ${SPOKES}[0]
+    ${pw}=    Evaluate    __import__('secrets').token_urlsafe(12)
+    Create Session    admin    http://127.0.0.1:8094    timeout=60
+    POST On Session    admin    /api/auth/login    json=${PORTAL_LOGIN}[admin]
+    DELETE On Session    admin    /api/auth/users/robot-customer    expected_status=any
+    POST On Session    admin    /api/auth/users    json=${{{"username": "robot-customer", "name": "suite 07", "roles": ["customer"], "password": $pw, "customer": $c}}}
+    Create Session    cust    http://127.0.0.1:8094    timeout=180
+    POST On Session    cust    /api/auth/login    json=${{{"username": "robot-customer", "password": $pw}}}
+    GET On Session    cust    /api/state    expected_status=403
+    ${v}=    GET On Session    cust    /api/c/me/state
+    Should Be Equal    ${v.json()}[customer]    ${c}
+    ${d}=    POST On Session    cust    /api/c/me/diagnostics    json=${{{"kind": "apps"}}}
+    FOR    ${aid}    IN    @{COMPANIES}[${c}][applications]
+        Dictionary Should Contain Key    ${d.json()}[apps]    ${aid}
+    END
+    ${q}=    POST On Session    cust    /api/c/me/requests    json=${{{"prefer_hub": $HUBS[-1] if $PREFER.get($c) != $HUBS[-1] else $HUBS[0], "reason": "suite 07"}}}
+    Should Be Equal    ${q.json()}[status]    pending
+    Should Be Equal    ${q.json()}[source]    customer
+    ${no}=    POST On Session    approver    /api/changes/${q.json()}[id]/reject    json=${{{"comment": "suite 07: only a test"}}}
+    Should Be Equal    ${no.json()}[status]    rejected
+    ${mine}=    GET On Session    cust    /api/c/me/requests
+    Should Be Equal    ${mine.json()}[0][id]    ${q.json()}[id]
+    Should Be Equal    ${mine.json()}[0][status]    rejected
+    DELETE On Session    admin    /api/auth/users/robot-customer
+
+*** Keywords ***
+Sign In
+    Create Session    portal    http://127.0.0.1:8094    timeout=180
+    POST On Session    portal    /api/auth/login    json=${PORTAL_LOGIN}[operator]
+    Create Session    approver    http://127.0.0.1:8094    timeout=60
+    POST On Session    approver    /api/auth/login    json=${PORTAL_LOGIN}[approver]

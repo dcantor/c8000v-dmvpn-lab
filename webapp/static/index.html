@@ -141,7 +141,12 @@ body.print .legend { margin:2px 0 6px } body.print #mapinfo { padding-top:6px; b
 .chart .lg { font-size:12px; fill:var(--body) } .slah3 { font-size:14px; margin:12px 0 2px }
 .slaprint { display:none } body.print .slaprint { display:block; break-before:page; padding-top:2mm } body.print .slaprint h3 { font-size:17px; margin:0 0 6px }
 body.print .slakpi .n { font-size:18px } body.print .chart { margin:0 0 2px; width:auto; height:36mm; max-width:100% }   /* one A4 landscape page */
-body.print .chart.short { height:24mm } body.print .slanote { font-size:9.5px; margin:3px 0 0 }
+body.print .chart.short { height:20mm } body.print .slanote { font-size:9.5px; margin:3px 0 0 }
+body.print .chart { height:30mm } body.print .slaloss { display:none }       /* loss is in the table below: its chart is left out */
+body.print .slakpis { grid-template-columns:repeat(7, 1fr) } body.print .slaprint table { font-size:10.5px }
+body.print .slah3 { margin-top:3px; font-size:12px }
+body.print .slaapps { break-before:page; font-size:16px !important; margin-top:0 !important }   /* the applications' availability: page four */
+body.print .slaprint .slaapps + table { font-size:12px }
 body.print .slakpis { grid-template-columns:repeat(6, 1fr); gap:6px; margin-bottom:6px } body.print .slakpi { padding:5px 8px }
 body.print .slah3 { margin-top:6px } body.print .slaprint table td, body.print .slaprint table th { padding:2px 6px }
 /* resilience */
@@ -153,11 +158,27 @@ body.print .slah3 { margin-top:6px } body.print .slaprint table td, body.print .
 .tl .mk { stroke:var(--body); stroke-dasharray:3 3 } .tl text { fill:var(--muted); font-size:10.5px }
 #map .faultmark circle { fill:var(--bad) } #map .faultmark text { fill:#fff; font-size:13px; font-weight:700; text-anchor:middle }
 #map .ul.faulted { stroke:var(--bad) !important; stroke-dasharray:4 4; stroke-width:4 }
+/* roles: a viewer or approver sees no operator controls, only an approver the approve buttons, only an admin Users */
+body.ro #mt-go, body.ro [data-mend], body.ro #tasks, body.ro #f-apply, body.ro #f-measure, body.ro #f-restore-all, body.ro [data-restore], body.ro #drift-card h2 button,
+body.ro .driftfix, body.ro [data-watch], body.ro [data-plink], body.ro [data-cancel] { display:none !important }
+body.noapprove [data-approve], body.noapprove [data-reject], body.noapprove [data-emerg], body:not(.isadmin) #pol-toggle,
+body:not(.isadmin) #users-card { display:none !important }
+body.ro #v-provision .card h2 small::after { content:' — your role reads only' }
+/* the customer's own pages exist only in its view */
+body:not(.cview) nav a.conly { display:none }
 /* the customer's view */
-body.cview #v-cloud, body.cview nav a:not([data-view=map]):not([data-view=sla]), body.cview .right .me, body.cview #chg-hdr, body.cview #theme ~ *,
+body.cview #v-cloud, body.cview nav a:not([data-view=map]):not([data-view=sla]):not([data-view=requests]):not([data-view=diag]), body.cview.tok .right .me, body.cview #chg-hdr, body.cview #theme ~ *,
 body.cview .maptools, body.cview .export, body.cview #mapfocus, body.cview .mapactions button, body.cview .slactl #sla-cust { display:none !important }
 .notices .svc { font-size:15px; margin-bottom:4px } .notices .svc.up b { color:var(--green) } .notices .svc.degraded b { color:var(--amber) } .notices .svc.down b { color:var(--red) }
 .notices .inc { color:var(--red); margin:3px 0 } .notices .plan { color:var(--amber); margin:3px 0 } .notices[hidden] { display:none }
+pre.diff .dp, #mapout .dp { color:#86efac } pre.diff .dm, #mapout .dm { color:#fca5a5 } pre.diff .dh, #mapout .dh { color:#7dd3fc }
+#job-cfg details { margin:6px 0 } #job-cfg pre.diff { max-height:360px } #mapout .hist { margin-bottom:10px }
+.adot { font-size:11px; white-space:nowrap } .adot.ok { color:var(--green) } .adot.bad { color:var(--red) }
+.mbanner { background:#fdf0d5; color:#7c2d12; border:1px solid #fcd34d; border-radius:8px; padding:7px 12px; margin:0 0 12px; font-size:13.5px }
+:root[data-theme=dark] .mbanner { background:#3a2a08; color:#fde68a; border-color:#854d0e } .mbanner[hidden] { display:none }
+.cr-form .row > div { min-width:180px } #cq-apps { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:3px 12px }
+#cq-apps label { display:flex; gap:6px; align-items:center; font-size:13px; color:var(--body); margin:0 } #cq-apps input, .cr-form input[type=checkbox] { width:auto }
+.diag td, .diag th { font-size:13px }
 /* lab tools */
 .toolgrid { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:10px }
 .tool { border:1px solid var(--line); border-radius:9px; padding:10px 12px; background:var(--bg) }
@@ -179,12 +200,13 @@ body.cview .maptools, body.cview .export, body.cview #mapfocus, body.cview .mapa
 <header>
   <div><h1>C8000v DMVPN Portal</h1>
     <div class="sub">three hubs &middot; Catalyst 8000v and VyOS customers &middot; two VyOS providers &middot; Network-as-Code &middot; Nautobot</div></div>
-  <nav><a href="#cloud" data-view="cloud" class="on">The cloud</a><a href="#map" data-view="map">Network map</a><a href="#sla" data-view="sla">SLA</a><a href="#resilience" data-view="resilience">Resilience</a><a href="#provision" data-view="provision">Provision</a>
+  <nav><a href="#cloud" data-view="cloud" class="on">The cloud</a><a href="#map" data-view="map">Network map</a><a href="#sla" data-view="sla">SLA</a><a href="#requests" data-view="requests" class="conly">Requests</a><a href="#diag" data-view="diag" class="conly">Diagnostics</a><a href="#resilience" data-view="resilience">Resilience</a><a href="#provision" data-view="provision">Provision</a>
        <a href="#runs" data-view="runs">Jobs</a><a href="#tools" data-view="tools">Lab Tools</a><a href="/docs" target="_blank">API</a></nav>
-  <div class="right"><span class="me" title="your name on change requests and approvals (the lab portal has no logins)">you: <input id="me" placeholder="your name" size="10"></span> &middot; <a href="#runs" id="chg-hdr" hidden></a> <a id="ver" href="https://github.com/dcantor/c8000v-dmvpn-lab/blob/main/CHANGELOG.md" target="_blank" rel="noopener" title="what changed (CHANGELOG.md)"></a> &middot; <span id="hdr"></span> &middot; <a href="#" id="theme">&#9790; dark</a></div>
+  <div class="right"><span class="me" id="who"></span> &middot; <a href="#runs" id="chg-hdr" hidden></a> <a id="ver" href="https://github.com/dcantor/c8000v-dmvpn-lab/blob/main/CHANGELOG.md" target="_blank" rel="noopener" title="what changed (CHANGELOG.md)"></a> &middot; <span id="hdr"></span> &middot; <a href="#" id="theme">&#9790; dark</a></div>
 </header>
 <main>
 <div class="fbanner" id="fbanner" hidden></div>
+<div class="mbanner" id="mbanner" hidden></div>
 
 <section id="v-cloud" class="view on">
   <div class="kpis" id="kpis"></div>
@@ -250,6 +272,25 @@ body.cview .maptools, body.cview .export, body.cview #mapfocus, body.cview .mapa
     <div id="sla-body"><p class="hint">loading…</p></div></div>
 </section>
 
+<section id="v-requests" class="view">
+  <div class="card cr-form"><h2>Ask for a change <small>your request goes to our operators as a change request; you see here when it is approved and done</small></h2>
+    <div id="cq-signin" class="hint" hidden>Sign in with your customer account to ask for changes — this read-only link cannot.</div>
+    <div id="cq-form">
+      <h3 style="font-size:14px;margin:4px 0 6px">Applications <small class="hint">(what you subscribe to)</small></h3><div id="cq-apps"></div>
+      <div class="row" style="margin-top:10px"><div><label>Preferred hub</label><select id="cq-pref" style="width:100%;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--body);font:inherit;font-size:13.5px"></select></div>
+        <div id="cq-dual-box"><label>Second provider</label><label style="display:flex;gap:6px;align-items:center;font-size:13.5px;color:var(--body);margin:6px 0 0"><input type="checkbox" id="cq-dual"> a second, backup circuit (dual-homed)</label></div>
+        <div style="flex:2"><label>Why (optional)</label><input id="cq-why"></div></div>
+      <div class="actions"><button class="primary" id="cq-go">Send the request</button><span class="msg" id="cq-msg"></span></div></div></div>
+  <div class="card"><h2>Your requests</h2><table id="cq-t"><thead><tr><th>Request</th><th>What</th><th>Asked</th><th>Status</th></tr></thead><tbody></tbody></table></div>
+</section>
+
+<section id="v-diag" class="view">
+  <div class="card diag"><h2>Diagnostics <small>tests run now, from your own LAN host, to your applications and to our hubs</small></h2>
+    <div class="actions" style="margin-top:0"><button class="primary" id="dg-apps">Test my applications</button><button id="dg-hubs">Test the hubs</button>
+      <span style="flex:1"></span><select id="dg-trace" style="width:100%;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--body);font:inherit;font-size:13.5px" style="width:auto"></select><button id="dg-trace-go">Trace the path</button></div>
+    <div id="dg-out" style="margin-top:10px"><p class="hint">pick a test</p></div></div>
+</section>
+
 <section id="v-resilience" class="view">
   <div class="card"><h2>Simulate a failure <small>take part of the lab down on purpose, see what the design does, put it back</small></h2>
     <div class="row"><div><label>What fails</label><select id="f-kind" style="padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--body);font:inherit;font-size:13.5px" style="width:100%"></select></div>
@@ -267,6 +308,14 @@ body.cview .maptools, body.cview .export, body.cview #mapfocus, body.cview .mapa
 </section>
 
 <section id="v-tools" class="view">
+  <div class="card" id="users-card"><h2>Users <small>who may sign in, and what each role may do — viewer reads, operator changes, approver approves, admin all, customer its own service</small></h2>
+    <table id="users-t"><thead><tr><th>Account</th><th>Name</th><th>Roles</th><th>Customer</th><th>State</th><th></th></tr></thead><tbody></tbody></table>
+    <div class="row" style="margin-top:10px"><div><label>Username</label><input id="u-name"></div><div><label>Full name</label><input id="u-full"></div>
+      <div><label>Role</label><select id="u-role" style="width:100%;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--body);font:inherit;font-size:13.5px">
+        <option>viewer</option><option>operator</option><option>approver</option><option>admin</option><option>customer</option></select></div>
+      <div id="u-cust-box" hidden><label>Customer</label><select id="u-cust" style="width:100%;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--body);font:inherit;font-size:13.5px"></select></div>
+      <div><label>Password (8+)</label><input id="u-pass" type="password" autocomplete="new-password"></div></div>
+    <div class="actions"><button class="primary" id="u-add">Add the account</button><span class="msg" id="u-msg"></span></div></div>
   <div class="card"><h2>How to get in</h2>
     <div class="access" id="tools-access"></div>
     <p class="hint" id="tools-note"></p></div>
@@ -290,6 +339,12 @@ body.cview .maptools, body.cview .export, body.cview #mapfocus, body.cview .mapa
     <p class="hint" id="cr-msg" style="margin:0 0 6px"></p>
     <div id="pol" hidden></div>
     <table id="cr-t"><thead><tr><th>Change</th><th>What</th><th>Asked by</th><th>Status</th><th></th></tr></thead><tbody></tbody></table></div>
+  <div class="card"><h2>Maintenance <small>under way while a disruptive job runs or a failure is simulated — or declared here: the nodes' alerts are muted, the customers told, the SLA leaves it out</small></h2>
+    <div id="mt-active"></div>
+    <div class="row" style="margin-top:8px"><div style="flex:2"><label>What</label><input id="mt-sum" placeholder="replacing hub-west's uplink"></div>
+      <div><label>Affects</label><select id="mt-scope" style="width:100%;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--body);font:inherit;font-size:13.5px"></select></div></div>
+    <div class="actions"><button id="mt-go">Declare maintenance</button><span class="msg" id="mt-msg"></span></div>
+    <details style="margin-top:6px"><summary class="hint">recent maintenance</summary><div id="mt-hist"></div></details></div>
   <div class="card"><h2>Jobs <small>one at a time; a failed job resumes from the step that failed</small></h2>
     <table id="runs"><thead><tr><th>Started</th><th>Mode</th><th>Customer</th><th>Status</th><th>Progress</th><th>Tests</th></tr></thead><tbody></tbody></table></div>
   <div class="card"><h2 id="run-title">Job</h2><div id="run-body" class="hint">select a job</div></div>
@@ -324,6 +379,14 @@ body.cview .maptools, body.cview .export, body.cview #mapfocus, body.cview .mapa
   <div class="msg" id="w-msg"></div>
   <div class="actions"><button class="primary" id="w-go">Provision the customer</button><button id="w-check">Re-check</button>
     <span style="flex:1"></span><button onclick="wiz.close()">Cancel</button></div></dialog>
+
+<dialog id="login" style="max-width:380px"><h2>Sign in</h2>
+  <form id="l-form"><div style="margin-bottom:8px"><label>Username</label><input id="l-user" autocomplete="username"></div>
+    <div><label>Password</label><input id="l-pass" type="password" autocomplete="current-password"></div>
+    <div class="msg" id="l-msg"></div>
+    <div class="actions"><button class="primary" type="submit">Sign in</button></div></form>
+  <p class="hint">Staff accounts see the whole lab by role; a customer account sees its own service. The lab-default accounts are in
+    <span class="mono">webapp/users.seed.json</span> — change their passwords.</p></dialog>
 
 <dialog id="mod"><h2>Modify a customer</h2>
   <div class="row"><div><label>Customer</label><select id="m-cust" style="width:100%;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--body);font:inherit;font-size:13.5px"></select></div></div>
@@ -392,13 +455,35 @@ body.cview .maptools, body.cview .export, body.cview #mapfocus, body.cview .mapa
 <script>
 const $ = id => document.getElementById(id), esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const J = { method: 'POST', headers: { 'content-type': 'application/json' } };
-const CVIEW = (location.pathname.match(/^\/c\/([A-Za-z0-9_-]+)/) || [])[1] || null;     // a customer's own read-only view
-try { $('me').value = localStorage.getItem('c8d-user') || ''; } catch (e) {}
-$('me').onchange = () => { try { localStorage.setItem('c8d-user', $('me').value.trim()); } catch (e) {} };
-// who is asking: the header's name, asked for once if it is empty
-function who() { let n = $('me').value.trim();
-  if (!n) { n = (prompt('Your name, for the change request (the approver must be someone else):') || '').trim(); $('me').value = n; $('me').onchange(); }
-  return n; }
+// a customer's own view: /c/<secret token> (read-only), or 'me' once a customer account has signed in
+let CVIEW = (location.pathname.match(/^\/c\/([A-Za-z0-9_-]+)/) || [])[1] || null;
+let ME = null;                                       // the signed-in account {username, name, roles, customer}
+const can = (...roles) => !!ME && (ME.roles.some(r => roles.includes(r)) || (ME.roles.includes('admin') && !roles.includes('customer')));
+function who() { return ME ? ME.username : ''; }
+// every API call: a 401 means the session ended — sign in again
+const _fetch = window.fetch;
+window.fetch = async (u, o) => { const r = await _fetch(u, o);
+  if (r.status === 401 && typeof u === 'string' && u.startsWith('/api/') && !u.startsWith('/api/auth/') && !(CVIEW && CVIEW !== 'me')) showLogin();
+  return r; };
+function showLogin(msg) { if ($('login').open) return; $('l-msg').textContent = msg || ''; $('login').showModal(); setTimeout(() => $('l-user').focus(), 50); }
+async function doLogin(e) { e && e.preventDefault();
+  const r = await _fetch('/api/auth/login', { ...J, body: JSON.stringify({ username: $('l-user').value.trim(), password: $('l-pass').value }) }), j = await r.json();
+  if (!r.ok) { $('l-msg').textContent = j.detail || 'could not sign in'; return; }
+  $('l-pass').value = ''; $('login').close(); location.reload(); }
+async function signOut(e) { e && e.preventDefault(); await _fetch('/api/auth/logout', { method: 'POST' }); location.href = '/'; }
+async function changePassword(e) { e && e.preventDefault();
+  const old = prompt('Your current password:'); if (old === null) return;
+  const nw = prompt('The new password (at least 8 characters):'); if (!nw) return;
+  const r = await fetch('/api/auth/password', { ...J, body: JSON.stringify({ old, new: nw }) }), j = await r.json();
+  alert(r.ok ? 'Password changed.' : j.detail); }
+function renderWho() {
+  if (!ME) { $('who').innerHTML = ''; return; }
+  $('who').innerHTML = `<b>${esc(ME.name || ME.username)}</b> <span class="hint">${esc(ME.username)} · ${esc(ME.roles.join(', '))}${ME.customer ? ' · ' + esc(ME.customer) : ''}</span> · <a href="#" id="pw-link">password</a> · <a href="#" id="signout">sign out</a>`;
+  $('signout').onclick = signOut; $('pw-link').onclick = changePassword;
+  document.body.classList.toggle('ro', !can('operator'));             // a viewer / approver: no operator buttons
+  document.body.classList.toggle('noapprove', !can('approver'));
+  document.body.classList.toggle('isadmin', can('admin'));
+}
 const changeFiled = cr => `<b>${esc(cr.id)}</b> filed — change control covers this: it waits for someone other than ${esc(cr.requested_by)} to approve it (Jobs → Change requests).`;
 let ST = null, SPEC = null, watching = null;
 function applyTheme() { let t = null; try { t = localStorage.getItem('c8d-theme'); } catch (e) {}
@@ -410,7 +495,7 @@ applyTheme(); $('theme').onclick = e => { e.preventDefault();
 document.querySelectorAll('nav a[data-view]').forEach(a => a.onclick = e => { e.preventDefault(); show(a.dataset.view); });
 function show(v) { document.querySelectorAll('.view').forEach(x => x.classList.toggle('on', x.id === 'v-' + v));
   document.querySelectorAll('nav a[data-view]').forEach(a => a.classList.toggle('on', a.dataset.view === v));
-  location.hash = v; if (v === 'runs') { loadRuns(); loadChanges(); } if (v === 'tools') loadTools(); if (v === 'sla') openSla(); if (v === 'resilience') loadResilience(); }
+  location.hash = v; if (v === 'runs') { loadRuns(); loadChanges(); loadMaint(); } if (v === 'requests') loadRequests(); if (v === 'diag') openDiag(); if (v === 'tools') loadTools(); if (v === 'sla') openSla(); if (v === 'resilience') loadResilience(); }
 const pill = (ok, text, warn) => `<span class="pill ${ok ? 'ok' : (warn ? 'warn' : 'bad')}">${esc(text)}</span>`;
 
 const TASKS = [
@@ -663,12 +748,7 @@ async function checkRemoval() {
 }
 
 async function start(body) {
-  body = { requested_by: $('me').value.trim() || undefined, ...body };
-  let r = await fetch('/api/runs', { ...J, body: JSON.stringify(body) }), run = await r.json();
-  if (r.status === 400 && /requested_by/.test(run.detail || '')) {       // change control wants a name
-    body.requested_by = who(); if (!body.requested_by) return;
-    r = await fetch('/api/runs', { ...J, body: JSON.stringify(body) }); run = await r.json();
-  }
+  const r = await fetch('/api/runs', { ...J, body: JSON.stringify(body) }), run = await r.json();
   if (!r.ok) { alert(typeof run.detail === 'string' ? run.detail : JSON.stringify(run.detail) || 'could not start'); return; }
   show('runs');
   if (r.status === 202) { await loadChanges(); $('cr-msg').innerHTML = changeFiled(run.change); load(); return; }
@@ -732,11 +812,14 @@ async function watch(id) {
     const r = await (await fetch(`/api/runs/${encodeURIComponent(id)}`)).json();
     const log = (r.log || []).map(x => typeof x === 'string' ? x : x.line).join('\n');
     const plat = (r.spec || {}).platform || (r.removal || {}).platform || ((r.modification || {}).new || {}).platform, PLATN = { c8000v: 'Catalyst 8000v', vyos: 'VyOS' };
-    $('run-title').innerHTML = `${esc(r.mode)} ${esc(r.customer || '')}${plat ? ` <span class="pill teal">${esc(PLATN[plat] || plat)}</span>` : ''} <span class="pill ${stCls(r.status)}">${esc(r.status)}</span>
+    $('run-title').innerHTML = `${esc(r.mode)} ${esc(r.customer || '')}${r.started_by ? ` <span class="hint">by ${esc(r.started_by)}</span>` : ''}${plat ? ` <span class="pill teal">${esc(PLATN[plat] || plat)}</span>` : ''} <span class="pill ${stCls(r.status)}">${esc(r.status)}</span>
       ${['failed', 'interrupted'].includes(r.status) ? `<button onclick="resume('${esc(r.id)}')">Resume</button>` : ''}`;
     $('run-body').innerHTML = `<div class="run-prog">${progress(r, true)}</div><ol class="steps">${(r.steps || []).map(s => `<li class="${s.status === 'running' ? 'cur' : ''}"><span class="pill ${stCls(s.status)}">${esc(s.status)}</span>
       <span class="s">${esc(s.title || s.name)}</span>${s.summary ? `<div class="d">${esc(s.summary)}</div>` : ''}</li>`).join('')}</ol>
       ${r.tests ? `<p><b>Tests:</b> ${r.tests.passed}/${r.tests.total} passed${r.results_dir ? ` — <a href="/results/${esc(r.results_dir)}/report.html" target="_blank">report</a>` : ''}</p>` : ''}
+      ${r.config_changes ? `<p><b>Configuration changes:</b> ${Object.keys(r.config_changes).length ? Object.entries(r.config_changes).map(([n, c]) =>
+          `<span class="pill ${c.new ? 'ok' : c.gone ? 'bad' : 'teal'}">${esc(n)} ${c.new ? 'new' : c.gone ? 'gone' : `+${c.added} / −${c.removed}`}</span>`).join(' ')
+          + ` <button onclick="showJobConfig('${esc(r.id)}')">show the differences</button>` : '<span class="hint">no router\'s configuration changed</span>'}</p><div id="job-cfg"></div>` : ''}
       <pre class="out">${esc(log.slice(-8000))}</pre>`;
     const pre = $('run-body').querySelector('pre'); if (pre) pre.scrollTop = pre.scrollHeight;
     if (location.hash === '#runs') loadRuns();          // the list's bars move with the run being watched
@@ -745,6 +828,24 @@ async function watch(id) {
   await tick(); if (!done) watching = setInterval(tick, 3000);
 }
 setInterval(() => { if (location.hash === '#runs' && !watching && document.querySelector('#runs .prog.live, #runs .prog.idle')) loadRuns(); }, 5000);
+// a job's configuration changes: one coloured unified diff per router
+const diffHtml = t => `<pre class="out diff">${t.split('\n').map(l => `<span class="${l.startsWith('+') && !l.startsWith('+++') ? 'dp' : l.startsWith('-') && !l.startsWith('---') ? 'dm' : l.startsWith('@@') ? 'dh' : ''}">${esc(l)}</span>`).join('\n')}</pre>`;
+async function showJobConfig(id) {
+  const r = await fetch(`/api/runs/${encodeURIComponent(id)}/config`), d = await r.json(), el = document.getElementById('job-cfg');
+  if (!r.ok) { el.innerHTML = `<p class="msg">${esc(d.detail)}</p>`; return; }
+  clearInterval(watching); watching = null;              // the page stops refreshing while the differences are read
+  el.innerHTML = Object.entries(d).map(([n, c]) => `<details open><summary><b>${esc(n)}</b> <span class="hint">+${c.added} / −${c.removed}${c.new ? ' · new router' : ''}${c.gone ? ' · removed' : ''}</span></summary>${diffHtml(c.diff)}</details>`).join('') || '<p class="hint">nothing changed</p>';
+}
+async function showRouterHistory(n) {
+  const h = await (await fetch(`/api/config-history?router=${encodeURIComponent(n)}`)).json(), card = $('mapcmd'), out = $('mapout');
+  card.hidden = false; $('mapcmd-title').textContent = `${n} — configuration history`; $('mapcmd-when').textContent = `${h.length} job(s) changed it`;
+  out.innerHTML = h.length ? '' : 'no recorded job has changed this router yet';
+  for (const j of h.slice(0, 10)) {
+    const d = await (await fetch(`/api/runs/${encodeURIComponent(j.job)}/config`)).json(), c = d[n];
+    out.insertAdjacentHTML('beforeend', `<div class="hist"><b>${esc(j.job)}</b> +${c.added} / −${c.removed}\n${c.diff.split('\n').slice(2).map(l => `<span class="${l.startsWith('+') ? 'dp' : l.startsWith('-') ? 'dm' : l.startsWith('@@') ? 'dh' : ''}">${esc(l)}</span>`).join('\n')}</div>\n`);
+  }
+  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
 async function resume(id) { const r = await fetch(`/api/runs/${encodeURIComponent(id)}/resume`, { method: 'POST' });
   const run = await r.json(); if (!r.ok) { alert(run.detail); return; } watch(run.id); }
 
@@ -756,7 +857,7 @@ async function loadChanges() {
   const P = CHG.policy, rq = CHG.requests;
   $('cr-policy').textContent = !P.approval.enabled ? 'approval is off: every job starts at once'
     : `approval for: ${P.approval.covers.join(', ')}${P.approval.four_eyes ? ' · four eyes' : ''} · windows ${P.windows.enabled ? (CHG.window_open ? 'on — one is open now' : 'on — next opens ' + (CHG.next_window ? fmtT(CHG.next_window) : 'never')) : 'off'}`;
-  const me = $('me').value.trim().toLowerCase();
+  const me = who().toLowerCase();
   $('cr-t').querySelector('tbody').innerHTML = rq.slice(0, 25).map(c => {
     const open = c.status === 'pending', mine = me && c.requested_by.toLowerCase() === me;
     const acts = open ? (mine && P.approval.four_eyes ? `<span class="hint">waiting for someone else</span> <button data-cancel="${esc(c.id)}">Withdraw</button>`
@@ -775,8 +876,23 @@ async function loadChanges() {
   T.querySelectorAll('[data-run]').forEach(a => a.onclick = e => { e.preventDefault(); watch(a.dataset.run); });
   renderPolicy();
 }
+async function loadMaint() {
+  const d = await (await fetch('/api/maintenance')).json();
+  $('mt-active').innerHTML = d.active.length ? `<table><thead><tr><th>What</th><th>Nodes</th><th>Customers</th><th>By</th><th>Since</th><th></th></tr></thead><tbody>${d.active.map(x =>
+    `<tr><td><b>${esc(x.summary)}</b>${x.change ? ` <span class="hint">${esc(x.change)}</span>` : ''}</td><td class="hint">${x.all ? 'all' : esc(x.routers.join(', '))}</td><td>${x.all ? 'all' : esc(x.customers.join(', ') || '—')}</td>
+     <td>${esc(x.by)}</td><td>${esc(fmtT(x.started))}</td><td>${x.kind === 'manual' ? `<button data-mend="${esc(x.id)}">End</button>` : `<span class="hint">ends with its ${esc(x.kind)}</span>`}</td></tr>`).join('')}</tbody></table>`
+    : '<p class="hint">none under way</p>';
+  $('mt-active').querySelectorAll('[data-mend]').forEach(b => b.onclick = async () => { await fetch(`/api/maintenance/${b.dataset.mend}`, { method: 'DELETE' }); loadMaint(); load(); });
+  $('mt-hist').innerHTML = d.history.slice(0, 12).map(x => `<div class="hint">${esc(fmtT(x.started))} – ${esc(fmtT(x.ended))} · ${esc(x.summary)} · ${esc(x.reason)}</div>`).join('') || '<p class="hint">none</p>';
+  if (ST) $('mt-scope').innerHTML = `<option value="all">the whole lab</option>` + ST.customers.map(c => `<option value="c:${esc(c)}">customer ${esc(c)} (its router and host)</option>`).join('')
+    + [...ST.hubs, ...allProviders()].map(r => `<option value="r:${esc(r)}">${esc(r)} — every customer it serves</option>`).join('');
+  $('mt-go').onclick = async () => { const v = $('mt-scope').value, sum = $('mt-sum').value.trim();
+    const body = v === 'all' ? { summary: sum, customers: ['all'] } : v.startsWith('c:') ? { summary: sum, customers: [v.slice(2)] } : { summary: sum, routers: [v.slice(2)], customers: ['all'] };
+    const r = await fetch('/api/maintenance', { ...J, body: JSON.stringify(body) }), j = await r.json();
+    $('mt-msg').textContent = r.ok ? '' : j.detail; if (r.ok) { $('mt-sum').value = ''; loadMaint(); load(); } };
+}
 async function decide(id, what, emergency) {
-  const by = who(); if (!by) return;
+  const by = who();
   const comment = what === 'cancel' ? '' : (prompt(emergency ? `Emergency: why must ${id} run now, outside the window?` : `${what === 'approve' ? 'Approve' : 'Reject'} ${id} — comment (optional):`) ?? null);
   if (comment === null) return;
   const r = await fetch(`/api/changes/${encodeURIComponent(id)}/${what}`, { ...J, body: JSON.stringify({ by, comment, emergency: !!emergency }) }), j = await r.json();
@@ -1121,14 +1237,18 @@ function renderInfo(n, fresh) {
       <dt>Account</dt><dd>${esc(cu.account)}</dd></dl></div>` : '';
   const APPS = ST.applications || [], link = u => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(u.replace(/^https?:\/\//, ''))}</a>`;
   let apps = '';
+  const ast = (ST.app_status || {})[owner] || {};
+  const appDot = (a, h) => { const r = (ast[a.id] || {})[h]; if (!r) return '';
+    const ok = r.loss < 1 && r.tcp !== false;
+    return ` <span class="adot ${ok ? 'ok' : 'bad'}" title="${ok ? 'answers' : 'does not answer'} from ${esc(owner)}'s LAN host${r.rtt_avg != null ? ' · ' + r.rtt_avg.toFixed(1) + ' ms' : ''}${r.tcp != null ? ' · HTTPS ' + (r.tcp ? 'connects' : 'refused') : ''}">${ok ? '●' : '●'}${r.rtt_avg != null ? ' ' + r.rtt_avg.toFixed(1) + ' ms' : ''}</span>`; };
   if (cu && m.role === 'spoke') {
     const mine = APPS.filter(a => (cu.applications || []).includes(a.id));
     apps = `<div class="apps"><h3><span class="printonly">${esc(cu.company)} — </span>Applications (${mine.length})</h3>${mine.length ? `<table class="wide"><thead><tr><th>ID</th><th>Application</th><th>Served from · VIP</th></tr></thead><tbody>${mine.map(a =>
       `<tr><td class="id">${esc(a.id)}</td><td>${esc(a.name)}<br>${link(a.url)} <span class="hint">${esc(a.protocol.toUpperCase())}/${esc(a.port)}</span></td>
-       <td>${a.hubs.map(h => `<div class="vip">${esc(h)} ${esc(a.vips[h])}</div>`).join('')}</td></tr>`).join('')}</tbody></table>
+       <td>${a.hubs.map(h => `<div class="vip">${esc(h)} ${esc(a.vips[h])}${appDot(a, h)}</div>`).join('')}</td></tr>`).join('')}</tbody></table>
       <div class="narrow">${mine.map(a => `<div class="app"><div><span class="id">${esc(a.id)}</span> ${esc(a.name)}</div>
         <div>${link(a.url)} <span class="hint">${esc(a.protocol.toUpperCase())}/${esc(a.port)}</span></div>
-        ${a.hubs.map(h => `<div class="vip">${esc(h)} · VIP ${esc(a.vips[h])}</div>`).join('')}</div>`).join('')}</div>` : '<p class="hint">subscribes to no application</p>'}</div>`;
+        ${a.hubs.map(h => `<div class="vip">${esc(h)} · VIP ${esc(a.vips[h])}${appDot(a, h)}</div>`).join('')}</div>`).join('')}</div>` : '<p class="hint">subscribes to no application</p>'}</div>`;
   } else if (m.role === 'hub') {
     const here = APPS.filter(a => a.hubs.includes(n));
     const who = a => ST.customers.filter(c => (((ST.nodes[c] || {}).customer || {}).applications || []).includes(a.id));
@@ -1138,7 +1258,7 @@ function renderInfo(n, fresh) {
         <div class="hint">subscribers: ${who(a).map(c => esc(c) + ' (' + esc(((ST.nodes[c] || {}).customer || {}).company || '') + ')').join(', ') || 'none'}</div></div>`).join('') : '<p class="hint">hosts no application</p>'}</div>`;
   }
   $('mapinfo').innerHTML = `<h2>${esc(n)}</h2>${company}${apps}<dl>${rows.join('')}</dl>${view}
-    ${CVIEW ? '' : `<div class="cmds">${cmds.map(x => `<button data-cmd="${esc(x)}">${esc(x)}</button>`).join('')}<button data-config title="read the configuration live from ${esc(n)}">show configuration</button></div>`}
+    ${CVIEW ? '' : `<div class="cmds">${cmds.map(x => `<button data-cmd="${esc(x)}">${esc(x)}</button>`).join('')}<button data-config title="read the configuration live from ${esc(n)}">show configuration</button>${m.role !== 'host' ? `<button data-hist title="the jobs that changed ${esc(n)}, and what they changed">configuration history</button>` : ''}</div>`}
     ${pings.length ? `<div class="cmds"><button data-pingall title="ping ${esc(pings.join(', '))} from ${esc(n)}">ping all hosts (${pings.length})</button></div>
     <div class="pathctl"><label for="trace-to">Path to another host <span class="hint">(traceroute, drawn on the map)</span></label>
       <div class="cmds" style="margin-top:4px"><select id="trace-to">${pings.map(x => `<option value="${esc(x)}" ${x === (PATHS[0] || {}).target ? 'selected' : ''}>${esc(x)}${ST.nodes[x].router ? ' (' + esc(ST.nodes[x].router) + ')' : ''}</option>`).join('')}</select>
@@ -1146,6 +1266,7 @@ function renderInfo(n, fresh) {
         ${PATHS.length ? '<button data-clearpath>clear path</button>' : ''}</div></div>` : ''}`;
   $('mapinfo').querySelectorAll('[data-cmd]').forEach(b => b.onclick = () => runMapCommand(n, b.dataset.cmd));
   $('mapinfo').querySelectorAll('[data-config]').forEach(b => b.onclick = () => runMapConfig(n));
+  $('mapinfo').querySelectorAll('[data-hist]').forEach(b => b.onclick = () => showRouterHistory(n));
   $('mapinfo').querySelectorAll('[data-focus]').forEach(b => b.onclick = () => setFocus(MAPFOCUS === n ? null : n));
   $('mapinfo').querySelectorAll('[data-pdf]').forEach(b => b.onclick = () => downloadCustomerPdf(n, b));
   $('mapinfo').querySelectorAll('[data-plink]').forEach(b => b.onclick = () => portalLink(n));
@@ -1291,13 +1412,18 @@ function slaHtml(r) {
       ${kpi(msf(r.rtt_p95), 'Latency, 95th percentile', met(r.met.rtt_ms, `target ≤ ${T.rtt_ms} ms`))}
       ${kpi(pct(r.loss, 2), 'Packet loss', met(r.met.loss_pct, `target ≤ ${T.loss_pct}%`))}
       ${kpi(pct(r.coverage, 1), 'Monitored', `<span class="hint">of ${esc(r.label)}; probes ${pct(r.probe_coverage, 1)}</span>`)}
+      ${kpi(esc(Math.round(r.maintenance_minutes || 0) + ' min'), 'Announced maintenance', '<span class="hint">left out of availability and loss</span>')}
     </div>
     <div class="slah3"><b>Latency to each hub</b> <span class="hint">round trip from ${esc(r.customer)}'s LAN host to the hub's LAN, where the applications are served</span></div>
     ${lineChart(rtt, { unit: ' ms', target: T.rtt_ms, fmt: v => v.toFixed(v < 10 ? 1 : 0) })}
     <div class="slah3"><b>Tunnel registrations</b> <span class="hint">hubs ${esc(r.customer)} is registered with (NHRP)</span></div>
     ${lineChart(reg, { h: 120, cls: 'short', fmt: v => v.toFixed(0), ymax: Math.max(3, ...(r.series.nhs_expected || [[0, 3]]).map(p => p[1])) + 0.5 })}
-    <div class="slah3"><b>Packet loss to each hub</b></div>
-    ${lineChart(loss, { h: 110, cls: 'short', unit: '%', target: T.loss_pct, ymax: Math.max(2, ...loss.flatMap(s => s.pts.map(p => p[1]))) , fmt: v => v.toFixed(v < 10 ? 1 : 0) })}
+    <div class="slah3 slaloss"><b>Packet loss to each hub</b></div>
+    ${lineChart(loss, { h: 110, cls: 'short slaloss', unit: '%', target: T.loss_pct, ymax: Math.max(2, ...loss.flatMap(s => s.pts.map(p => p[1]))) , fmt: v => v.toFixed(v < 10 ? 1 : 0) })}
+    ${Object.keys(r.applications || {}).length ? `<div class="slah3 slaapps"><b>Applications</b> <span class="hint">each subscribed application's VIP at each hosting hub, probed every minute from ${esc(r.customer)}'s LAN host</span></div>
+    <table style="margin-bottom:10px"><thead><tr><th>Application</th><th>Available (any hub)</th><th>Per hub</th><th>Round trip</th></tr></thead><tbody>${Object.entries(r.applications).sort().map(([a, x]) =>
+      `<tr><td><b>${esc(a)}</b> ${esc(((ST.applications || []).find(y => y.id === a) || {}).name || '')}</td><td>${x.availability != null ? pill(x.availability * 100 >= r.targets.availability, pct(x.availability)) : '—'}</td>
+       <td class="hint">${Object.entries(x.hubs || {}).map(([h, v]) => `${esc(h)} ${pct(v)}`).join(' · ')}</td><td class="hint">${Object.entries(x.rtt || {}).map(([h, v]) => `${esc(h)} ${v.toFixed(1)} ms`).join(' · ')}</td></tr>`).join('')}</tbody></table>` : ''}
     <table><thead><tr><th>Hub</th><th>Average</th><th>95th percentile</th><th>Worst</th><th>Loss</th><th>Now</th></tr></thead><tbody>
       ${hubs.map(h => { const x = r.hubs[h], now = (r.now || {})[h];
         return `<tr><td><b>${esc(h)}</b></td><td>${msf(x.rtt_avg)}</td><td>${msf(x.rtt_p95)}</td><td>${msf(x.rtt_max)}</td><td>${pct(x.loss, 2)}</td>
@@ -1326,7 +1452,13 @@ async function renderSla() {
 // ---- resilience ----------------------------------------------------------------------------------------------------
 let FAULTS = null;
 const fmtT = t => new Date(t * 1000).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+function maintBanner() {
+  const a = (ST && ST.maintenance) || [], b = $('mbanner');
+  b.hidden = !a.length || !!CVIEW;
+  if (a.length) b.innerHTML = `<b>🛠 Maintenance under way:</b> ${a.map(x => `${esc(x.summary)} <span class="hint">(${x.all ? 'the whole lab' : esc(x.routers.concat(x.customers).filter((v, i, z) => z.indexOf(v) === i).join(', '))} · by ${esc(x.by)} · since ${esc(fmtT(x.started))})</span>`).join(' · ')} — alerts for these nodes are muted, the SLA leaves the time out`;
+}
 function faultBanner() {
+  maintBanner();
   const a = (ST && ST.faults) || [], b = $('fbanner');
   b.hidden = !a.length || !!CVIEW;
   if (a.length) b.innerHTML = `<b>⚡ ${a.length} simulated failure${a.length > 1 ? 's' : ''} in:</b> ${a.map(x => `${esc(x.title)} on <b>${esc(x.target)}</b> <span class="hint">since ${esc(fmtT(x.started))}</span> <button data-restore="${esc(x.id)}">Restore</button>`).join(' · ')}`;
@@ -1379,8 +1511,7 @@ async function showFailover(id) {
   el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 $('f-apply').onclick = async () => {
-  const body = { kind: $('f-kind').value, target: $('f-target').value, requested_by: who(), reason: '' };
-  if (!body.requested_by) return;
+  const body = { kind: $('f-kind').value, target: $('f-target').value, reason: '' };
   const r = await fetch('/api/faults', { ...J, body: JSON.stringify(body) }), j = await r.json();
   if (r.status === 202) { $('f-msg').innerHTML = changeFiled(j.change); return; }
   if (!r.ok) { $('f-msg').textContent = j.detail; return; }
@@ -1394,7 +1525,25 @@ let TOOLS = null;
 const copyBtn = t => `<button class="copy" data-copy="${esc(t)}" title="copy">copy</button>`;
 document.addEventListener('click', async e => { const b = e.target.closest('[data-copy]'); if (!b) return;
   try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = 'copied'; setTimeout(() => b.textContent = 'copy', 1200); } catch (x) {} });
+async function loadUsers() {
+  if (!can('admin')) return;
+  const r = await fetch('/api/auth/users'); if (!r.ok) return; const us = await r.json();
+  $('users-t').querySelector('tbody').innerHTML = us.map(u => `<tr><td class="mono"><b>${esc(u.username)}</b></td><td>${esc(u.name || '')}</td><td>${esc(u.roles.join(', '))}</td>
+    <td>${esc(u.customer || '')}</td><td>${u.disabled ? pill(false, 'disabled') : pill(true, 'active')}${(ME.defaults || []).includes(u.username) ? ' ' + pill(false, 'lab-default password', true) : ''}</td>
+    <td style="white-space:nowrap"><button data-upw="${esc(u.username)}">set password</button> <button data-udis="${esc(u.username)}" data-v="${u.disabled ? '' : '1'}">${u.disabled ? 'enable' : 'disable'}</button> ${u.username !== ME.username ? `<button class="danger" data-udel="${esc(u.username)}">delete</button>` : ''}</td></tr>`).join('');
+  const T = $('users-t'), act = async (m, url, body) => { const r = await fetch(url, { method: m, headers: J.headers, body: body ? JSON.stringify(body) : undefined }), j = await r.json();
+    $('u-msg').textContent = r.ok ? '' : j.detail; if (r.ok) { const me = await (await fetch('/api/auth/me')).json(); ME.defaults = me.defaults; loadUsers(); } };
+  T.querySelectorAll('[data-upw]').forEach(b => b.onclick = () => { const p = prompt(`New password for ${b.dataset.upw} (8+ characters):`); if (p) act('PATCH', `/api/auth/users/${b.dataset.upw}`, { password: p }); });
+  T.querySelectorAll('[data-udis]').forEach(b => b.onclick = () => act('PATCH', `/api/auth/users/${b.dataset.udis}`, { disabled: !!b.dataset.v }));
+  T.querySelectorAll('[data-udel]').forEach(b => b.onclick = () => { if (confirm(`Delete ${b.dataset.udel}?`)) act('DELETE', `/api/auth/users/${b.dataset.udel}`); });
+  $('u-cust').innerHTML = (ST ? ST.customers : []).map(c => `<option value="${esc(c)}">${esc(c)} — ${esc(((ST.nodes[c] || {}).customer || {}).company || '')}</option>`).join('');
+  $('u-role').onchange = () => { $('u-cust-box').hidden = $('u-role').value !== 'customer'; };
+  $('u-add').onclick = () => { const role = $('u-role').value;
+    act('POST', '/api/auth/users', { username: $('u-name').value.trim(), name: $('u-full').value.trim(), roles: [role], password: $('u-pass').value,
+      customer: role === 'customer' ? $('u-cust').value : null }).then(() => { $('u-pass').value = ''; }); };
+}
 async function loadTools() {
+  loadUsers();
   if (!TOOLS) TOOLS = await (await fetch('/api/lab-tools')).json();
   const T = TOOLS, a = T.access;
   $('tools-access').innerHTML = `<span>Lab host: <span class="cmd">${esc(a.lab_host)}</span>${copyBtn(a.lab_host)}</span>
@@ -1427,20 +1576,64 @@ $('nodes-q').oninput = () => TOOLS && drawNodes();
 
 fetch('/api/version').then(r => r.json()).then(v => { $('ver').textContent = 'v' + v.version; }).catch(() => {});
 
+// ---- the customer's requests and diagnostics ------------------------------------------------------------------------
+async function loadRequests() {
+  const tok = CVIEW, me = tok === 'me';
+  $('cq-signin').hidden = me; $('cq-form').hidden = !me;
+  if (me && ST) {
+    const n = ST.nodes[ST.customer] || {}, cu = n.customer || {}, on = new Set(cu.applications || []);
+    const all = await (await fetch('/api/c/me/catalogue')).json();
+    $('cq-apps').innerHTML = all.map(a => `<label title="${esc(a.description)} — at ${esc(a.hubs.join(', '))}"><input type="checkbox" value="${esc(a.id)}" ${on.has(a.id) ? 'checked' : ''}> <span><b>${esc(a.id)}</b> ${esc(a.name)}</span></label>`).join('');
+    $('cq-pref').innerHTML = `<option value="">none (any hub)</option>` + ST.hubs.map(h => `<option value="${esc(h)}" ${n.prefer_hub === h ? 'selected' : ''}>${esc(h)} (${esc((ST.nodes[h] || {}).region || '')})</option>`).join('');
+    $('cq-dual-box').hidden = !ST.provider2; $('cq-dual').checked = !!n.wan2;
+    $('cq-go').onclick = async () => {
+      const body = { applications: [...document.querySelectorAll('#cq-apps input:checked')].map(i => i.value), prefer_hub: $('cq-pref').value,
+                     dual_homed: $('cq-dual').checked, reason: $('cq-why').value.trim() };
+      if (!ST.provider2) delete body.dual_homed;
+      const r = await fetch('/api/c/me/requests', { ...J, body: JSON.stringify(body) }), j = await r.json();
+      $('cq-msg').innerHTML = r.ok ? `<span style="color:var(--green)">Request <b>${esc(j.id)}</b> sent: ${esc(j.summary)}</span>` : esc(typeof j.detail === 'string' ? j.detail : JSON.stringify(j.detail));
+      loadRequests(); };
+  }
+  const rs = await (await fetch(`/api/c/${tok}/requests`)).json();
+  $('cq-t').querySelector('tbody').innerHTML = (Array.isArray(rs) ? rs : []).map(c => `<tr><td class="mono"><b>${esc(c.id)}</b></td><td>${esc(c.summary)}${c.reason ? `<div class="hint">why: ${esc(c.reason)}</div>` : ''}</td>
+    <td class="hint">${esc(fmtT(c.requested_at))} · ${esc(c.requested_by)}</td><td><b>${esc({ pending: 'waiting for approval', started: 'being carried out', done: 'done', rejected: 'declined', failed: 'failed — we are on it', cancelled: 'withdrawn', expired: 'expired', scheduled: 'scheduled' }[c.status] || c.status)}</b>${c.comment ? `<div class="hint">${esc(c.comment)}</div>` : ''}</td></tr>`).join('')
+    || '<tr><td colspan="4" class="hint">no requests yet</td></tr>';
+}
+function openDiag() {
+  const n = ST && ST.nodes[ST.customer]; if (!n) return;
+  const subs = new Set(((n.customer || {}).applications) || []);
+  $('dg-trace').innerHTML = (ST.applications || []).filter(a => subs.has(a.id)).flatMap(a => a.hubs.map(h => `<option value="${esc(a.id)}@${esc(h)}">${esc(a.id)} ${esc(a.name)} at ${esc(h)}</option>`)).join('');
+  const run = async (body, label) => { $('dg-out').innerHTML = `<p class="hint">${esc(label)}…</p>`;
+    const r = await fetch(`/api/c/${CVIEW}/diagnostics`, { ...J, body: JSON.stringify(body) }), j = await r.json();
+    if (!r.ok) { $('dg-out').innerHTML = `<p class="msg">${esc(j.detail)}</p>`; return; }
+    if (j.kind === 'trace') { $('dg-out').innerHTML = `<h3 style="font-size:14px;margin:0 0 6px">Path to ${esc(j.target)}</h3><table><thead><tr><th>Hop</th><th>Address</th><th>What</th></tr></thead><tbody>${j.hops.map(h =>
+        `<tr><td>${h.hop}</td><td class="mono">${esc(h.ip || '*')}</td><td>${esc(h.node || '')}</td></tr>`).join('')}</tbody></table>`; return; }
+    const rows = j.kind === 'hubs' ? Object.entries(j.hubs).map(([h, x]) => [h, '', x]) : Object.entries(j.apps).flatMap(([a, hs]) => Object.entries(hs).map(([h, x]) => [a, h, x]));
+    const name = id => ((ST.applications || []).find(a => a.id === id) || {}).name || '';
+    $('dg-out').innerHTML = `<table><thead><tr><th>${j.kind === 'hubs' ? 'Hub' : 'Application'}</th>${j.kind === 'hubs' ? '' : '<th>At</th>'}<th>Answers</th><th>Round trip</th><th>Loss</th>${j.kind === 'hubs' ? '' : '<th>HTTPS</th>'}</tr></thead><tbody>${rows.map(([a, h, x]) => {
+      const ok = x.loss < 1 && x.tcp !== false;
+      return `<tr><td><b>${esc(a)}</b> ${esc(name(a))}</td>${j.kind === 'hubs' ? '' : `<td>${esc(h)} <span class="hint mono">${esc(x.vip)}</span></td>`}<td>${pill(ok, ok ? 'yes' : 'no')}</td>
+        <td>${x.rtt_avg != null ? esc(x.rtt_avg.toFixed(1) + ' ms') : '—'}</td><td>${esc(Math.round(x.loss * 100) + ' %')}</td>${j.kind === 'hubs' ? '' : `<td>${x.tcp == null ? '<span class="hint">not an HTTPS service</span>' : pill(x.tcp, x.tcp ? 'connects' : 'refused')}</td>`}</tr>`; }).join('')}</tbody></table>
+      <p class="hint">${esc(new Date(j.at * 1000).toLocaleTimeString())} · five pings to each, from your LAN host</p>`; };
+  $('dg-apps').onclick = () => run({ kind: 'apps' }, 'testing your applications');
+  $('dg-hubs').onclick = () => run({ kind: 'hubs' }, 'testing the hubs');
+  $('dg-trace-go').onclick = () => { const [app, hub] = $('dg-trace').value.split('@'); run({ kind: 'trace', app, hub }, 'tracing the path'); };
+}
+
 // ---- the customer's own view (/c/<token>): read-only, only its own service ------------------------------------------
 async function customerMode() {
-  document.body.classList.add('cview');
+  document.body.classList.add('cview'); if (CVIEW !== 'me') document.body.classList.add('tok');
   document.querySelector('nav a[data-view=map]').textContent = 'Your network';
   document.querySelector('nav a[data-view=sla]').textContent = 'Service levels';
   document.querySelector('header h1').textContent = 'Your network service'; document.querySelector('header .sub').textContent = 'loading…';
-  show(['map', 'sla'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'map');
+  show(['map', 'sla', 'requests', 'diag'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'map');
   await load();
   const cu = (ST.nodes[ST.customer] || {}).customer || {};
   document.title = `${cu.company || ST.customer} — network service`;
   document.querySelector('header h1').textContent = cu.company || ST.customer;
-  document.querySelector('header .sub').textContent = `your managed network service · site ${ST.customer} · read-only`;
+  document.querySelector('header .sub').textContent = `your managed network service · site ${ST.customer}` + (CVIEW === 'me' ? '' : ' · read-only link');
   MAPFOCUS = ST.customer; MAPSEL = ST.customer;
-  show(['map', 'sla'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'map'); drawMap();
+  show(['map', 'sla', 'requests', 'diag'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'map'); drawMap();
   setInterval(() => load(), 30000);
 }
 function renderNotices() {
@@ -1448,6 +1641,7 @@ function renderNotices() {
   const h = ST.health || {}, inc = ST.incidents || [], pl = ST.planned || [];
   el.hidden = false;
   el.innerHTML = `<div class="svc ${esc(h.service)}"><b>Your service is ${esc(h.service)}</b>${h.service === 'up' ? ' — registered with every hub, your LAN host answering' : h.service === 'degraded' ? ' — working, with less redundancy than usual' : ' — we are on it'}</div>
+    ${(ST.maintenance_now || []).map(x => `<div class="plan">🛠 <b>Maintenance in progress:</b> ${esc(x.summary)} <span class="hint">since ${esc(fmtT(x.since))}</span></div>`).join('')}
     ${inc.map(x => `<div class="inc">⚡ <b>Incident:</b> ${esc(x.title)} — ${esc(x.what)} <span class="hint">since ${esc(fmtT(x.since))}</span></div>`).join('')}
     ${pl.map(x => `<div class="plan">🛠 <b>Planned maintenance ${esc(x.id)}:</b> ${esc(x.summary)} <span class="hint">${x.status === 'scheduled' && x.scheduled_for ? 'scheduled for ' + esc(fmtT(x.scheduled_for)) : 'awaiting approval'}</span></div>`).join('')}`;
 }
@@ -1464,8 +1658,16 @@ if (PRINT) {
   document.documentElement.dataset.theme = 'light'; document.body.classList.add('print');
   MAPFOCUS = PRINT; MAPSEL = PRINT; show('map'); load();
 } else if (CVIEW) {
+  _fetch('/api/auth/me').then(r => r.ok ? r.json() : null).then(u => { if (u && u.roles.includes('customer')) { ME = u; renderWho(); } });
   customerMode();
 } else {
-  renderTasks(); show(location.hash.slice(1) || 'cloud'); load(); setInterval(() => { if (!watching) load(); }, 30000);
+  $('l-form').onsubmit = doLogin;
+  _fetch('/api/auth/me').then(async r => {
+    if (!r.ok) { showLogin(); return; }
+    ME = await r.json(); renderWho();
+    if (ME.roles.includes('customer')) { CVIEW = 'me'; customerMode(); return; }
+    if ((ME.defaults || []).length) $('cr-msg').innerHTML = `<span class="msg">Accounts still on their lab-default password: ${esc(ME.defaults.join(', '))} — change them in Lab Tools → Users.</span>`;
+    renderTasks(); show(location.hash.slice(1) || 'cloud'); load(); setInterval(() => { if (!watching) load(); }, 30000);
+  });
 }
 </script></body></html>
