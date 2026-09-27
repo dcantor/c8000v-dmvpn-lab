@@ -134,7 +134,7 @@ Show configuration returns each node's own configuration, read live
     Should Contain    ${r.json()}[output]    set system host-name '${PROVIDER}'
     FOR    ${h}    IN    @{HOSTS}
         ${r}=    GET On Session    portal    /api/config/${h}
-        Should Contain    ${r.json()}[output]    # hostname: ${h}
+        Should Contain    ${r.json()}[output]    \# hostname: ${h}
         Should Contain    ${r.json()}[output]    ${HOST_VMS}[${h}][lan_ip]
     END
     GET On Session    portal    /api/config/no-such-node    expected_status=404
