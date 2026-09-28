@@ -383,6 +383,88 @@ def tasks_slide(n):
     notes(sl, "The eleven Provision tasks. Anything that could take something away needs a second person; adding and reading never do.")
 
 
+def monitoring_slide(n):
+    sl = prs.slides.add_slide(BLANK)
+    header(sl, "How the lab is monitored", "Monitoring", n)
+    text(sl, 0.45, 1.2, 12.3, 0.6, "The shared monitoring stack on the NMS covers this lab. IOS XE has no exporter, so the portal itself measures the "
+         "C8000v routers every minute and publishes the results as Prometheus metrics.", size=14, color=MUTED)
+
+    def node(x, y, w, h, title, sub, fill=WHITE, line=TEAL, tc=NAVY):
+        box(sl, x, y, w, h, fill=fill, line=line, lw=1.5, shape=MSO_SHAPE.ROUNDED_RECTANGLE, radius=0.12)
+        text(sl, x + 0.08, y + 0.08, w - 0.16, 0.32, title, size=12.5, color=tc, bold=True, align=PP_ALIGN.CENTER)
+        text(sl, x + 0.08, y + 0.4, w - 0.16, h - 0.45, sub, size=10, color=MUTED if tc == NAVY else RGBColor(0xCB, 0xD5, 0xE1), align=PP_ALIGN.CENTER)
+
+    def arrow(x1, y1, x2, y2):
+        c = sl.shapes.add_connector(MSO_CONNECTOR.STRAIGHT, Inches(x1), Inches(y1), Inches(x2), Inches(y2))
+        c.line.color.rgb = MUTED; c.line.width = Pt(1.4)
+        ln = c.line._get_or_add_ln(); ln.append(ln.makeelement(qn("a:tailEnd"), {"type": "triangle", "w": "med", "len": "med"}))
+
+    text(sl, 0.45, 2.0, 2.6, 0.3, "SOURCES", size=10, color=TEAL, bold=True)
+    text(sl, 3.55, 2.0, 2.8, 0.3, "COLLECTION", size=10, color=TEAL, bold=True)
+    text(sl, 6.85, 2.0, 2.6, 0.3, "STORES", size=10, color=TEAL, bold=True)
+    text(sl, 10.2, 2.0, 2.6, 0.3, "VIEWS AND ALERTS", size=10, color=TEAL, bold=True)
+    node(0.45, 2.35, 2.6, 0.95, "Catalyst 8000v", "hubs and customers")
+    node(0.45, 3.5, 2.6, 0.95, "VyOS", "providers and VyOS customers")
+    node(0.45, 4.65, 2.6, 0.95, "LAN hosts", "Alpine, one per site")
+    node(3.55, 2.35, 2.8, 0.95, "The portal: /metrics", "polls every router each minute: NHRP, IPsec, BGP, CPU, SLA probes, app checks",
+         fill=NAVY, line=NAVY, tc=WHITE)
+    node(3.55, 3.5, 2.8, 0.95, "Exporters and Telegraf", "node-exporter, frr-exporter; Telegraf pushes")
+    node(3.55, 4.65, 2.8, 0.95, "Syslog", "C8000v and VyOS → UDP 5514")
+    node(6.85, 2.35, 2.6, 0.95, "Prometheus", "scrapes; targets from the portal's /api/sd")
+    node(6.85, 3.5, 2.6, 0.95, "VictoriaMetrics", "long-term metrics")
+    node(6.85, 4.65, 2.6, 0.95, "VictoriaLogs", "router syslog, searchable")
+    node(10.2, 2.35, 2.7, 0.95, "Grafana", "C8000v DMVPN overview, node detail")
+    node(10.2, 3.5, 2.7, 0.95, "Alerts", "Prometheus rules and vmalert on syslog")
+    node(10.2, 4.65, 2.7, 0.95, "The portal", "SLA page and monthly PDF, from VictoriaMetrics")
+    arrow(3.05, 2.82, 3.55, 2.82); arrow(3.05, 3.97, 3.55, 3.97); arrow(3.05, 4.1, 3.55, 5.0); arrow(3.05, 5.12, 3.55, 3.2)
+    arrow(6.35, 2.82, 6.85, 2.82); arrow(6.35, 3.97, 6.85, 3.97); arrow(6.35, 5.12, 6.85, 5.12); arrow(8.15, 3.3, 8.15, 3.5)
+    arrow(9.45, 2.82, 10.2, 2.82); arrow(9.45, 3.97, 10.2, 3.97); arrow(9.45, 5.0, 10.2, 3.2); arrow(9.45, 4.1, 10.2, 5.0)
+    text(sl, 0.45, 5.95, 12.4, 1.0, [
+        [("Alerts: ", {"bold": True, "color": NAVY}), ("DmvpnCustomerNotRegistered, DmvpnProviderSessionDown, DmvpnOverlayBgpDown, DmvpnRouterUnreachable, DmvpnLanHostDown, "
+          "DmvpnRouterCpuHigh from metrics; BGP neighbour down, NHS down and IKE SA down from syslog.", {})],
+        [("Maintenance: ", {"bold": True, "color": NAVY}), ("a job, a simulated failure or declared maintenance mutes the affected nodes' alerts and is left out of the SLA.", {})]],
+        size=11.5, spacing=4)
+    notes(sl, "Monitoring architecture. The portal is a Prometheus target like any exporter: lab_dmvpn_*, lab_bgp_*, lab_ipsec_*, lab_router_cpu_pct, lab_sla_*, lab_app_up.")
+
+
+
+def nautobot_model_slide(n):
+    sl = prs.slides.add_slide(BLANK)
+    header(sl, "Where the customers and the VPN live in Nautobot", "Source of truth", n)
+    text(sl, 0.45, 1.2, 12.3, 0.6, "lab.sh nautobot seed writes the whole lab into the shared Nautobot. The renderer can build every configuration from "
+         "Nautobot alone, and a check proves the result is byte for byte the same as from lab.conf.", size=14, color=MUTED)
+
+    def node(x, y, w, h, title, sub, fill=WHITE, line=TEAL, tc=NAVY):
+        box(sl, x, y, w, h, fill=fill, line=line, lw=1.5, shape=MSO_SHAPE.ROUNDED_RECTANGLE, radius=0.12)
+        text(sl, x + 0.08, y + 0.07, w - 0.16, 0.32, title, size=12.5, color=tc, bold=True, align=PP_ALIGN.CENTER)
+        text(sl, x + 0.08, y + 0.38, w - 0.16, h - 0.42, sub, size=10, color=MUTED if tc == NAVY else RGBColor(0xCB, 0xD5, 0xE1), align=PP_ALIGN.CENTER)
+
+    def line(x1, y1, x2, y2, label=None):
+        c = sl.shapes.add_connector(MSO_CONNECTOR.STRAIGHT, Inches(x1), Inches(y1), Inches(x2), Inches(y2))
+        c.line.color.rgb = MUTED; c.line.width = Pt(1.3)
+        if label:
+            text(sl, (x1 + x2) / 2 - 0.9, (y1 + y2) / 2 - 0.22, 1.8, 0.25, label, size=9, color=MUTED, align=PP_ALIGN.CENTER)
+
+    text(sl, 0.45, 1.95, 4, 0.3, "THE CUSTOMER", size=10, color=TEAL, bold=True)
+    text(sl, 4.7, 1.95, 4, 0.3, "THE NETWORK", size=10, color=TEAL, bold=True)
+    text(sl, 9.3, 1.95, 4, 0.3, "THE VPN SERVICE", size=10, color=TEAL, bold=True)
+    node(0.45, 2.3, 3.6, 1.05, "Tenant", "the customer company; custom fields: account, address, contact, industry")
+    node(0.45, 3.75, 3.6, 1.05, "Virtual servers", "one per application per hub, with its VIP; linked to tenants as 'Application subscriptions'")
+    node(0.45, 5.2, 3.6, 0.95, "Locations", "c8000v-dmvpn-lab and regions c8d-east, -central, -west")
+    node(4.7, 2.3, 4.0, 1.05, "Devices", "c8d- names; roles dmvpn-hub, dmvpn-spoke, wan-provider, host; tenant = customer", fill=NAVY, line=NAVY, tc=WHITE)
+    node(4.7, 3.75, 4.0, 1.05, "Interfaces, IPs and cables", "Tunnel0 (cloud 1), Tunnel1 (cloud 2), Loopback10 (VIPs), access links; a cable per link")
+    node(4.7, 5.2, 4.0, 0.95, "Prefixes with roles", "dmvpn-overlay 172.28 / 172.29, site-lan, wan-p2p, oob-management")
+    node(9.3, 2.3, 3.6, 1.05, "Config context", "the DMVPN service: NHRP, network-ids, tunnel keys, IKEv2 / IPsec, providers. No secrets")
+    node(9.3, 3.75, 3.6, 1.05, "BGP models", "AS 65100 / 65000 / 65010, a routing instance per router, a peering per session")
+    node(9.3, 5.2, 3.6, 0.95, "Saved GraphQL query", "c8000v-dmvpn-lab-model: what the renderer reads")
+    line(4.05, 2.82, 4.7, 2.82, "tenant"); line(4.05, 4.27, 4.7, 2.95); line(4.05, 5.67, 4.7, 3.1, "location")
+    line(6.7, 3.35, 6.7, 3.75); line(6.7, 4.8, 6.7, 5.2)
+    line(8.7, 2.82, 9.3, 2.82, "applies to"); line(8.7, 4.27, 9.3, 4.27, "per router")
+    text(sl, 0.45, 6.35, 12.4, 0.6, [[("Deliberately not in Nautobot: ", {"bold": True, "color": NAVY}),
+         ("the pre-shared key and the NHRP secret. They stay in secrets/ on the lab host.", {})]], size=11.5)
+    notes(sl, "The Nautobot model. ./lab.sh nautobot render --check rebuilds every rendered file from the saved GraphQL query and compares it with lab.conf's.")
+
+
 # ---------- build ----------
 title_slide()
 n = 2
@@ -526,6 +608,87 @@ TOUR = [
         ("Dark mode", "Every page, including the live map."),
         ("An operator", "It sees and changes the lab, but admin tasks such as key rotation and accounts are hidden.")],
      "The portal fits the user, and each role only sees the actions it may take."),
+    ("40_graf_cloud", "Monitoring", "Grafana: the DMVPN cloud over the last 24 hours", [
+        ("Portal jobs on the timeline", "Purple markers: every test run, failover and steering change the portal made."),
+        ("Health", "The portal's verdict and firing alerts."),
+        ("Registrations", "15 of 15: five customers, three hubs each."),
+        ("Each customer, each hub", "Gaps line up with the failover experiments."),
+        ("eBGP to the provider", "Per router, over time."),
+        ("IPsec per router", "Sessions UP-ACTIVE.")],
+     "What the portal shows now, Grafana shows over time, next to what the portal was doing."),
+    ("41_graf_provider", "Monitoring", "Grafana: the overlay, the routers and the provider", [
+        ("Overlay iBGP", "Established vs configured sessions per router."),
+        ("C8000v CPU", "Measured by the portal over SSH: IOS XE has no exporter."),
+        ("The provider", "node-exporter, frr-exporter and Telegraf: traffic on every access port."),
+        ("Syslog events", "NHRP, IKE and IPsec messages per router, counted in VictoriaLogs.")],
+     "Underlay and overlay on one page: a provider problem and its DMVPN symptoms line up."),
+    ("42_graf_logs", "Monitoring", "Grafana: router syslog", [
+        ("BGP Down from syslog", "Neighbour-down messages counted every 5 minutes per router."),
+        ("Router syslog", "Every C8000v line, newest first, from VictoriaLogs."),
+        ("The lab host", "CPU, memory, load and swap of the KVM host.")],
+     "Logs and metrics side by side: no logging in to routers to read their buffers."),
+    ("43_graf_lab", "Monitoring", "Grafana: the lab and the portal's jobs", [
+        ("Host CPU", "All cores, per mode."),
+        ("VMs running", "Every router, host and provider VM."),
+        ("LAN hosts answering", "Reachability of each site's host."),
+        ("The portal's jobs", "The last outcome of each job type; red was a failed run.")],
+     "Even the automation is monitored: a failing job type shows up like any other fault."),
+    ("44_graf_node", "Monitoring", "Grafana: the provider router in detail", [
+        ("BGP peers", "8 of 8 established on mpls."),
+        ("Access links", "Traffic on every customer and hub port."),
+        ("CPU, memory, load", "From node-exporter and Telegraf.")],
+     "Each VyOS router has full telemetry, down to each interface and BGP peer."),
+    ("45_alerts", "Monitoring", "The alert rules", [
+        ("Dmvpn* rules", "Six metric rules for this lab, all inactive: healthy. Three more rules watch syslog in vmalert. All are gated on the lab running and muted during maintenance.")],
+     "Problems page someone before a customer calls, and planned work does not."),
+    ("50_nb_devices", "Source of truth", "Nautobot: every device of the lab", [
+        ("The lab's devices", "Routers, providers and LAN hosts, under their c8d- names in the shared Nautobot."),
+        ("Tenant", "Each customer's router and host belong to its company."),
+        ("Role", "dmvpn-hub, dmvpn-spoke, wan-provider, host."),
+        ("Location", "Its region: c8d-east, -central or -west.")],
+     "One inventory for every lab on the host; this lab's part is easy to find and to filter."),
+    ("51_nb_tenant", "Source of truth", "Nautobot: a customer company as a tenant", [
+        ("Tenant", "Prairie Grain Logistics, in the c8000v-dmvpn-lab customers group."),
+        ("Custom fields", "Account, address, contact, email, industry, phone."),
+        ("Subscribed applications", "A relationship to the virtual servers it uses, at every hub."),
+        ("Its devices", "Its router and its LAN host.")],
+     "The customer record the portal edits is the one Nautobot holds: no second customer list to keep in sync."),
+    ("52_nb_apps", "Source of truth", "Nautobot: applications as virtual servers", [
+        ("One per application per hub", "APP-1001 to APP-1010, each at the hubs that host it."),
+        ("Its VIP", "An address on the hub's Loopback10, with port and protocol; the portal's application checks test these.")],
+     "Applications and who subscribes to them are modelled, not just the routers."),
+    ("53_nb_device", "Source of truth", "Nautobot: a hub", [
+        ("The device", "Location, role dmvpn-hub, platform, management address, autonomous system."),
+        ("Interfaces", "Its tunnels, loopbacks and access links."),
+        ("Autonomous system", "AS 65100, from the BGP models; the Config Context tab shows the DMVPN service data that applies to it.")],
+     "Everything needed to build this hub's configuration is on this page or one click away."),
+    ("54_nb_ifaces", "Source of truth", "Nautobot: the VPN on the hub's interfaces", [
+        ("Tunnel0", "Cloud 1: mGRE, phase 3, sourced from GigabitEthernet2."),
+        ("Tunnel1", "Cloud 2, the backup: sourced from GigabitEthernet4 into mpls2."),
+        ("Loopback10", "The hub LAN, carrying the application VIPs."),
+        ("Access link", "Cabled to the provider's port.")],
+     "The two DMVPN clouds are modelled as real interfaces with their sources, addresses and cables."),
+    ("55_nb_prefixes", "Source of truth", "Nautobot: the addressing plan", [
+        ("Cloud 1", "172.28.0.0/24, role dmvpn-overlay: network-id 1, tunnel key 100."),
+        ("Cloud 2", "172.29.0.0/24: network-id 2, tunnel key 200."),
+        ("Site LANs", "Each customer's LAN, role site-lan."),
+        ("Roles", "site-lan, dmvpn-overlay, wan-p2p, oob-management.")],
+     "Every prefix says what it is for, so the allocator and the renderer agree."),
+    ("56_nb_tunnel_ips", "Source of truth", "Nautobot: tunnel addresses", [
+        ("Tunnel0 addresses", "Each router's address in cloud 1, assigned to its Tunnel0: hubs .1 to .3, customers from their index.")],
+     "NHRP registrations and BGP neighbours come straight from these addresses."),
+    ("57_nb_peerings", "Source of truth", "Nautobot: every BGP session", [
+        ("Peerings", "Hub↔hub, hub (route reflector) ↔ customer, and site ↔ provider, over both clouds and both providers.")],
+     "The routing design is data: a missing or extra session shows up as a difference, not a surprise."),
+    ("58_nb_bgp", "Source of truth", "Nautobot: BGP routing instances", [
+        ("Routing instances", "One per router: its autonomous system (65100 sites, 65000 and 65010 providers) and router-id.")],
+     "AS numbers and router-ids are allocated once and read from here."),
+    ("59_nb_context", "Source of truth", "Nautobot: the DMVPN service as a config context", [
+        ("The service", "AS, both clouds (overlay, network-id, tunnel key), NHRP hold times, hubs and spokes, the IKEv2 and IPsec proposals, the providers. No pre-shared key.")],
+     "The VPN service's settings are one reviewed document, applied to the whole lab."),
+    ("60_nb_graphql", "Source of truth", "Nautobot: the query the renderer reads", [
+        ("Saved GraphQL query", "c8000v-dmvpn-lab-model: the config context, devices, interfaces, IPs and BGP in one call. The same renderer turns it into every configuration.")],
+     "lab.sh nautobot render --check proves Nautobot and lab.conf produce identical configurations."),
 ]
 
 SECTIONS = [
@@ -538,6 +701,11 @@ SECTIONS = [
     "11_changes", "28_policy", lifecycle_slide,
     ("divider", "Customers, access and the API", "Each customer sees its own service; staff see what their role allows."),
     "14_customer", "15_requests", "16_diag", "13_tools", "31_api", "32_dark",
+    ("divider", "Source of truth: Nautobot", "Where the customers, their applications and the VPN are modelled."),
+    nautobot_model_slide, "50_nb_devices", "51_nb_tenant", "52_nb_apps", "53_nb_device", "54_nb_ifaces", "55_nb_prefixes",
+    "56_nb_tunnel_ips", "57_nb_peerings", "58_nb_bgp", "59_nb_context", "60_nb_graphql",
+    ("divider", "Monitoring", "Prometheus, VictoriaMetrics, VictoriaLogs and Grafana: the lab over time."),
+    monitoring_slide, "40_graf_cloud", "41_graf_provider", "42_graf_logs", "43_graf_lab", "44_graf_node", "45_alerts",
 ]
 BYNAME = {t[0]: t for t in TOUR}
 EXTRA = {"12_job": [{"label": "steps", "box": [0.05, 0.085, 0.45, 0.375]}]}

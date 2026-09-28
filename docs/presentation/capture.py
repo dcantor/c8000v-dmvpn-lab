@@ -1,5 +1,6 @@
 """Screenshots of the portal for the deck, with the boxes of the elements each slide points at (shots/boxes.json)."""
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -14,7 +15,10 @@ W, H = 1600, 1000
 seed = {u["username"]: u["password"] for u in json.loads((LAB / "webapp/users.seed.json").read_text())["users"]}
 cust_pw = json.loads((LAB / "webapp/auth/test-accounts.json").read_text())["prairie"]["password"]
 boxes = json.loads((OUT / "boxes.json").read_text()) if (OUT / "boxes.json").exists() else {}
-PARTS = set(sys.argv[1:]) or {"tour", "more"}
+PARTS = set(sys.argv[1:]) or {"tour", "more", "grafana", "nautobot"}
+PUB = os.environ.get("LAB_PUBLIC", "192.168.50.231")               # Nautobot, Grafana and Prometheus are on the NMS, via the lab host
+GRAFANA, PROM, NAUTOBOT = f"http://{PUB}:3001", f"http://{PUB}:9091", f"http://{PUB}:8080"
+NB_STATE = os.environ.get("NB_STATE", str(Path.home() / ".cache/c8d/nautobot-state.json"))   # nb_session.py signs in and saves it
 
 
 def ctx_for(browser, user, pw):
@@ -220,12 +224,132 @@ def more(b):
     ctx.close()
 
 
+def tall_shot(page, name, top, callouts, height=1000):
+    """A 1600x`height` window of a tall page (already laid out in a tall viewport), callouts from element boxes."""
+    page.screenshot(path=str(OUT / f"{name}.png"), full_page=True, clip={"x": 0, "y": top, "width": W, "height": height})
+    out = []
+    for sel, label in callouts:
+        els = page.locator(sel)
+        if not els.count():
+            print(f"  {name}: {sel} not found", file=sys.stderr)
+            continue
+        b = els.first.bounding_box()
+        sy = page.evaluate("window.scrollY")
+        x, y, w, h = b["x"], b["y"] + sy - top, b["width"], b["height"]
+        y2 = min(height, y + h); y = max(0, y)
+        if y2 - y < 6:
+            print(f"  {name}: {sel} outside", file=sys.stderr)
+            continue
+        out.append({"label": label, "box": [x / W, y / height, w / W, (y2 - y) / height]})
+    boxes[name] = out
+    print(f"{name}: {len(out)} callouts")
+
+
+def panel(title):
+    return f".react-grid-item:has(h2:text-is('{title}'))"
+
+
+def grafana(b):
+    """The monitoring: the Grafana dashboard for this lab (anonymous viewer), and Prometheus's alert rules."""
+    p = b.new_page(viewport={"width": W, "height": 3000})
+    p.goto(f"{GRAFANA}/d/c8000v-dmvpn-lab-overview?orgId=1&from=now-24h&to=now&kiosk&theme=light")
+    p.wait_for_selector(panel("Health")); time.sleep(10)
+    tall_shot(p, "40_graf_cloud", 0, [
+        ("div:has(> [class*='dashboard-data-layer-controls'])", "Annotations: every portal job"),
+        (panel("Health"), "The portal's verdict"),
+        (panel("Registrations (customers x hubs)"), "Registrations: up vs expected"),
+        (panel("Customer registered with every hub (NHRP NHS up = expected)"), "Each customer, each hub, over time"),
+        (panel("eBGP session with the provider, per router"), "eBGP to the provider"),
+        (panel("IPsec sessions UP-ACTIVE per router"), "IPsec per router")])
+    tall_shot(p, "41_graf_provider", 820, [
+        (panel("Overlay iBGP: Established / sessions per router"), "Overlay iBGP"),
+        (panel("C8000v CPU % (one-minute average)"), "C8000v CPU"),
+        (panel("Access links: traffic per port (bit/s)"), "The provider: exporters and Telegraf"),
+        (panel("NHRP / IKE / IPsec events / 5 min per router"), "Syslog events, per router")])
+    tall_shot(p, "42_graf_logs", 1420, [
+        (panel("BGP neighbour Down events / 5 min per router"), "BGP Down events from syslog"),
+        (panel("C8000v syslog (newest first)"), "Router syslog, searchable"),
+        (panel("Host CPU busy %"), "The lab host itself")])
+    tall_shot(p, "43_graf_lab", 2000, [
+        (panel("Host CPU busy % (all cores) and per mode"), "Host CPU"),
+        (panel("VMs running"), "Every VM running"),
+        (panel("LAN hosts answering"), "Every LAN host answering"),
+        (panel("Portal runs: last outcome per mode"), "The portal's jobs")])
+    p.close()
+
+    # the provider's own telemetry: node detail for mpls
+    p = b.new_page(viewport={"width": W, "height": 1000})
+    p.goto(f"{GRAFANA}/d/lab-node-detail?orgId=1&var-lab=c8000v-dmvpn-lab&var-node=mpls&from=now-24h&to=now&kiosk&theme=light")
+    p.wait_for_selector(panel("Uptime")); time.sleep(8)
+    shot(p, "44_graf_node", [(panel("BGP peers established"), "BGP peers on the provider"),
+                             (panel("Interface traffic received (bit/s)"), "Every access link"),
+                             (panel("CPU by mode"), "node-exporter: CPU, memory, load")])
+    p.close()
+
+    # alert rules
+    p = b.new_page(viewport={"width": W, "height": 1000})
+    p.goto(f"{PROM}/alerts?search=Dmvpn"); time.sleep(4)
+    shot(p, "45_alerts", [(".mantine-Card-root", "The Dmvpn* alert rules: inactive = healthy")])
+    p.close()
+
+
+def card(title):
+    return f".card:has(> .card-header:has-text('{title}'))"
+
+
+def nautobot(b):
+    """Where the customers and the VPN are modelled: the shared Nautobot, with a session nb_session.py saved."""
+    ctx = b.new_context(viewport={"width": W, "height": H}, storage_state=NB_STATE)
+    p = ctx.new_page()
+
+    def go(path, wait=".page-content, main, body"):
+        p.goto(NAUTOBOT + path); p.wait_for_load_state("networkidle"); time.sleep(2)
+
+    def open_link(name):
+        p.get_by_role("link", name=name, exact=True).first.click(); p.wait_for_load_state("networkidle"); time.sleep(2)
+
+    go("/dcim/devices/?q=c8d-")
+    shot(p, "50_nb_devices", [("table", "Every VM of the lab, under its c8d- name"), ("th:has-text('Tenant')", "The customer company"),
+                              ("th:has-text('Role')", "dmvpn-hub, dmvpn-spoke, wan-provider"), ("th:has-text('Location')", "Its region")])
+    go("/tenancy/tenants/?tenant_group=c8000v-dmvpn-lab+customers"); open_link("Prairie Grain Logistics")
+    p.evaluate("document.body.style.zoom = '0.78'"); time.sleep(1)                     # the whole tenant on one screen
+    shot(p, "51_nb_tenant", [(".card:has(td:text-is('Tenant Group'))", "A tenant per customer company"),
+                             (card("Custom Fields"), "Account, address, contact"), (card("Relationships"), "Subscribed applications"),
+                             (card("Stats"), "Its router and LAN host")])
+    go("/load-balancers/virtual-servers/?q=APP-10")
+    shot(p, "52_nb_apps", [("table", "One virtual server per application per hub"), ("th:has-text('VIP')", "Its VIP on the hub's Loopback10")])
+    go("/dcim/devices/?q=c8d-hub-east"); open_link("c8d-hub-east")
+    shot(p, "53_nb_device", [(card("Device"), "Role, tenant, location, platform"), (".nav-tabs a:has-text('Interfaces')", "Its interfaces"),
+                             (card("Autonomous Systems"), "Its autonomous system")])
+    p.goto(p.url.rstrip("/") + "/interfaces/"); p.wait_for_load_state("networkidle"); time.sleep(2)
+    shot(p, "54_nb_ifaces", [("tr:has(a:text-is('Tunnel0'))", "Cloud 1: Tunnel0 over mpls"), ("tr:has(a:text-is('Tunnel1'))", "Cloud 2: Tunnel1 over mpls2"),
+                             ("tr:has(a:text-is('Loopback10'))", "Application VIPs"), ("tr:has(a:text-is('GigabitEthernet2'))", "Access link to the provider")])
+    go("/ipam/prefixes/?location=c8000v-dmvpn-lab&sort=-prefix")      # the LANs, then both clouds
+    shot(p, "55_nb_prefixes", [("tr:has(td:has-text('172.28.0.0/24'))", "The DMVPN cloud: dmvpn-overlay"),
+                               ("tr:has(td:has-text('172.29.0.0/24'))", "The backup cloud"), ("tr:has(td:has-text('192.168.62.0/24'))", "A customer's site LAN"), ("th:has-text('Role')", "Every prefix has a role")])
+    go("/ipam/ip-addresses/?q=172.28.0.")
+    shot(p, "56_nb_tunnel_ips", [("table", "Each router's Tunnel0 address, on its interface")])
+    go("/plugins/bgp/peerings/?q=c8d")
+    shot(p, "57_nb_peerings", [("table", "Every BGP session: hub↔hub, hub↔customer, site↔provider, both clouds")])
+    go("/plugins/bgp/routing-instances/?q=c8d")
+    shot(p, "58_nb_bgp", [("table", "A routing instance per router: AS and router-id")])
+    go("/extras/config-contexts/?q=c8000v-dmvpn-lab"); open_link("c8000v-dmvpn-lab")
+    shot(p, "59_nb_context", [(card("Toggle Data"), "The DMVPN service: NHRP, tunnels, IKEv2 / IPsec, providers")], scroll_to=card("Toggle Data"))
+    go("/extras/graphql-queries/"); open_link("c8000v-dmvpn-lab-model")
+    shot(p, "60_nb_graphql", [(card("Toggle Query"), "The saved query the renderer reads")])
+    ctx.close()
+
+
 with sync_playwright() as pw:
     b = pw.chromium.launch(channel="chrome", headless=True)
     if "tour" in PARTS:
         tour(b)
     if "more" in PARTS:
         more(b)
+    if "grafana" in PARTS:
+        grafana(b)
+    if "nautobot" in PARTS and Path(NB_STATE).exists():
+        nautobot(b)
     b.close()
 
 (OUT / "boxes.json").write_text(json.dumps(boxes, indent=1))

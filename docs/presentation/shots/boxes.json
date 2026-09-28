@@ -776,5 +776,462 @@
     0.017
    ]
   }
+ ],
+ "40_graf_cloud": [
+  {
+   "label": "Annotations: every portal job",
+   "box": [
+    0.0,
+    0.0,
+    1.0,
+    0.104
+   ]
+  },
+  {
+   "label": "The portal's verdict",
+   "box": [
+    0.025,
+    0.142,
+    0.156875,
+    0.144
+   ]
+  },
+  {
+   "label": "Registrations: up vs expected",
+   "box": [
+    0.186875,
+    0.142,
+    0.196875,
+    0.144
+   ]
+  },
+  {
+   "label": "Each customer, each hub, over time",
+   "box": [
+    0.025,
+    0.294,
+    0.48,
+    0.258
+   ]
+  },
+  {
+   "label": "eBGP to the provider",
+   "box": [
+    0.51,
+    0.294,
+    0.48,
+    0.258
+   ]
+  },
+  {
+   "label": "IPsec per router",
+   "box": [
+    0.671875,
+    0.56,
+    0.318125,
+    0.258
+   ]
+  }
+ ],
+ "41_graf_provider": [
+  {
+   "label": "Overlay iBGP",
+   "box": [
+    0.025,
+    0.006,
+    0.48,
+    0.258
+   ]
+  },
+  {
+   "label": "C8000v CPU",
+   "box": [
+    0.51,
+    0.006,
+    0.48,
+    0.258
+   ]
+  },
+  {
+   "label": "The provider: exporters and Telegraf",
+   "box": [
+    0.671875,
+    0.31,
+    0.318125,
+    0.258
+   ]
+  },
+  {
+   "label": "Syslog events, per router",
+   "box": [
+    0.348125,
+    0.614,
+    0.318125,
+    0.258
+   ]
+  }
+ ],
+ "42_graf_logs": [
+  {
+   "label": "BGP Down events from syslog",
+   "box": [
+    0.025,
+    0.014,
+    0.318125,
+    0.258
+   ]
+  },
+  {
+   "label": "Router syslog, searchable",
+   "box": [
+    0.025,
+    0.28,
+    0.965,
+    0.334
+   ]
+  },
+  {
+   "label": "The lab host itself",
+   "box": [
+    0.025,
+    0.66,
+    0.156875,
+    0.144
+   ]
+  }
+ ],
+ "43_graf_lab": [
+  {
+   "label": "Host CPU",
+   "box": [
+    0.025,
+    0.232,
+    0.318125,
+    0.296
+   ]
+  },
+  {
+   "label": "Every VM running",
+   "box": [
+    0.025,
+    0.574,
+    0.318125,
+    0.334
+   ]
+  },
+  {
+   "label": "Every LAN host answering",
+   "box": [
+    0.348125,
+    0.574,
+    0.318125,
+    0.334
+   ]
+  },
+  {
+   "label": "The portal's jobs",
+   "box": [
+    0.671875,
+    0.574,
+    0.318125,
+    0.334
+   ]
+  }
+ ],
+ "44_graf_node": [
+  {
+   "label": "BGP peers on the provider",
+   "box": [
+    0.830625,
+    0.107828125,
+    0.159375,
+    0.144
+   ]
+  },
+  {
+   "label": "Every access link",
+   "box": [
+    0.01,
+    0.563828125,
+    0.4875,
+    0.296
+   ]
+  },
+  {
+   "label": "node-exporter: CPU, memory, load",
+   "box": [
+    0.01,
+    0.259828125,
+    0.4875,
+    0.296
+   ]
+  }
+ ],
+ "45_alerts": [
+  {
+   "label": "The Dmvpn* alert rules: inactive = healthy",
+   "box": [
+    0.01,
+    0.237765625,
+    0.98,
+    0.38778125
+   ]
+  }
+ ],
+ "50_nb_devices": [
+  {
+   "label": "Every VM of the lab, under its c8d- name",
+   "box": [
+    0.163125,
+    0.196484375,
+    0.82375,
+    0.593
+   ]
+  },
+  {
+   "label": "The customer company",
+   "box": [
+    0.333603515625,
+    0.196484375,
+    0.1936328125,
+    0.036625
+   ]
+  },
+  {
+   "label": "dmvpn-hub, dmvpn-spoke, wan-provider",
+   "box": [
+    0.527236328125,
+    0.196484375,
+    0.0917578125,
+    0.036625
+   ]
+  },
+  {
+   "label": "Its region",
+   "box": [
+    0.7451953125,
+    0.196484375,
+    0.103251953125,
+    0.036625
+   ]
+  }
+ ],
+ "51_nb_tenant": [
+  {
+   "label": "A tenant per customer company",
+   "box": [
+    0.12673828125,
+    0.1958125,
+    0.426884765625,
+    0.149671875
+   ]
+  },
+  {
+   "label": "Account, address, contact",
+   "box": [
+    0.12673828125,
+    0.429734375,
+    0.426884765625,
+    0.393078125
+   ]
+  },
+  {
+   "label": "Subscribed applications",
+   "box": [
+    0.12673828125,
+    0.83528125,
+    0.426884765625,
+    0.076296875
+   ]
+  },
+  {
+   "label": "Its router and LAN host",
+   "box": [
+    0.563369140625,
+    0.1958125,
+    0.426884765625,
+    0.3785
+   ]
+  }
+ ],
+ "52_nb_apps": [
+  {
+   "label": "One virtual server per application per hub",
+   "box": [
+    0.163125,
+    0.196484375,
+    0.82375,
+    0.740375
+   ]
+  },
+  {
+   "label": "Its VIP on the hub's Loopback10",
+   "box": [
+    0.4970703125,
+    0.196484375,
+    0.098251953125,
+    0.036625
+   ]
+  }
+ ],
+ "53_nb_device": [
+  {
+   "label": "Role, tenant, location, platform",
+   "box": [
+    0.1625,
+    0.24875,
+    0.40625,
+    0.39509375
+   ]
+  },
+  {
+   "label": "Its interfaces",
+   "box": [
+    0.63796875,
+    0.1525,
+    0.07357421875,
+    0.032125
+   ]
+  },
+  {
+   "label": "Its autonomous system",
+   "box": [
+    0.58125,
+    0.883,
+    0.40625,
+    0.112375
+   ]
+  }
+ ],
+ "54_nb_ifaces": [
+  {
+   "label": "Cloud 1: Tunnel0 over mpls",
+   "box": [
+    0.163125,
+    0.64375,
+    0.836875,
+    0.117625
+   ]
+  },
+  {
+   "label": "Cloud 2: Tunnel1 over mpls2",
+   "box": [
+    0.163125,
+    0.761375,
+    0.836875,
+    0.13725
+   ]
+  },
+  {
+   "label": "Application VIPs",
+   "box": [
+    0.163125,
+    0.5865,
+    0.836875,
+    0.05725
+   ]
+  },
+  {
+   "label": "Access link to the provider",
+   "box": [
+    0.163125,
+    0.3535,
+    0.836875,
+    0.05925
+   ]
+  }
+ ],
+ "55_nb_prefixes": [
+  {
+   "label": "The DMVPN cloud: dmvpn-overlay",
+   "box": [
+    0.163125,
+    0.624359375,
+    0.82375,
+    0.05725
+   ]
+  },
+  {
+   "label": "The backup cloud",
+   "box": [
+    0.163125,
+    0.546984375,
+    0.82375,
+    0.077375
+   ]
+  },
+  {
+   "label": "A customer's site LAN",
+   "box": [
+    0.163125,
+    0.469015625,
+    0.82375,
+    0.038984375
+   ]
+  },
+  {
+   "label": "Every prefix has a role",
+   "box": [
+    0.67314453125,
+    0.196484375,
+    0.093203125,
+    0.038625
+   ]
+  }
+ ],
+ "56_nb_tunnel_ips": [
+  {
+   "label": "Each router's Tunnel0 address, on its interface",
+   "box": [
+    0.163125,
+    0.196484375,
+    0.82375,
+    0.349125
+   ]
+  }
+ ],
+ "57_nb_peerings": [
+  {
+   "label": "Every BGP session: hub\u2194hub, hub\u2194customer, site\u2194provider, both clouds",
+   "box": [
+    0.163125,
+    0.196484375,
+    0.82375,
+    0.803515625
+   ]
+  }
+ ],
+ "58_nb_bgp": [
+  {
+   "label": "A routing instance per router: AS and router-id",
+   "box": [
+    0.163125,
+    0.196484375,
+    0.82375,
+    0.407375
+   ]
+  }
+ ],
+ "59_nb_context": [
+  {
+   "label": "The DMVPN service: NHRP, tunnels, IKEv2 / IPsec, providers",
+   "box": [
+    0.1625,
+    0.012234375,
+    0.825,
+    0.987765625
+   ]
+  }
+ ],
+ "60_nb_graphql": [
+  {
+   "label": "The saved query the renderer reads",
+   "box": [
+    0.1625,
+    0.24875,
+    0.40625,
+    0.665703125
+   ]
+  }
  ]
 }

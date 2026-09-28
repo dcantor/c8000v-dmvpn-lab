@@ -11,6 +11,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 While the version is 0.x, the lab's interfaces are still settling. The current version is in [`VERSION`](VERSION), in
 the portal's header, and in git as a `v<version>` tag.
 
+## [0.21.3] — 2026-09-27
+
+### Changed
+- **The portal presentation adds Nautobot and monitoring: 61 slides, up from 40.**
+  - **Source of truth: Nautobot.** A model diagram, then slides for the lab's devices, a customer company as a
+    tenant (custom fields and application subscriptions), applications as virtual servers with VIPs, a hub and its
+    Tunnel0 and Tunnel1 interfaces, the prefixes and their roles, the tunnel addresses, BGP peerings and routing
+    instances, the DMVPN service as a config context (no secrets), and the saved GraphQL query the renderer reads.
+  - **Monitoring.** A diagram of how the lab is monitored, four views of the Grafana "C8000v DMVPN: overview"
+    dashboard over 24 hours, the provider router's node detail, and the Dmvpn* alert rules in Prometheus.
+  - `nb_session.py` signs in to Nautobot once. It asks for the password in the terminal and keeps the session
+    outside the repo. `capture.py` gains two parts, `grafana` and `nautobot`.
+
 ## [0.21.2] — 2026-09-27
 
 ### Changed
@@ -513,6 +526,7 @@ the portal's header, and in git as a `v<version>` tag.
   - `nac/`, Network-as-Code for the C8000vs.
   - Robot suites, the README, and the first Nautobot seed.
 
+[0.21.3]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.21.2...v0.21.3
 [0.21.2]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.21.1...v0.21.2
 [0.21.1]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.21.0...v0.21.1
 [0.21.0]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.20.0...v0.21.0
