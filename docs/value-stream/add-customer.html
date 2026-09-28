@@ -1,0 +1,328 @@
+<title>Add a Customer Value Stream</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root {
+  --ground: #eef2f5; --paper: #ffffff; --ink: #14202c; --muted: #5b6b7a; --line: #cfd8e0; --grid: #e3e9ee;
+  --teal: #0e7490; --teal-soft: #d6ecf2;
+  --va: #15803d; --va-soft: #dcf2e3;
+  --nva: #64748b; --nva-soft: #e6ebf0;
+  --wait: #c2410c; --wait-soft: #fbe7dc;
+  --rework: #b42318; --rework-soft: #fbe1df;
+  --burst: #d97706;
+  --display: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+  --body: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground: #0f161d; --paper: #151f29; --ink: #e5edf3; --muted: #93a4b3; --line: #2a3a48; --grid: #1c2833;
+    --teal: #38bdd8; --teal-soft: #103341;
+    --va: #4ade80; --va-soft: #11301f; --nva: #94a3b8; --nva-soft: #1e2a36;
+    --wait: #fb923c; --wait-soft: #3a2012; --rework: #f87171; --rework-soft: #3a1717; --burst: #fbbf24;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #0f161d; --paper: #151f29; --ink: #e5edf3; --muted: #93a4b3; --line: #2a3a48; --grid: #1c2833;
+  --teal: #38bdd8; --teal-soft: #103341;
+  --va: #4ade80; --va-soft: #11301f; --nva: #94a3b8; --nva-soft: #1e2a36;
+  --wait: #fb923c; --wait-soft: #3a2012; --rework: #f87171; --rework-soft: #3a1717; --burst: #fbbf24;
+}
+* { box-sizing: border-box }
+body { background: var(--ground); color: var(--ink); font: 15px/1.55 var(--body); }
+.wrap { max-width: 1240px; margin: 0 auto; padding-inline: 20px; padding-block: 28px 56px; display: grid; gap: 28px }
+header { display: grid; gap: 10px }
+.eyebrow { font: 600 12px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--teal) }
+h1 { font: 700 44px/1.02 var(--display); letter-spacing: .01em; margin: 0; text-wrap: balance }
+h2 { font: 700 26px/1.1 var(--display); margin: 0 0 4px; letter-spacing: .01em }
+.lede { max-width: 72ch; margin: 0; color: var(--muted) }
+.lede b { color: var(--ink); font-weight: 600 }
+.controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--paper) }
+.seg button { font: 600 13px var(--body); color: var(--muted); background: none; border: 0; padding: 8px 14px; cursor: pointer }
+.seg button[aria-pressed="true"] { background: var(--teal); color: #fff }
+.seg button:focus-visible { outline: 2px solid var(--teal); outline-offset: -2px }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: var(--muted) }
+.legend span { display: inline-flex; align-items: center; gap: 6px }
+.sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden }
+.kpi { background: var(--paper); padding: 14px 16px; display: grid; gap: 2px }
+.kpi .n { font: 600 30px/1.1 var(--mono); font-variant-numeric: tabular-nums }
+.kpi .l { font-size: 12.5px; color: var(--muted) }
+.kpi.va .n { color: var(--va) } .kpi.wait .n { color: var(--wait) } .kpi.rw .n { color: var(--rework) }
+.panel { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 18px 18px 14px; display: grid; gap: 12px }
+.panel > p { margin: 0; color: var(--muted); max-width: 80ch; font-size: 14px }
+.scroll { overflow-x: auto; -webkit-overflow-scrolling: touch }
+svg text { font-family: var(--body) }
+#vsm { display: block; width: 100%; min-width: 1080px; height: auto }
+.bars { display: grid; gap: 8px }
+.barrow { display: grid; grid-template-columns: 190px 1fr 88px; gap: 10px; align-items: center; font-size: 13.5px }
+.barrow .track { height: 14px; background: var(--grid); border-radius: 4px; overflow: hidden }
+.barrow .fill { height: 100% }
+.barrow .v { font: 500 13px var(--mono); text-align: right; font-variant-numeric: tabular-nums; color: var(--muted) }
+.kz { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 14px }
+.card { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 6px; background: var(--paper) }
+.card h3 { margin: 0; font: 600 20px/1.15 var(--display); display: flex; gap: 10px; align-items: baseline }
+.card h3 .no { font: 700 13px var(--mono); color: #fff; background: var(--burst); border-radius: 50%; width: 24px; height: 24px; display: inline-grid; place-items: center; flex: none; transform: translateY(-2px) }
+.card p { margin: 0; font-size: 14px; color: var(--muted) }
+.card .gain { font: 600 13px var(--mono); color: var(--va) }
+.card .est { font-size: 11.5px; color: var(--muted); font-style: italic }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; min-width: 680px }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line) }
+th { font: 600 12px var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted) }
+td.num { font-family: var(--mono); font-variant-numeric: tabular-nums }
+.pill { font: 600 11.5px var(--mono); padding: 2px 8px; border-radius: 999px }
+.pill.ok { background: var(--va-soft); color: var(--va) } .pill.bad { background: var(--rework-soft); color: var(--rework) }
+.pill.run { background: var(--teal-soft); color: var(--teal) } .pill.res { background: var(--nva-soft); color: var(--nva) }
+.notes { font-size: 13px; color: var(--muted); display: grid; gap: 6px; max-width: 90ch }
+.notes p { margin: 0 }
+.future { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px }
+.fs { border: 1px dashed var(--va); border-radius: 10px; padding: 14px 16px; background: var(--va-soft) }
+.fs .n { font: 600 28px/1.1 var(--mono) } .fs .l { font-size: 13px; color: var(--muted) }
+@media (max-width: 560px) { h1 { font-size: 34px } .barrow { grid-template-columns: 120px 1fr 70px } }
+@media (prefers-reduced-motion: no-preference) { .barrow .fill { transition: width .35s ease } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Value stream map · current state · C8000v DMVPN Portal</div>
+    <h1>Provision → Add a customer</h1>
+    <p class="lede">From the operator opening <b>Add a customer</b> to a new site that is registered with all three hubs,
+      recorded in Nautobot and tested. Job step times are <b>measured</b> from the portal's job records (10 Add-a-customer
+      jobs, Sep 26–28, all finished); the operator's planning time is an <b>estimate</b>, marked as such.</p>
+    <div class="controls">
+      <div class="seg" role="group" aria-label="Customer router type">
+        <button type="button" id="p-c8000v" aria-pressed="true">Catalyst 8000v customer</button>
+        <button type="button" id="p-vyos" aria-pressed="false">VyOS customer</button>
+      </div>
+      <div class="legend">
+        <span><i class="sw" style="background:var(--va)"></i>Value-adding</span>
+        <span><i class="sw" style="background:var(--nva)"></i>Necessary, not value-adding</span>
+        <span><i class="sw" style="background:var(--wait)"></i>Waiting</span>
+        <span><i class="sw" style="background:var(--burst)"></i>Improvement (kaizen)</span>
+      </div>
+    </div>
+  </header>
+
+  <section class="kpis" aria-label="Summary">
+    <div class="kpi"><span class="n" id="k-lead">–</span><span class="l">Lead time, operator to tested site (idle queue)</span></div>
+    <div class="kpi va"><span class="n" id="k-va">–</span><span class="l">Value-adding time</span></div>
+    <div class="kpi va"><span class="n" id="k-pce">–</span><span class="l">Process cycle efficiency (VA ÷ lead time)</span></div>
+    <div class="kpi"><span class="n" id="k-insp">–</span><span class="l">Spent checking (verify + test suites)</span></div>
+    <div class="kpi rw"><span class="n">57%</span><span class="l">First-pass yield: 4 of 7 first attempts succeeded</span></div>
+    <div class="kpi"><span class="n" id="k-touch">~2 min</span><span class="l">Operator touch time (estimate)</span></div>
+  </section>
+
+  <section class="panel">
+    <h2>The map</h2>
+    <p>Information flows along the top, the work along the middle, the timeline along the bottom: waiting above the line,
+      processing time below it. Scroll sideways on a narrow screen.</p>
+    <div class="scroll"><svg id="vsm" role="img" aria-label="Value stream map of Add a customer"></svg></div>
+  </section>
+
+  <section class="panel">
+    <h2>Where the time goes</h2>
+    <p>Each step's share of the lead time. Day-0 bootstrap is counted as value-adding, but most of it is the router's first
+      boot (and, on a C8000v, the reload after setting the licence level): the job log records the step, not its phases.</p>
+    <div class="bars" id="bars"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Improvements</h2>
+    <p>The numbered bursts on the map. Savings are for the selected router type; figures marked <i>estimate</i> are not
+      measured yet.</p>
+    <div class="kz" id="kz"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Future state, if all of them land</h2>
+    <div class="future" id="future"></div>
+  </section>
+
+  <section class="panel">
+    <h2>The jobs behind the numbers</h2>
+    <p>Every Add-a-customer job the portal has recorded. A resumed job re-runs only from the step that failed.</p>
+    <div class="scroll"><table><thead><tr><th>Started</th><th>Customer</th><th>Router</th><th>Outcome</th><th>Failed at</th><th>Took</th></tr></thead><tbody id="runs"></tbody></table></div>
+    <div class="notes">
+      <p><b>Medians</b> of the steps that completed: C8000v from 2 first attempts, VyOS from 6 (test suites: every full run,
+        passed or failed, since the time is the same). Queue wait is zero when no other job runs; jobs run one at a time, so
+        otherwise it is the rest of the running job (up to about 26 minutes).</p>
+      <p><b>Not measured:</b> how a customer's order reaches the operator, and how the customer hears the site is live — both
+        happen outside the portal today.</p>
+    </div>
+  </section>
+</div>
+
+<script>
+const OPERATOR = 120;                                   // estimate: open the form, review the pre-filled plan, submit
+const P = {
+  c8000v: { name: 'Catalyst 8000v', prep: 8, bootstrap: 582, nac: 77, provider: 48, nautobot: 139, verify: 56, test: 637 },
+  vyos:   { name: 'VyOS',           prep: 8, bootstrap: 346, nac: 34, provider: 76, nautobot: 96,  verify: 43, test: 491 },
+};
+const STEPS = [
+  { k: 'operator', t: 'Plan & submit', who: 'Operator · portal', cls: 'nva', note: 'form pre-filled; plan shown', est: true },
+  { k: 'prep', t: 'Prepare', who: 'Job', cls: 'nva', note: 'snapshot · validate · VM' },
+  { k: 'bootstrap', t: 'Day-0 boot', who: 'Job · serial console', cls: 'va', note: 'first boot + day-0', burst: [4] },
+  { k: 'nac', t: 'NAC apply', who: 'Job · Network-as-Code', cls: 'va', note: 'resources on the new router' },
+  { k: 'provider', t: 'Provider link', who: 'Job · VyOS push', cls: 'va', note: '1 timeout in 7 runs', fail: true, burst: [3, 5] },
+  { k: 'nautobot', t: 'Nautobot seed', who: 'Job · source of truth', cls: 'nva', note: 'record, then compare', burst: [2] },
+  { k: 'verify', t: 'Verify', who: 'Job', cls: 'nva', note: 'hubs · IPsec · BGP · hosts', fail: true },
+  { k: 'test', t: 'Tests', who: 'Job · Robot Framework', cls: 'nva', note: 'all 74 tests', fail: true, burst: [1] },
+];
+const KAIZEN = [
+  { n: 1, t: 'Test the new customer, not the whole lab', p: 'Run the tests that concern the new site (its registrations, routes, host reachability, applications) at the end of the job, and the full suite on a nightly schedule.',
+    gain: s => s.test - 150, est: 'estimate: a customer-scoped run of ~2½ min' },
+  { n: 2, t: 'Seed Nautobot while the router boots', p: 'Nautobot does not need the router: seeding it in parallel with the day-0 bootstrap takes it off the critical path.',
+    gain: s => s.nautobot },
+  { n: 3, t: 'Attach the provider in parallel too', p: 'The provider side of the access link needs only the address plan, so it can also run during the bootstrap.',
+    gain: s => s.provider },
+  { n: 4, t: 'A golden image per router type', p: 'Boot from an image with the licence level and base configuration already in place: no licence reload, and day-0 shrinks to the site-specific lines.',
+    gain: s => Math.round(s.bootstrap * 0.45), est: 'estimate: about 45% of the bootstrap' },
+  { n: 5, t: 'Raise the first-pass yield', p: '3 of 7 first attempts failed: a provider push timed out, and verify/tests ran before routing had settled. Retry the push with back-off and gate the checks on convergence.',
+    gain: () => 0, gainText: 'fewer resumes (0.6–10 min each) and no operator rework', est: '3 failures in 7 first attempts' },
+  { n: 6, t: 'Close the loop with the customer', p: 'Today the order arrives and the hand-over leaves outside the portal. Take the request through the customer portal and notify the customer (and create its account) when the job succeeds.',
+    gain: () => 0, gainText: 'removes two manual hand-offs', est: 'not measured today' },
+];
+const RUNS = [{"id":"2026-09-26_19-02-18-f8a0","when":"Sep 26 19:02","customer":"cust4","platform":"c8000v","status":"success","resume":false,"total":14.8,"failed":null},{"id":"2026-09-27_00-43-14-da22","when":"Sep 27 00:43","customer":"cust4","platform":"vyos","status":"failed","resume":false,"total":13.6,"failed":"verify"},{"id":"2026-09-27_01-04-06-6bbd","when":"Sep 27 01:04","customer":"cust4","platform":"vyos","status":"success","resume":true,"total":0.6,"failed":null},{"id":"2026-09-27_01-59-49-80ec","when":"Sep 27 01:59","customer":"cust4","platform":"vyos","status":"success","resume":false,"total":16.7,"failed":null},{"id":"2026-09-27_07-42-12-7a9e","when":"Sep 27 07:42","customer":"cust5","platform":"c8000v","status":"success","resume":false,"total":25.9,"failed":null},{"id":"2026-09-27_08-53-33-9618","when":"Sep 27 08:53","customer":"cust5","platform":"vyos","status":"failed","resume":false,"total":16.5,"failed":"test"},{"id":"2026-09-27_09-46-36-5745","when":"Sep 27 09:46","customer":"cust6","platform":"vyos","status":"failed","resume":false,"total":11.3,"failed":"provider"},{"id":"2026-09-27_10-02-05-20c3","when":"Sep 27 10:02","customer":"cust6","platform":"vyos","status":"failed","resume":true,"total":3.8,"failed":"verify"},{"id":"2026-09-27_10-07-19-54e1","when":"Sep 27 10:07","customer":"cust6","platform":"vyos","status":"failed","resume":true,"total":9.9,"failed":"test"},{"id":"2026-09-28_11-35-13-5e5c","when":"Sep 28 11:35","customer":"cust7","platform":"vyos","status":"success","resume":false,"total":25.2,"failed":null}];
+
+const $ = id => document.getElementById(id);
+const fmt = s => s >= 60 ? `${(s / 60).toFixed(1)} min` : `${Math.round(s)} s`;
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+let plat = 'c8000v';
+
+function secs(s, k) { return k === 'operator' ? OPERATOR : s[k]; }
+
+function draw() {
+  const s = P[plat];
+  const lead = STEPS.reduce((a, x) => a + secs(s, x.k), 0);
+  const va = STEPS.filter(x => x.cls === 'va').reduce((a, x) => a + secs(s, x.k), 0);
+  $('k-lead').textContent = fmt(lead); $('k-va').textContent = fmt(va);
+  $('k-pce').textContent = Math.round(100 * va / lead) + '%';
+  $('k-insp').textContent = Math.round(100 * (s.verify + s.test) / lead) + '%';
+
+  // ---- the map ----
+  const bw = 124, gap = 30, x0 = 24, n = STEPS.length, W = x0 + n * bw + (n - 1) * gap + 170, H = 560;
+  const C = { ink: css('--ink'), muted: css('--muted'), line: css('--line'), paper: css('--paper'), teal: css('--teal'), tealS: css('--teal-soft'),
+    va: css('--va'), vaS: css('--va-soft'), nva: css('--nva'), nvaS: css('--nva-soft'), wait: css('--wait'), waitS: css('--wait-soft'),
+    rw: css('--rework'), burst: css('--burst'), grid: css('--grid') };
+  const X = i => x0 + i * (bw + gap);
+  const py = 240, ph = 84, dy = py + ph + 8, dh = 84;
+  let g = '';
+  const t = (x, y, str, o = {}) => `<text x="${x}" y="${y}" fill="${o.fill || C.ink}" font-size="${o.size || 12}" font-weight="${o.w || 400}" text-anchor="${o.a || 'start'}" ${o.mono ? 'font-family="IBM Plex Mono, monospace"' : ''} ${o.disp ? 'font-family="Barlow Condensed, Arial Narrow, sans-serif"' : ''}>${str}</text>`;
+  g += `<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="${C.muted}"/></marker>
+        <pattern id="push" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="${C.paper}"/><rect width="3.5" height="8" fill="${C.muted}"/></pattern></defs>`;
+  // information flow: operator, customer, portal/job engine, lab.conf+Nautobot
+  const ix = X(0), cx = X(n - 1) + bw - 60;
+  g += `<rect x="${ix}" y="40" width="${bw + 40}" height="58" rx="8" fill="${C.tealS}" stroke="${C.teal}"/>`;
+  g += t(ix + 12, 62, 'Operator', { w: 600, size: 14, disp: true }) + t(ix + 12, 80, 'signed in to the portal', { fill: C.muted, size: 11.5 });
+  // customer (factory-style icon replaced by a simple person block)
+  g += `<rect x="${cx}" y="40" width="${bw + 40}" height="58" rx="8" fill="${C.paper}" stroke="${C.ink}" stroke-dasharray="4 3"/>`;
+  g += t(cx + 12, 62, 'Customer', { w: 600, size: 14, disp: true }) + t(cx + 12, 80, 'orders a site · hears it is live', { fill: C.muted, size: 11.5 });
+  // job engine / portal in the middle
+  const jx = X(2) + 20;
+  g += `<rect x="${jx}" y="130" width="${X(6) - X(2) + bw - 40}" height="50" rx="8" fill="${C.paper}" stroke="${C.teal}"/>`;
+  g += t(jx + 12, 150, 'Portal job engine', { w: 600, size: 14, disp: true }) + t(jx + 12, 168, 'one job at a time · change control (adding needs no approval) · progress, log, config diff', { fill: C.muted, size: 11.5 });
+  const sx = X(5) + 10;
+  g += `<rect x="${sx}" y="40" width="${bw * 2 + gap - 20}" height="58" rx="8" fill="${C.paper}" stroke="${C.line}"/>`;
+  g += t(sx + 12, 62, 'lab.conf · Nautobot', { w: 600, size: 14, disp: true }) + t(sx + 12, 80, 'the intent, and its source of truth', { fill: C.muted, size: 11.5 });
+  // manual flow: customer -> operator (straight dashed arrow along the top), electronic: operator -> engine (zig-zag)
+  g += `<path d="M${cx + 70},40 L${cx + 70},20 L${ix + (bw + 40) / 2},20 L${ix + (bw + 40) / 2},38" stroke="${C.muted}" stroke-dasharray="6 4" fill="none" marker-end="url(#ah)"/>`;
+  g += t((cx + ix + bw + 40) / 2, 14, 'order: e-mail or ticket (manual, not measured)', { fill: C.muted, size: 11, a: 'middle' });
+  const zz = (x1, y1, x2, y2) => { const mx = (x1 + x2) / 2, my = (y1 + y2) / 2; return `<path d="M${x1},${y1} L${mx - 10},${my - 6} L${mx + 10},${my + 6} L${x2},${y2}" stroke="${C.teal}" stroke-width="1.6" fill="none" marker-end="url(#ah)"/>`; };
+  g += zz(ix + (bw + 40) / 2, 98, jx, 154);
+  g += zz(sx + 40, 98, jx + (X(6) - X(2) + bw - 40) - 40, 130);
+  g += `<path d="M${X(n - 1) + bw / 2},${py} L${X(n - 1) + bw / 2 + 10},190 L${cx + 60},98" stroke="${C.muted}" stroke-dasharray="6 4" fill="none" marker-end="url(#ah)"/>`;
+  g += t(X(n - 1) + bw / 2 + 16, 212, 'hand-over (manual)', { fill: C.muted, size: 11 });
+
+  // process boxes, data boxes, arrows, queue triangle, bursts
+  STEPS.forEach((st, i) => {
+    const x = X(i), col = st.cls === 'va' ? C.va : C.nva, soft = st.cls === 'va' ? C.vaS : C.nvaS, v = secs(s, st.k);
+    g += `<rect x="${x}" y="${py}" width="${bw}" height="${ph}" rx="6" fill="${soft}" stroke="${col}" stroke-width="1.6"/>`;
+    g += `<rect x="${x}" y="${py}" width="${bw}" height="6" fill="${col}"/>`;
+    g += t(x + bw / 2, py + 34, st.t, { w: 700, size: 16, a: 'middle', disp: true });
+    g += t(x + bw / 2, py + 54, st.who, { fill: C.muted, size: 11, a: 'middle' });
+    g += t(x + bw / 2, py + 72, st.cls === 'va' ? 'value-adding' : 'necessary', { fill: col, size: 10.5, a: 'middle', w: 600 });
+    // data box
+    g += `<rect x="${x}" y="${dy}" width="${bw}" height="${dh}" fill="${C.paper}" stroke="${C.line}"/>`;
+    g += t(x + 10, dy + 20, 'C/T', { fill: C.muted, size: 11, mono: true }) + t(x + bw - 10, dy + 20, fmt(v) + (st.est ? '*' : ''), { size: 12.5, a: 'end', mono: true, w: 600 });
+    g += t(x + 10, dy + 40, 'share', { fill: C.muted, size: 11, mono: true }) + t(x + bw - 10, dy + 40, Math.round(100 * v / lead) + '%', { size: 12.5, a: 'end', mono: true });
+    g += t(x + 10, dy + 60, st.fail ? 'failures' : 'failures', { fill: C.muted, size: 11, mono: true }) +
+         t(x + bw - 10, dy + 60, { provider: '1 of 7', verify: '2 runs', test: '2 runs' }[st.k] || '0', { size: 12.5, a: 'end', mono: true, fill: st.fail ? C.rw : C.ink });
+    g += t(x + 10, dy + 78, st.note, { fill: C.muted, size: 10.5 });
+    // push arrow to the next box
+    if (i < n - 1) {
+      const ax = x + bw + 2, aw = gap - 6;
+      if (i === 0) {   // queue before the job: an inventory triangle
+        const qx = x + bw + gap / 2, qy = py + ph / 2;
+        g += `<path d="M${qx - 12},${qy + 12} L${qx},${qy - 11} L${qx + 12},${qy + 12} Z" fill="${C.waitS}" stroke="${C.wait}" stroke-width="1.5"/>`;
+        g += t(qx, qy + 9, 'I', { fill: C.wait, size: 11, a: 'middle', w: 700 });
+        g += t(qx, py - 10, 'queue', { fill: C.wait, size: 11, a: 'middle', w: 600 });
+      } else {
+        g += `<path d="M${ax},${py + ph / 2 - 5} h${aw - 10} v-5 l10,10 l-10,10 v-5 h-${aw - 10} z" fill="url(#push)" stroke="${C.muted}"/>`;
+      }
+    }
+    (st.burst || []).forEach((b, j) => {
+      const bx = x + bw - 12 - j * 30, by = py - 16;
+      const pts = Array.from({ length: 16 }, (_, q) => { const r = q % 2 ? 7 : 14, a = Math.PI * q / 8; return `${bx + r * Math.cos(a)},${by + r * Math.sin(a)}`; }).join(' ');
+      g += `<polygon points="${pts}" fill="${C.burst}"/>` + t(bx, by + 4.5, b, { fill: '#fff', size: 12, a: 'middle', w: 700, mono: true });
+    });
+  });
+
+  // timeline ladder
+  const ly = dy + dh + 44, up = ly, dn = ly + 34;
+  g += t(x0, ly - 18, 'Timeline', { w: 700, size: 15, disp: true });
+  let path = `M${x0},${dn}`;
+  STEPS.forEach((st, i) => {
+    const x = X(i), v = secs(s, st.k);
+    // waiting segment in the gap before this box (queue before prep only)
+    path += ` L${x},${dn} L${x + bw},${dn}`;
+    g += t(x + bw / 2, dn + 20, fmt(v) + (st.est ? '*' : ''), { size: 12, a: 'middle', mono: true, fill: st.cls === 'va' ? C.va : C.ink, w: st.cls === 'va' ? 600 : 400 });
+    if (i < n - 1) {
+      path += ` L${x + bw},${up} L${x + bw + gap},${up} L${x + bw + gap},${dn}`;
+      g += t(x + bw + gap / 2, up - 8, i === 0 ? '0–26 min' : '0', { size: 11, a: 'middle', mono: true, fill: i === 0 ? C.wait : C.muted });
+    }
+  });
+  g += `<path d="${path}" fill="none" stroke="${C.ink}" stroke-width="1.6"/>`;
+  // totals box
+  const tx = X(n - 1) + bw + 30;
+  g += `<rect x="${tx}" y="${up - 26}" width="130" height="100" rx="6" fill="${C.paper}" stroke="${C.ink}"/>`;
+  g += t(tx + 10, up - 6, 'Lead time', { fill: C.muted, size: 11 }) + t(tx + 10, up + 14, fmt(lead), { size: 16, mono: true, w: 600 });
+  g += t(tx + 10, up + 36, 'Value-adding', { fill: C.muted, size: 11 }) + t(tx + 10, up + 56, fmt(va), { size: 16, mono: true, w: 600, fill: C.va });
+  g += t(x0, dn + 48, '* estimate · waiting above the line, processing below · lead time assumes an idle queue', { fill: C.muted, size: 11 });
+
+  const svg = $('vsm'); svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('width', W); svg.setAttribute('height', H);
+  svg.innerHTML = `<rect width="${W}" height="${H}" fill="${C.paper}"/>` + g;
+
+  // bars
+  $('bars').innerHTML = STEPS.map(st => { const v = secs(s, st.k), c = st.cls === 'va' ? 'var(--va)' : 'var(--nva)';
+    return `<div class="barrow"><span>${st.t}${st.est ? ' <small style="color:var(--muted)">(est.)</small>' : ''}</span><div class="track"><div class="fill" style="width:${(100 * v / lead).toFixed(1)}%;background:${c}"></div></div><span class="v">${fmt(v)}</span></div>`; }).join('');
+
+  // kaizen
+  $('kz').innerHTML = KAIZEN.map(k => { const gsec = k.gain(s);
+    return `<div class="card"><h3><span class="no">${k.n}</span>${k.t}</h3><p>${k.p}</p>
+      <span class="gain">${gsec ? '− ' + fmt(gsec) + ' of lead time' : k.gainText}</span>${k.est ? `<span class="est">${k.est}</span>` : ''}</div>`; }).join('');
+  const saved = KAIZEN.reduce((a, k) => a + k.gain(s), 0), fut = lead - saved;
+  $('future').innerHTML = `
+    <div class="fs"><div class="n">${fmt(fut)}</div><div class="l">lead time (now ${fmt(lead)}), ${Math.round(100 * saved / lead)}% shorter</div></div>
+    <div class="fs"><div class="n">${Math.round(100 * (va - Math.round(s.bootstrap * 0.45)) / fut)}%</div><div class="l">process cycle efficiency (now ${Math.round(100 * va / lead)}%)</div></div>
+    <div class="fs"><div class="n">≥ 90%</div><div class="l">first-pass yield target (now 57%)</div></div>
+    <div class="fs"><div class="n">0</div><div class="l">manual hand-offs outside the portal (now 2)</div></div>`;
+}
+
+$('runs').innerHTML = RUNS.map(r => `<tr><td class="num">${r.when}</td><td>${r.customer}</td><td>${r.platform === 'vyos' ? 'VyOS' : 'Catalyst 8000v'}</td>
+  <td><span class="pill ${r.status === 'success' ? 'ok' : r.status === 'running' ? 'run' : 'bad'}">${r.status}</span>${r.resume ? ' <span class="pill res">resumed</span>' : ''}</td>
+  <td>${r.failed || '—'}</td><td class="num">${r.total != null ? r.total + ' min' : '—'}</td></tr>`).join('');
+
+['c8000v', 'vyos'].forEach(p => $('p-' + p).addEventListener('click', () => {
+  plat = p; ['c8000v', 'vyos'].forEach(q => $('p-' + q).setAttribute('aria-pressed', String(q === p)));
+  try { localStorage.setItem('vsm-plat', p); } catch (e) {}
+  draw();
+}));
+try { const saved = localStorage.getItem('vsm-plat'); if (saved && P[saved]) { plat = saved; ['c8000v', 'vyos'].forEach(q => $('p-' + q).setAttribute('aria-pressed', String(q === saved))); } } catch (e) {}
+draw();
+matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', draw);
+new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+</script>

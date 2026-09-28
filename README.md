@@ -63,6 +63,7 @@ Version and changes: [`VERSION`](VERSION) and [`CHANGELOG.md`](CHANGELOG.md), wh
 | `webapp/` | the portal: `app.py` (the runs), `customers.py` (allocate, validate, plan, modify), `labconf.py` (edit `lab.conf`), `state.py` (what the routers are doing), `drift.py` (configuration drift), `sla.py` (probes and SLA reports), `backup.py` (backup / restore), `chaos.py` (simulated failures, failover timing), `changes.py` (change control), `cportal.py` (the customer portal), `capacity.py` (hub load and room to grow), `static/index.html` |
 | `results/` | one folder per test run: `configs/pre-run`, `configs/post-run`, the diff, Robot report / log |
 | `docs/presentation/` | the portal presentation (.pptx, .pdf) and a demo video (.mp4), and the scripts that rebuild them from the live lab |
+| `docs/value-stream/` | a value stream map of Provision → Add a customer, from measured job timings, with improvements and a future state |
 
 ## Customer router type: Catalyst 8000v or VyOS
 

@@ -11,6 +11,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 While the version is 0.x, the lab's interfaces are still settling. The current version is in [`VERSION`](VERSION), in
 the portal's header, and in git as a `v<version>` tag.
 
+## [0.22.2] — 2026-09-28
+
+### Added
+- **A value stream map of Provision → Add a customer, in `docs/value-stream/`.** It is a current-state map built from
+  the portal's job records (10 jobs, Sep 26–28).
+  - **Findings:** lead time is 27.8 min for a C8000v customer and 20.2 min for a VyOS one. 42% and 38% of it is
+    value-adding. Verify and the full test suite take 42–44%, and the first-pass yield is 57%.
+  - **Improvements:** six, each with the time it would save. Together they would bring a C8000v customer to about
+    12 minutes (partly estimated).
+  - **Files:** the README renders on GitHub; `add-customer.html` is the interactive version, with a C8000v / VyOS
+    toggle; `capture.py` redraws the images.
+
 ## [0.22.1] — 2026-09-27
 
 ### Changed
@@ -595,6 +607,7 @@ the portal's header, and in git as a `v<version>` tag.
   - `nac/`, Network-as-Code for the C8000vs.
   - Robot suites, the README, and the first Nautobot seed.
 
+[0.22.2]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.22.1...v0.22.2
 [0.22.1]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.22.0...v0.22.1
 [0.22.0]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.21.6...v0.22.0
 [0.21.6]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.21.5...v0.21.6
