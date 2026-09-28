@@ -1,0 +1,339 @@
+<title>Detailed Value Stream Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root {
+  --ground: #eef2f5; --paper: #ffffff; --ink: #14202c; --muted: #5b6b7a; --line: #cfd8e0; --grid: #e3e9ee;
+  --teal: #0e7490; --teal-soft: #d6ecf2;
+  --va: #15803d; --va-soft: #dcf2e3;
+  --nva: #64748b; --nva-soft: #e6ebf0;
+  --wait: #c2410c; --wait-soft: #fbe7dc;
+  --waste: #9f1239; --waste-soft: #fbe2ea;
+  --burst: #d97706;
+  --display: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+  --body: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground: #0f161d; --paper: #151f29; --ink: #e5edf3; --muted: #93a4b3; --line: #2a3a48; --grid: #1c2833;
+    --teal: #38bdd8; --teal-soft: #103341; --va: #4ade80; --va-soft: #11301f; --nva: #94a3b8; --nva-soft: #1e2a36;
+    --wait: #fb923c; --wait-soft: #3a2012; --waste: #fb7185; --waste-soft: #3b1523; --burst: #fbbf24;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #0f161d; --paper: #151f29; --ink: #e5edf3; --muted: #93a4b3; --line: #2a3a48; --grid: #1c2833;
+  --teal: #38bdd8; --teal-soft: #103341; --va: #4ade80; --va-soft: #11301f; --nva: #94a3b8; --nva-soft: #1e2a36;
+  --wait: #fb923c; --wait-soft: #3a2012; --waste: #fb7185; --waste-soft: #3b1523; --burst: #fbbf24;
+}
+* { box-sizing: border-box }
+body { background: var(--ground); color: var(--ink); font: 15px/1.55 var(--body) }
+.wrap { max-width: 1240px; margin: 0 auto; padding-inline: 20px; padding-block: 28px 56px; display: grid; gap: 26px }
+header { display: grid; gap: 10px }
+.eyebrow { font: 600 12px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--teal) }
+h1 { font: 700 46px/1.02 var(--display); margin: 0; text-wrap: balance }
+h1 small { display: block; font: 600 24px/1.2 var(--display); color: var(--muted); margin-top: 4px }
+h2 { font: 700 26px/1.1 var(--display); margin: 0 }
+.lede { max-width: 76ch; margin: 0; color: var(--muted) }
+.lede b { color: var(--ink); font-weight: 600 }
+.controls { display: flex; flex-wrap: wrap; gap: 14px; align-items: center }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--paper) }
+.seg button { font: 600 13px var(--body); color: var(--muted); background: none; border: 0; padding: 8px 14px; cursor: pointer }
+.seg button[aria-pressed="true"] { background: var(--teal); color: #fff }
+.seg button:focus-visible { outline: 2px solid var(--teal); outline-offset: -2px }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: var(--muted) }
+.legend span { display: inline-flex; align-items: center; gap: 6px }
+.sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(185px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden }
+.kpi { background: var(--paper); padding: 14px 16px; display: grid; gap: 2px }
+.kpi .n { font: 600 28px/1.1 var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap }
+.kpi .n small { font: 500 14px var(--mono); color: var(--muted); margin-left: 6px }
+.kpi .l { font-size: 12.5px; color: var(--muted) }
+.kpi.va .n { color: var(--va) } .kpi.wait .n { color: var(--wait) } .kpi.waste .n { color: var(--waste) } .kpi.fut .n { color: var(--teal) }
+.panel { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 18px 18px 16px; display: grid; gap: 12px }
+.panel > p { margin: 0; color: var(--muted); max-width: 84ch; font-size: 14px }
+/* the whole job as one strip of tasks */
+.strip { display: flex; height: 38px; border-radius: 6px; overflow: hidden; border: 1px solid var(--line) }
+.strip i { display: block; height: 100%; border-right: 1px solid var(--paper); min-width: 1px }
+.stages { display: flex; font: 500 11.5px var(--mono); color: var(--muted) }
+.stages span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; border-left: 1px solid var(--line); padding-left: 4px }
+.axis { display: flex; justify-content: space-between; font: 500 11px var(--mono); color: var(--muted) }
+.c-va { background: var(--va) } .c-nva { background: var(--nva) } .c-wait { background: var(--wait) } .c-waste { background: var(--waste) }
+/* per stage */
+.stage { border: 1px solid var(--line); border-radius: 10px; overflow: hidden }
+.stage > .hd { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: baseline; justify-content: space-between; padding: 12px 14px; background: var(--grid) }
+.stage > .hd h3 { margin: 0; font: 700 22px/1.1 var(--display); display: flex; gap: 10px; align-items: baseline }
+.stage > .hd h3 .no { font: 600 12px var(--mono); color: var(--muted) }
+.stage > .hd .tot { font: 500 13px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums }
+.stage > .hd .tot b { color: var(--ink) }
+.tasks { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 860px }
+.tasks th, .tasks td { text-align: left; padding: 8px 12px; border-top: 1px solid var(--line); vertical-align: top }
+.tasks th { font: 600 11.5px var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); background: var(--paper) }
+.tasks td.t { width: 30% } .tasks td.t b { font-weight: 600 } .tasks td.t div { color: var(--muted); font-size: 12.5px }
+.tasks td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right }
+.tasks td.bar { width: 22% } .tb { height: 10px; border-radius: 3px; background: var(--grid); overflow: hidden } .tb i { display: block; height: 100% }
+.chip { font: 600 11px var(--mono); padding: 2px 7px; border-radius: 999px; white-space: nowrap; display: inline-block }
+.chip.va { background: var(--va-soft); color: var(--va) } .chip.nva { background: var(--nva-soft); color: var(--nva) }
+.chip.wait { background: var(--wait-soft); color: var(--wait) } .chip.waste { background: var(--waste-soft); color: var(--waste) }
+.src { font: 500 11px var(--mono); color: var(--muted) } .src.est { font-style: italic }
+.fut { color: var(--teal) } .fut.same { color: var(--muted) }
+.scroll { overflow-x: auto; -webkit-overflow-scrolling: touch }
+.wastegrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 14px }
+.wcard { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 6px; align-content: start }
+.wcard h3 { margin: 0; font: 700 20px/1.1 var(--display); display: flex; justify-content: space-between; gap: 8px }
+.wcard h3 span { font: 600 14px var(--mono); color: var(--waste) } .wcard.w h3 span { color: var(--wait) }
+.wcard ul { margin: 0; padding-left: 18px; font-size: 13.5px; color: var(--muted) } .wcard li { margin: 2px 0 }
+.imp { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 760px }
+.imp th, .imp td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top }
+.imp th { font: 600 11.5px var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted) }
+.imp td.num { font-family: var(--mono); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--va) }
+.imp td .no { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--burst); color: #fff; font: 700 12px var(--mono) }
+.notes { font-size: 13px; color: var(--muted); display: grid; gap: 6px; max-width: 92ch } .notes p { margin: 0 }
+@media (max-width: 560px) { h1 { font-size: 36px } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Detailed value stream map · current state · C8000v DMVPN Portal</div>
+    <h1>Detailed Value Stream Map<small>Provision → Add a customer, task by task</small></h1>
+    <p class="lede">Every step of the Add-a-customer job broken into the tasks it actually performs, each with its time, what
+      kind of work it is, and <b>where the number comes from</b>: <b>measured</b> from the job's own log, <b>derived</b> from
+      the code and a measured total, or an <b>estimate</b>. The VyOS view is cust7's job (Sep 28), the Catalyst 8000v view cust5's
+      (Sep 27). The future column is what each task would take after the improvements below.</p>
+    <div class="controls">
+      <div class="seg" role="group" aria-label="Customer router type">
+        <button type="button" id="p-c8000v" aria-pressed="true">Catalyst 8000v customer</button>
+        <button type="button" id="p-vyos" aria-pressed="false">VyOS customer</button>
+      </div>
+      <div class="legend">
+        <span><i class="sw c-va"></i>Value-adding</span>
+        <span><i class="sw c-nva"></i>Necessary, not value-adding</span>
+        <span><i class="sw c-wait"></i>Waiting</span>
+        <span><i class="sw c-waste"></i>Waste: over-processing or duplicated</span>
+      </div>
+    </div>
+  </header>
+
+  <section class="kpis" aria-label="Summary">
+    <div class="kpi"><span class="n" id="k-lead">–</span><span class="l">Lead time (idle queue)</span></div>
+    <div class="kpi va"><span class="n" id="k-va">–</span><span class="l">Value-adding</span></div>
+    <div class="kpi wait"><span class="n" id="k-wait">–</span><span class="l">Waiting (boots, sleeps, pacing)</span></div>
+    <div class="kpi waste"><span class="n" id="k-waste">–</span><span class="l">Over-processing and duplicated work</span></div>
+    <div class="kpi"><span class="n" id="k-tasks">–</span><span class="l">Tasks mapped</span></div>
+    <div class="kpi fut"><span class="n" id="k-fut">–</span><span class="l">Future lead time, all improvements</span></div>
+  </section>
+
+  <section class="panel">
+    <h2>The whole job, one task after another</h2>
+    <p>Each block is one task, as wide as the time it takes, coloured by the kind of work. The row above names the step. Hover a block for the task.</p>
+    <div class="stages" id="stages"></div>
+    <div class="strip" id="strip"></div>
+    <div class="axis" id="axis"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Step by step</h2>
+    <div id="detail" style="display:grid;gap:14px"></div>
+  </section>
+
+  <section class="panel">
+    <h2>The waste the tasks reveal</h2>
+    <p>Grouped the Lean way. Every item is a task above; the totals are for the selected router type.</p>
+    <div class="wastegrid" id="waste"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Improvements, ranked by the time they save</h2>
+    <div class="scroll"><table class="imp"><thead><tr><th></th><th>Improvement</th><th>Changes</th><th>Saves</th><th>Basis</th></tr></thead><tbody id="imp"></tbody></table></div>
+  </section>
+
+  <section class="panel">
+    <h2>Method</h2>
+    <div class="notes">
+      <p><b>Measured</b> times come from the job records the portal keeps (webapp/runs/): every log line carries its time,
+        so a task is the span between the lines that start and end it. The test suites are timed per test by Robot Framework.</p>
+      <p><b>Derived</b> times split a measured total using the code. The VyOS day-0 push waits for its prompt in 2-second read
+        windows (tools/vyos_console.py), so its 165 configuration lines take at least 330 s; the kernel log shows the router
+        itself booted in about 32 s. The C8000v bootstrap (lab.sh) boots, pushes day-0, reloads for the licence level after a
+        fixed 60-second sleep, boots again and polls RESTCONF every 10 s; its phases are split by those rules and its console
+        timings, and only the 561 s total is measured.</p>
+      <p><b>Estimates</b> are the operator's planning time and the future times that depend on work not yet done (a scoped
+        Nautobot seed, customer-scoped tests, a golden image). Future times of tasks moved into parallel with the boot count as
+        zero on the critical path.</p>
+      <p>The C8000v job (cust5, Sep 27) ran before the configuration snapshots existed; its snapshot tasks use cust7's 4 s.
+        The test suite has grown since (74 tests for cust7, fewer for cust5), which is part of why cust7's tests took longer.</p>
+    </div>
+  </section>
+</div>
+
+<script>
+// c: va | nva | wait | waste · s: m (measured) | d (derived) | e (estimate) · f: future seconds (0 = removed), par: runs in parallel in the future
+const STAGES = [
+  { k: 'op', t: 'Plan & submit', who: 'Operator in the portal' },
+  { k: 'prep', t: 'Prepare', who: 'Job' },
+  { k: 'boot', t: 'Day-0 boot', who: 'Job · serial console' },
+  { k: 'nac', t: 'NAC apply', who: 'Job · Terraform, RESTCONF' },
+  { k: 'prov', t: 'Provider link', who: 'Job · VyOS push over SSH' },
+  { k: 'nb', t: 'Nautobot seed', who: 'Job · Nautobot REST API' },
+  { k: 'ver', t: 'Verify', who: 'Job' },
+  { k: 'test', t: 'Tests', who: 'Job · Robot Framework' },
+];
+const OP = [
+  { g: 'op', t: 'Open Add a customer', d: 'the next name, addresses, ports and tunnel index arrive pre-filled', x: 10, c: 'nva', s: 'e', f: 10 },
+  { g: 'op', t: 'Choose what the customer bought', d: 'router type, preferred hub, second provider, applications, company', x: 60, c: 'va', s: 'e', f: 60 },
+  { g: 'op', t: 'Review the plan and capacity, submit', d: 'each change re-validates against the running lab in about a second', x: 50, c: 'nva', s: 'e', f: 50 },
+];
+const PREP = [
+  { g: 'prep', t: 'Snapshot every router', d: "each router's running configuration read over SSH, in parallel", x: 4, c: 'nva', s: 'm', f: 4 },
+  { g: 'prep', t: 'Validate against the running lab', d: 'addresses, ports, index, names still free', x: 0.4, c: 'nva', s: 'm', f: 0.4 },
+  { g: 'prep', t: 'Register in lab.conf and render', d: 'the intent written once; configurations generated', x: 0.4, c: 'va', s: 'm', f: 0.4 },
+  { g: 'prep', t: 'Create disks, seed ISO, start the VMs', d: 'overlay disk on the base image; the LAN host gets cloud-init', x: 3, c: 'va', s: 'm', f: 3 },
+];
+const DATA = {
+  c8000v: [
+    ...OP, ...PREP,
+    { g: 'boot', t: 'First boot to the console prompt', d: 'IOS XE boots from the base image (3–5 min on first boot)', x: 240, c: 'wait', s: 'd', f: 150 },
+    { g: 'boot', t: 'Push day-0 over the console', d: '43 lines + SSH key generation; returns as soon as each prompt appears', x: 30, c: 'va', s: 'd', f: 30 },
+    { g: 'boot', t: 'Licence level check, write memory, reload', d: 'the crypto feature set needs network-advantage, active only after a reload', x: 15, c: 'nva', s: 'd', f: 0 },
+    { g: 'boot', t: 'Fixed sleep after the reload', d: 'sleep 60 in lab.sh, whatever the router is doing', x: 60, c: 'wait', s: 'd', f: 0 },
+    { g: 'boot', t: 'Second boot to the prompt', d: 'the licence level takes effect', x: 180, c: 'wait', s: 'd', f: 0 },
+    { g: 'boot', t: 'Poll RESTCONF every 10 s', d: 'until Network-as-Code can reach the router', x: 36, c: 'wait', s: 'd', f: 20 },
+    { g: 'nac', t: 'terraform init, render check', d: '', x: 1.5, c: 'nva', s: 'm', f: 1.5 },
+    { g: 'nac', t: 'Plan: refresh every router’s state', d: 'reads all 7 C8000vs over RESTCONF, though only one is new', x: 29, c: 'waste', s: 'm', f: 5 },
+    { g: 'nac', t: 'Apply 39 resources, one at a time', d: '-parallelism=1: interfaces, tunnel, crypto, BGP on the new router', x: 32, c: 'va', s: 'm', f: 12 },
+    { g: 'nac', t: 'write memory on every C8000v', d: '7 routers, ~1.9 s each; only the new one changed', x: 13, c: 'waste', s: 'm', f: 2 },
+    { g: 'prov', t: 'Push the provider (mpls)', d: 'address the new access link; reconcile 1 line', x: 37, c: 'va', s: 'm', f: 37, par: true },
+    { g: 'prov', t: 'Re-push every VyOS customer', d: 'cust4 re-pushed (122 lines) and its hook re-run; nothing changed', x: 29, c: 'waste', s: 'm', f: 0 },
+    { g: 'nb', t: 'Seed: walk every object of the lab', d: '56 changes for one customer; the whole lab is compared through the REST API', x: 149, c: 'nva', s: 'm', f: 20, par: true },
+    { g: 'ver', t: 'Wait for NHRP, IPsec and BGP to settle', d: '', x: 6.5, c: 'wait', s: 'm', f: 6.5 },
+    { g: 'ver', t: 'Every host pings every other host', d: '20 pairs', x: 54, c: 'nva', s: 'm', f: 54 },
+    { g: 'ver', t: 'Render from Nautobot, compare with lab.conf', d: 'byte for byte, every file', x: 1.5, c: 'nva', s: 'm', f: 1.5 },
+    { g: 'ver', t: 'Snapshot every router again', d: 'for the job’s configuration diff', x: 4, c: 'nva', s: 'm', f: 4 },
+    { g: 'test', t: 'Capture configurations before and after', d: 'the test run’s own evidence, on top of the job’s snapshots', x: 66, c: 'waste', s: 'm', f: 10 },
+    { g: 'test', t: '01 Management', d: '7 tests', x: 36, c: 'nva', s: 'm', f: 0 },
+    { g: 'test', t: '02 Underlay', d: '5 tests', x: 59, c: 'nva', s: 'm', f: 0 },
+    { g: 'test', t: '03 DMVPN', d: '6 tests', x: 40, c: 'nva', s: 'm', f: 0 },
+    { g: 'test', t: '04 Routing, less the ping-all', d: '7 tests', x: 86, c: 'nva', s: 'm', f: 0 },
+    { g: 'test', t: '04 Routing: every host pings every other', d: 'the same matrix Verify ran minutes earlier', x: 43, c: 'waste', s: 'm', f: 0 },
+    { g: 'test', t: '05 NAC compliance', d: '3 tests', x: 28, c: 'nva', s: 'm', f: 0 },
+    { g: 'test', t: '06 Nautobot: model in sync with lab.conf', d: 'repeats the seed’s full walk', x: 126, c: 'waste', s: 'm', f: 0 },
+    { g: 'test', t: '06 Nautobot, the rest', d: '5 tests', x: 11, c: 'nva', s: 'm', f: 0 },
+    { g: 'test', t: '07 Portal: ping every host from the map', d: 'the matrix a third time', x: 73, c: 'waste', s: 'm', f: 0 },
+    { g: 'test', t: '07 Portal, the rest', d: '10 tests', x: 49, c: 'nva', s: 'm', f: 0 },
+    { g: 'test', t: '08 VyOS customers', d: '6 tests', x: 20, c: 'nva', s: 'm', f: 0 },
+    { g: 'test', t: 'Customer-scoped checks (future)', d: 'the new site’s registrations, routes, reachability, applications; full suite nightly', x: 0, c: 'nva', s: 'e', f: 150 },
+  ],
+  vyos: [
+    ...OP, ...PREP,
+    { g: 'boot', t: 'Boot to the login prompt', d: 'the kernel log shows the configuration loaded at 32 s', x: 40, c: 'wait', s: 'd', f: 40 },
+    { g: 'boot', t: 'Push 165 set-lines, 2 s read window each', d: 'vyos_console.py reads for 2 s before it looks for the prompt', x: 330, c: 'wait', s: 'd', f: 10 },
+    { g: 'boot', t: 'Commit and save', d: '', x: 8, c: 'va', s: 'd', f: 8 },
+    { g: 'boot', t: 'Wait for SSH, install the IKE hook', d: 'keeps its IKE proposal IOS-compatible', x: 12, c: 'nva', s: 'd', f: 12 },
+    { g: 'nac', t: 'terraform init, render check', d: 'for a customer with no C8000v resources', x: 1.4, c: 'waste', s: 'm', f: 0 },
+    { g: 'nac', t: 'Plan and apply: 0 changes', d: 'refreshes all 5 C8000vs to find nothing to do', x: 29.6, c: 'waste', s: 'm', f: 0 },
+    { g: 'nac', t: 'write memory on every C8000v', d: '5 routers; none changed', x: 6.3, c: 'waste', s: 'm', f: 0 },
+    { g: 'prov', t: 'Push the provider (mpls)', d: 'address the new access link; reconcile 1 line', x: 13.9, c: 'va', s: 'm', f: 13.9, par: true },
+    { g: 'prov', t: 'Re-push the second provider (mpls2)', d: 'cust7 is not dual-homed: nothing changed', x: 10.3, c: 'waste', s: 'm', f: 0 },
+    { g: 'prov', t: 'Re-push cust4, cust5, cust6', d: '433 lines and three hook runs; nothing changed', x: 60.3, c: 'waste', s: 'm', f: 0 },
+    { g: 'prov', t: 'Re-push cust7 itself', d: 'day-0 was applied minutes earlier', x: 16.3, c: 'waste', s: 'm', f: 0 },
+    { g: 'nb', t: 'Seed: walk every object of the lab', d: '57 changes for one customer; the whole lab is compared through the REST API', x: 133, c: 'nva', s: 'm', f: 20, par: true },
+    { g: 'ver', t: 'Wait for NHRP, IPsec and BGP to settle', d: '', x: 6, c: 'wait', s: 'm', f: 6 },
+    { g: 'ver', t: 'Every host pings every other host', d: '30 pairs', x: 64, c: 'nva', s: 'm', f: 64 },
+    { g: 'ver', t: 'Render from Nautobot, compare with lab.conf', d: 'byte for byte, 12 files', x: 2.3, c: 'nva', s: 'm', f: 2.3 },
+    { g: 'ver', t: 'Snapshot every router again', d: 'for the job’s configuration diff', x: 4, c: 'nva', s: 'm', f: 4 },
+    { g: 'test', t: 'Capture configurations before and after', d: 'the test run’s own evidence, on top of the job’s snapshots', x: 34, c: 'waste', s: 'm', f: 10 },
+    { g: 'test', t: '01 Management', d: '7 tests', x: 24, c: 'nva', s: 'm', f: 0 },
+    { g: 'test', t: '02 Underlay', d: '6 tests', x: 46, c: 'nva', s: 'm', f: 0 },
+    { g: 'test', t: '03 DMVPN', d: '7 tests', x: 32, c: 'nva', s: 'm', f: 0 },
+    { g: 'test', t: '04 Routing, less the ping-all', d: '10 tests', x: 80, c: 'nva', s: 'm', f: 0 },
+    { g: 'test', t: '04 Routing: every host pings every other', d: 'the same matrix Verify ran minutes earlier', x: 64, c: 'waste', s: 'm', f: 0 },
+    { g: 'test', t: '05 NAC compliance', d: '3 tests', x: 22, c: 'nva', s: 'm', f: 0 },
+    { g: 'test', t: '06 Nautobot: model in sync with lab.conf', d: 'repeats the seed’s full walk', x: 129, c: 'waste', s: 'm', f: 0 },
+    { g: 'test', t: '06 Nautobot, the rest', d: '5 tests', x: 5, c: 'nva', s: 'm', f: 0 },
+    { g: 'test', t: '07 Portal: ping every host from the map', d: 'the matrix a third time', x: 105, c: 'waste', s: 'm', f: 0 },
+    { g: 'test', t: '07 Portal, the rest', d: '27 tests (the map PDFs take 29 s)', x: 139, c: 'nva', s: 'm', f: 0 },
+    { g: 'test', t: '08 VyOS customers', d: '6 tests', x: 87, c: 'nva', s: 'm', f: 0 },
+    { g: 'test', t: 'Customer-scoped checks (future)', d: 'the new site’s registrations, routes, reachability, applications; full suite nightly', x: 0, c: 'nva', s: 'e', f: 150 },
+  ],
+};
+// improvements: which tasks they change (by title fragment) and, for each, the basis
+const IMPS = [
+  { n: 1, t: 'Test the new customer, not the whole lab', m: t => t.g === 'test', basis: 'measured suites; scoped run of ~2½ min estimated' },
+  { n: 2, t: 'Stop pacing the VyOS console at 2 s a line', m: t => /2 s read window/.test(t.t), basis: 'code + measured total; a fix returns at the prompt', only: 'vyos' },
+  { n: 3, t: 'Boot from a golden image (licence level preset)', m: t => t.g === 'boot' && /boot|Licence|sleep|RESTCONF/i.test(t.t) && !/Push/.test(t.t), basis: 'derived phases; the shorter first boot is an estimate', only: 'c8000v' },
+  { n: 4, t: 'Push only what changes: the provider, not every VyOS router', m: t => /Re-push/.test(t.t), basis: 'measured' },
+  { n: 5, t: 'Seed only the new customer, alongside the boot', m: t => t.g === 'nb', basis: 'measured walk; scoped seed estimated' },
+  { n: 6, t: 'Run Terraform only when there is something to apply, and only on the new router', m: t => t.g === 'nac' && t.c === 'waste' || (t.g === 'nac' && /Apply 39/.test(t.t)), basis: 'measured; -target and parallelism estimated' },
+  { n: 7, t: 'Move the provider push alongside the boot', m: t => t.g === 'prov' && t.par, basis: 'measured' },
+];
+
+const $ = id => document.getElementById(id);
+const fmt = s => s >= 60 ? `${(s / 60).toFixed(1)} min` : s >= 10 ? `${Math.round(s)} s` : `${(+s).toFixed(1).replace(/\.0$/, '')} s`;
+const CLS = { va: 'value-adding', nva: 'necessary', wait: 'waiting', waste: 'waste' };
+const SRC = { m: 'measured', d: 'derived', e: 'estimate' };
+const fut = t => (t.par ? 0 : t.f);
+let plat = 'c8000v';
+
+function draw() {
+  const T = DATA[plat].filter(t => t.x > 0 || t.f > 0);
+  const cur = T.filter(t => t.x > 0);
+  const lead = cur.reduce((a, t) => a + t.x, 0);
+  const sum = c => cur.filter(t => t.c === c).reduce((a, t) => a + t.x, 0);
+  const future = T.reduce((a, t) => a + fut(t), 0);
+  $('k-lead').textContent = fmt(lead); $('k-va').innerHTML = `${fmt(sum('va'))}<small>${Math.round(100 * sum('va') / lead)}%</small>`;
+  $('k-wait').innerHTML = `${fmt(sum('wait'))}<small>${Math.round(100 * sum('wait') / lead)}%</small>`;
+  $('k-waste').innerHTML = `${fmt(sum('waste'))}<small>${Math.round(100 * sum('waste') / lead)}%</small>`;
+  $('k-tasks').textContent = cur.length; $('k-fut').textContent = `${fmt(future)}`;
+
+  // strip
+  $('strip').innerHTML = cur.map(t => `<i class="c-${t.c}" style="flex:${t.x} 0 0" title="${STAGES.find(s => s.k === t.g).t} · ${t.t} · ${fmt(t.x)} (${CLS[t.c]}, ${SRC[t.s]})"></i>`).join('');
+  $('stages').innerHTML = STAGES.map(s => { const x = cur.filter(t => t.g === s.k).reduce((a, t) => a + t.x, 0); return `<span style="flex:${x} 0 0" title="${s.t}">${s.t}</span>`; }).join('');
+  const ticks = []; for (let m = 0; m * 60 <= lead; m += 5) ticks.push(`<span>${m} min</span>`);
+  $('axis').innerHTML = ticks.join('') + `<span>${fmt(lead)}</span>`;
+
+  // per stage
+  const max = Math.max(...T.map(t => t.x));
+  $('detail').innerHTML = STAGES.map((s, i) => {
+    const ts = T.filter(t => t.g === s.k), x = ts.reduce((a, t) => a + t.x, 0), f = ts.reduce((a, t) => a + fut(t), 0);
+    const rows = ts.map(t => `<tr><td class="t"><b>${t.t}</b>${t.d ? `<div>${t.d}</div>` : ''}</td>
+      <td><span class="chip ${t.c}">${CLS[t.c]}</span></td>
+      <td class="bar"><div class="tb"><i class="c-${t.c}" style="width:${(100 * t.x / max).toFixed(1)}%"></i></div></td>
+      <td class="num">${t.x ? fmt(t.x) : '—'}</td>
+      <td class="num fut ${fut(t) === t.x ? 'same' : ''}">${t.par ? 'in parallel' : t.f ? fmt(t.f) : 'removed'}</td>
+      <td><span class="src ${t.s === 'e' ? 'est' : ''}">${SRC[t.s]}</span></td></tr>`).join('');
+    return `<div class="stage"><div class="hd"><h3><span class="no">${i + 1}</span>${s.t} <span class="src">${s.who}</span></h3>
+      <span class="tot">now <b>${fmt(x)}</b> · ${Math.round(100 * x / lead)}% of the lead time · future <b>${f ? fmt(f) : '0 s'}</b></span></div>
+      <div class="scroll"><table class="tasks"><thead><tr><th>Task</th><th>Kind</th><th>Time</th><th>Now</th><th>Future</th><th>Source</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+  }).join('');
+
+  // waste groups
+  const grp = (title, cls, test) => { const ts = cur.filter(test); const x = ts.reduce((a, t) => a + t.x, 0);
+    return ts.length ? `<div class="wcard ${cls}"><h3>${title}<span>${fmt(x)}</span></h3><ul>${ts.map(t => `<li>${t.t} — ${fmt(t.x)}</li>`).join('')}</ul></div>` : ''; };
+  $('waste').innerHTML =
+    grp('Waiting', 'w', t => t.c === 'wait') +
+    grp('Duplicated checks', '', t => t.c === 'waste' && /pings every|in sync with|ping every host|Capture configurations/.test(t.t)) +
+    grp('Over-processing', '', t => t.c === 'waste' && !/pings every|in sync with|ping every host|Capture configurations/.test(t.t)) +
+    `<div class="wcard"><h3>Defects and rework<span>3 of 7</span></h3><ul><li>First attempts that failed: a provider push timed out once; verify or the tests ran before routing settled twice</li><li>Each failure costs a resume (0.6–10 min) and an operator’s attention</li></ul></div>` +
+    `<div class="wcard w"><h3>Inventory and hand-offs<span>0–26 min</span></h3><ul><li>The job queue: one job at a time</li><li>The order arrives, and the customer hears it is live, outside the portal</li></ul></div>`;
+
+  // improvements, ranked
+  const rows = IMPS.filter(im => !im.only || im.only === plat).map(im => {
+    const ts = T.filter(im.m); const save = ts.reduce((a, t) => a + t.x - fut(t), 0);
+    return { ...im, ts, save };
+  }).sort((a, b) => b.save - a.save);
+  $('imp').innerHTML = rows.map(r => `<tr><td><span class="no">${r.n}</span></td><td><b>${r.t}</b></td>
+    <td>${r.ts.filter(t => t.x !== fut(t)).map(t => `${t.t} <span class="src">${t.x ? fmt(t.x) : '—'} → ${t.par ? 'parallel' : t.f ? fmt(t.f) : '0'}</span>`).join('<br>')}</td>
+    <td class="num">${r.save > 0 ? '− ' + fmt(r.save) : '+ ' + fmt(-r.save)}</td><td><span class="src">${r.basis}</span></td></tr>`).join('');
+}
+
+['c8000v', 'vyos'].forEach(p => $('p-' + p).addEventListener('click', () => {
+  plat = p; ['c8000v', 'vyos'].forEach(q => $('p-' + q).setAttribute('aria-pressed', String(q === p)));
+  try { localStorage.setItem('dvsm-plat', p); } catch (e) {}
+  draw();
+}));
+try { const s = localStorage.getItem('dvsm-plat'); if (s && DATA[s]) { plat = s; ['c8000v', 'vyos'].forEach(q => $('p-' + q).setAttribute('aria-pressed', String(q === s))); } } catch (e) {}
+draw();
+</script>

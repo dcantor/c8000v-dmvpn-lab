@@ -11,6 +11,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 While the version is 0.x, the lab's interfaces are still settling. The current version is in [`VERSION`](VERSION), in
 the portal's header, and in git as a `v<version>` tag.
 
+## [0.22.3] — 2026-09-28
+
+### Added
+- **A Detailed Value Stream Map of Provision → Add a customer, in `docs/value-stream/DETAILED.md`.** It has an
+  interactive version (`detailed.html`) and breaks every step into its tasks: 36 for a C8000v customer and 35 for a
+  VyOS one. Each task has its time, its kind (value-adding, necessary, waiting or waste) and its source (measured from
+  the job log, derived from the code, or an estimate).
+  - **Value-adding share:** only 5–10% of the lead time.
+  - **VyOS day-0:** takes 330 s of a 390 s bootstrap, because `tools/vyos_console.py` reads for 2 s per configuration
+    line. The router itself boots in about 32 s.
+  - **Duplicated checks:** every host pings every other three times per job, and Nautobot is walked twice.
+  - **Unneeded pushes:** the Provider link step re-pushes every VyOS router, and NAC refreshes and saves every C8000v.
+    For a VyOS customer, NAC runs for 37 s with nothing to apply.
+  - **Improvements:** ranked by the time they save, for each router type.
+
 ## [0.22.2] — 2026-09-28
 
 ### Added
@@ -607,6 +622,7 @@ the portal's header, and in git as a `v<version>` tag.
   - `nac/`, Network-as-Code for the C8000vs.
   - Robot suites, the README, and the first Nautobot seed.
 
+[0.22.3]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.22.2...v0.22.3
 [0.22.2]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.22.1...v0.22.2
 [0.22.1]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.22.0...v0.22.1
 [0.22.0]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.21.6...v0.22.0

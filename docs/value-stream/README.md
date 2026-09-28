@@ -9,6 +9,7 @@ Sep 26 and Sep 28, 2026, all of them finished. The operator's planning time, abo
 - **Interactive version:** [`add-customer.html`](add-customer.html). It switches between a Catalyst 8000v and a VyOS
   customer and lists every job behind the numbers. Download it and open it in a browser; GitHub shows its source only.
 - **Images:** `capture.py` redraws them from that page.
+- **Task-level detail:** [**Detailed Value Stream Map**](DETAILED.md) breaks every step into its tasks (35–36 of them), each timed from the job logs.
 
 ## Catalyst 8000v customer
 
