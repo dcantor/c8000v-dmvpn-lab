@@ -32,3 +32,4 @@ webapp/confighist/
 webapp/maintenance/
 secrets/
 nac/data/secrets.nac.yaml
+docs/presentation/recordings/

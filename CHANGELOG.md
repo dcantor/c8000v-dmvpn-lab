@@ -11,6 +11,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 While the version is 0.x, the lab's interfaces are still settling. The current version is in [`VERSION`](VERSION), in
 the portal's header, and in git as a `v<version>` tag.
 
+## [0.21.4] — 2026-09-27
+
+### Added
+- **A demo video, `docs/presentation/c8000v-dmvpn-portal-demo.mp4`** (6 min 21 s, 1920x1080, H.264, captioned).
+  - It uses the deck's slides for the problem, the solution, the section openers, the results and the summary.
+  - Between them are recorded walkthroughs of the live lab:
+    - the portal as an admin: the cloud, the map and a phase 3 shortcut forming, SLA, resilience, Provision's plans,
+      change control, and the pre-shared key rotation's masked diff;
+    - the portal as a customer;
+    - Nautobot;
+    - Grafana.
+  - `demo.py` records the walkthroughs, with captions, a pointer and highlight rings drawn into the page, and starts
+    no job.
+  - `make_video.py` assembles the MP4.
+
 ## [0.21.3] — 2026-09-27
 
 ### Changed
@@ -526,6 +541,7 @@ the portal's header, and in git as a `v<version>` tag.
   - `nac/`, Network-as-Code for the C8000vs.
   - Robot suites, the README, and the first Nautobot seed.
 
+[0.21.4]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.21.3...v0.21.4
 [0.21.3]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.21.2...v0.21.3
 [0.21.2]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.21.1...v0.21.2
 [0.21.1]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.21.0...v0.21.1

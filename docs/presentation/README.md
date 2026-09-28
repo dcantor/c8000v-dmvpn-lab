@@ -1,4 +1,4 @@
-# The portal presentation
+# The portal presentation and demo video
 
 `c8000v-dmvpn-portal.pptx` (61 slides, 16:9, with speaker notes) and `c8000v-dmvpn-portal.pdf` present the portal.
 They cover the problem it solves, what it does and its capabilities. Then come four sections of annotated screenshots: the tour; Provision in depth, with every task and its dialog, plan and job; change control; customers, access and the API; Nautobot, where the customers and the VPN are modelled; and monitoring in Grafana. On each
@@ -9,6 +9,8 @@ screenshot, numbered callouts match the explanations beside it.
 | `capture.py` | signs in to the running portal, takes the screenshots into `shots/`, and writes the box of every element a callout points at into `shots/boxes.json` |
 | `build.py` | `shots/` → the .pptx |
 | `nb_session.py` | signs in to Nautobot once: it asks for the username and password in the terminal and keeps the session in `~/.cache/c8d/nautobot-state.json`, outside the repo |
+| `demo.py` | records the demo walkthrough (the portal as staff and as a customer, Nautobot, Grafana) as browser videos, with captions, a pointer and highlight rings drawn into the page; the recordings go to `recordings/` (not in git) |
+| `make_video.py` | the recordings and slides from the PDF → `c8000v-dmvpn-portal-demo.mp4` (1920x1080, H.264, about 6 minutes) |
 | `topdf.py` | the .pptx → the .pdf, drawn from the slides themselves, so no office suite is needed |
 
 ## Rebuilding
@@ -28,3 +30,21 @@ The figures on the Results slide come from the lab on 2026-09-27 and are written
 The PDF uses Liberation Sans in place of Calibri. The footer shows the version from `VERSION`.
 
 The capture only opens dialogs and pages: it starts no job. The Restore slide uploads the oldest backup to show its plan, and the portal keeps that upload as a copy, which the capture then deletes.
+
+## The demo video
+
+`c8000v-dmvpn-portal-demo.mp4` runs about 6 minutes, with captions and no narration. It opens with the title,
+problem, solution and capabilities slides, then walks through:
+- the portal: the cloud, the map and a phase 3 shortcut forming, SLA, resilience, Provision's plans, change control
+  and the rotation job's diff;
+- the customer's own view;
+- Nautobot: tenant, the hub's tunnels, prefixes, BGP and the config context;
+- Grafana.
+
+It closes with the results and summary slides. Recording starts no job.
+
+```bash
+webapp/.venv/bin/python docs/presentation/demo.py          # or one segment: portal | customer | nautobot | grafana
+/tmp/deck/bin/pip install imageio-ffmpeg                   # when there is no ffmpeg with libx264
+/tmp/deck/bin/python docs/presentation/make_video.py
+```
