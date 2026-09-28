@@ -11,6 +11,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 While the version is 0.x, the lab's interfaces are still settling. The current version is in [`VERSION`](VERSION), in
 the portal's header, and in git as a `v<version>` tag.
 
+## [0.21.6] — 2026-09-27
+
+### Added
+- **Music in both demo videos.** It plays on the opening slides, on each section transition and on the closing
+  summary. The deck and the PDF are unchanged.
+  - `music.py` composes it in code, so no track is downloaded or licensed: a calm, business-style instrumental in C
+    major at 96 bpm, with piano arpeggios, a pad, bass and light drums.
+  - The pieces are a continuous bed under the intro, a swell-and-chord sting for each transition, and an outro that
+    ends on a held chord and fades out.
+  - In the narrated video, a sidechain compressor ducks the music under the voice.
+  - `make_video.py --no-music` builds either video without it.
+
 ## [0.21.5] — 2026-09-27
 
 ### Added
@@ -552,6 +564,7 @@ the portal's header, and in git as a `v<version>` tag.
   - `nac/`, Network-as-Code for the C8000vs.
   - Robot suites, the README, and the first Nautobot seed.
 
+[0.21.6]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.21.5...v0.21.6
 [0.21.5]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.21.4...v0.21.5
 [0.21.4]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.21.3...v0.21.4
 [0.21.3]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.21.2...v0.21.3

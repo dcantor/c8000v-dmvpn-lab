@@ -12,6 +12,7 @@ screenshot, numbered callouts match the explanations beside it.
 | `demo.py` | records the demo walkthrough (the portal as staff and as a customer, Nautobot, Grafana) as browser videos, with captions, a pointer and highlight rings drawn into the page; the recordings go to `recordings/` (not in git) |
 | `make_video.py` | the recordings and slides from the PDF → `c8000v-dmvpn-portal-demo.mp4` (1920x1080, H.264, about 6 minutes) |
 | `narration.py` | the voice-over script, one line per scene, synthesized with Piper into `recordings/voice/` |
+| `music.py` | the videos' music, composed in code (no samples, nothing downloaded): a bed for the opening slides, a transition sting, a closing piece |
 | `topdf.py` | the .pptx → the .pdf, drawn from the slides themselves, so no office suite is needed |
 
 ## Rebuilding
@@ -64,3 +65,15 @@ webapp/.venv/bin/python docs/presentation/demo.py --narrated          # recordin
 
 The Lessac voice was trained on the Blizzard 2013 Lessac data, which is licensed for research use. Check that licence
 before using the narrated video commercially.
+
+### Music
+
+Both videos have music on:
+- the opening slides (a continuous bed);
+- each section transition (a short swell into a chord);
+- the closing summary (it resolves and fades out).
+
+The walkthroughs themselves have none. `music.py` composes the music: a calm instrumental in C major at 96 bpm, over
+I–V–vi–IV, with piano arpeggios, a pad, bass and light drums. Because it is generated, there is no licence to track.
+In the narrated video, a sidechain compressor ducks the music about 10 dB under the voice.
+`make_video.py --no-music` leaves the music out.

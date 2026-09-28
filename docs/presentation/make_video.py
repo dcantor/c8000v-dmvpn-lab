@@ -6,6 +6,8 @@ Needs ffmpeg with libx264: FFMPEG=/path/to/ffmpeg, or ffmpeg on the PATH, or the
     python docs/presentation/make_video.py --narrated   # with the voice-over: c8000v-dmvpn-portal-demo-narrated.mp4
 
 --narrated uses the recordings demo.py --narrated made (paced to the voice) and the lines narration.py synthesized.
+Music (music.py, composed here) plays under the opening slides, on the section transitions and under the closing
+summary; under narration it ducks. --no-music leaves it out.
 """
 import json
 import os
@@ -17,6 +19,7 @@ from pathlib import Path
 
 D = Path(__file__).resolve().parent
 NARRATED = "--narrated" in sys.argv
+MUSIC = "--no-music" not in sys.argv
 VOICE_DIR = D / "recordings" / "voice"
 REC = D / "recordings" / ("narrated" if NARRATED else "")
 BUILD = REC / "_build"
@@ -54,6 +57,12 @@ PLAN = [
     ("Measured, not assumed", 10, "s_results"), ("In short", 9, "s_summary"),
 ]
 LEAD = 0.6                                                      # a slide's voice starts this long after it appears
+INTRO = ["C8000v DMVPN Portal", "Running a DMVPN service by hand does not scale", "What the portal does", "Capabilities at a glance"]
+TRANSITIONS = ["A tour of the portal", "Customers, access and the API", "Source of truth: Nautobot", "How the lab is monitored"]
+SUMMARY = "In short"
+GAIN = {"bed": 0.32, "sting": 0.45, "outro": 0.38}                # music level alone; under the voice it ducks further
+if not NARRATED:                                                  # no voice to sit under: the music carries the slides
+    GAIN = {k: round(v * 1.9, 2) for k, v in GAIN.items()}
 
 
 def run(args):
@@ -79,27 +88,53 @@ def page_titles():
     return out
 
 
-def audio_args(lines, secs):
-    """ffmpeg inputs and filter for a clip's sound: each (seconds, key) line delayed into place, silence elsewhere."""
-    if not NARRATED or not lines:
+def audio_args(lines, secs, music=None):
+    """ffmpeg inputs and filter for a clip's sound: each (seconds, key) voice line delayed into place, and the music
+    (wav, offset, gain) under it, ducked by the voice; silence when there is neither."""
+    lines = lines if NARRATED else []
+    if not lines and not music:
         return SILENCE, ["-map", "0:v", "-map", "1:a"]
     ins, parts = [], []
     for i, (t, key) in enumerate(lines):
         ins += ["-i", str(VOICE_DIR / f"{key}.wav")]
         ms = max(0, int(t * 1000))
         parts.append(f"[{i + 1}:a]aresample=48000,aformat=channel_layouts=stereo,adelay={ms}|{ms}[a{i}]")
-    mix = "".join(f"[a{i}]" for i in range(len(lines)))
-    graph = ";".join(parts) + f";{mix}amix=inputs={len(lines)}:normalize=0:dropout_transition=0,apad,atrim=0:{secs:.2f}[aout]"
+    if lines:
+        parts.append("".join(f"[a{i}]" for i in range(len(lines))) + f"amix=inputs={len(lines)}:normalize=0:dropout_transition=0,apad=whole_dur={secs:.2f}[vox]")
+    out = "[vox]"
+    if music:
+        wav, offset, gain = music
+        ins += ["-ss", f"{offset:.3f}", "-t", f"{secs:.3f}", "-i", str(wav)]
+        parts.append(f"[{len(lines) + 1}:a]aresample=48000,aformat=channel_layouts=stereo,volume={gain}[mus]")
+        if lines:
+            parts.append("[vox]asplit=2[vx][sc];[mus][sc]sidechaincompress=threshold=0.012:ratio=10:attack=15:release=600[md];"
+                         "[vx][md]amix=inputs=2:normalize=0:dropout_transition=0[mixed]")
+            out = "[mixed]"
+        else:
+            out = "[mus]"
+    graph = ";".join(parts) + f";{out}apad,atrim=0:{secs:.2f}[aout]"
     return ins, ["-filter_complex", graph, "-map", "0:v", "-map", "[aout]"]
 
 
-def slide_clip(page, secs, out, key=None):
+def slide_secs(secs, key):
+    return max(secs, LEAD + VOICE[key]["secs"] + 1.0) if NARRATED and key else secs
+
+
+def render_music(kind, secs):
+    """music.py's piece, `secs` long, as a wav in the build folder."""
+    sys.path.insert(0, str(D))
+    import music
+    path = BUILD / f"music-{kind}-{len(list(BUILD.glob('music-*')))}.wav"
+    music.write(path, getattr(music, kind)(secs))
+    return path
+
+
+def slide_clip(page, secs, out, key=None, music=None):
     png = BUILD / f"p{page:02d}"
     subprocess.run(["pdftoppm", "-png", "-r", "144", "-scale-to-x", "1920", "-scale-to-y", "1080", "-f", str(page), "-l", str(page),
                     "-singlefile", str(PDF), str(png)], check=True)
-    if NARRATED and key:
-        secs = max(secs, LEAD + VOICE[key]["secs"] + 1.0)
-    ains, amap = audio_args([(LEAD, key)] if key else [], secs)
+    secs = slide_secs(secs, key)
+    ains, amap = audio_args([(LEAD, key)] if key else [], secs, music)
     run(["-loop", "1", "-framerate", str(FPS), "-t", str(secs), "-i", f"{png}.png", *ains,
          "-vf", f"scale=1920:1080,fade=in:st=0:d=0.4,fade=out:st={secs - 0.4}:d=0.4", *amap, *X264, *AUDIO, str(out)])
 
@@ -121,6 +156,18 @@ def main():
     shutil.rmtree(BUILD, ignore_errors=True); BUILD.mkdir(parents=True)
     titles = page_titles()
     clips = []
+    tracks = {}                                                  # slide title -> (wav, offset, gain)
+    if MUSIC:
+        intro = [slide_secs(secs, key) for what, secs, key in PLAN if what in INTRO]
+        bed = render_music("bed", sum(intro))
+        at = 0.0
+        for (what, secs, key) in [x for x in PLAN if x[0] in INTRO]:
+            tracks[what] = (bed, at, GAIN["bed"]); at += slide_secs(secs, key)
+        for what, secs, key in PLAN:
+            if what in TRANSITIONS:
+                tracks[what] = (render_music("sting", min(slide_secs(secs, key), 5.0)), 0.0, GAIN["sting"])
+            elif what == SUMMARY:
+                tracks[what] = (render_music("outro", slide_secs(secs, key)), 0.0, GAIN["outro"])
     for i, (what, arg, key) in enumerate(PLAN):
         out = BUILD / f"{i:02d}.mp4"
         if what == "rec":
@@ -130,7 +177,7 @@ def main():
         else:
             if what not in titles:
                 sys.exit(f"no slide titled {what!r} in {PDF.name}")
-            slide_clip(titles[what], arg, out, key)
+            slide_clip(titles[what], arg, out, key, tracks.get(what))
         clips.append(out)
         print(f"{out.name}: {what if what != 'rec' else arg} ({duration(out):.1f} s)")
     (BUILD / "list.txt").write_text("".join(f"file '{c.name}'\n" for c in clips))
