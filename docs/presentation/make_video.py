@@ -2,7 +2,10 @@
 
 Needs ffmpeg with libx264: FFMPEG=/path/to/ffmpeg, or ffmpeg on the PATH, or the imageio-ffmpeg package's build.
 
-    python docs/presentation/make_video.py
+    python docs/presentation/make_video.py              # captions only: c8000v-dmvpn-portal-demo.mp4
+    python docs/presentation/make_video.py --narrated   # with the voice-over: c8000v-dmvpn-portal-demo-narrated.mp4
+
+--narrated uses the recordings demo.py --narrated made (paced to the voice) and the lines narration.py synthesized.
 """
 import json
 import os
@@ -13,10 +16,12 @@ import sys
 from pathlib import Path
 
 D = Path(__file__).resolve().parent
-REC = D / "recordings"
+NARRATED = "--narrated" in sys.argv
+VOICE_DIR = D / "recordings" / "voice"
+REC = D / "recordings" / ("narrated" if NARRATED else "")
 BUILD = REC / "_build"
 PDF = D / "c8000v-dmvpn-portal.pdf"
-OUT = D / "c8000v-dmvpn-portal-demo.mp4"
+OUT = D / ("c8000v-dmvpn-portal-demo-narrated.mp4" if NARRATED else "c8000v-dmvpn-portal-demo.mp4")
 FPS = 30
 
 
@@ -37,16 +42,18 @@ X264 = ["-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv42
 SILENCE = ["-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000"]
 AUDIO = ["-c:a", "aac", "-b:a", "96k", "-shortest"]
 
-# (slide title as it appears in the PDF, seconds) or ("rec", segment)
+# (slide title as it appears in the PDF, seconds, its voice-over line) or ("rec", segment, None)
 PLAN = [
-    ("C8000v DMVPN Portal", 6), ("Running a DMVPN service by hand does not scale", 11), ("What the portal does", 10),
-    ("Capabilities at a glance", 11),
-    ("A tour of the portal", 3.5), ("rec", "portal"),
-    ("Customers, access and the API", 3.5), ("rec", "customer"),
-    ("Source of truth: Nautobot", 3.5), ("Where the customers and the VPN live in Nautobot", 10), ("rec", "nautobot"),
-    ("How the lab is monitored", 10), ("rec", "grafana"),
-    ("Measured, not assumed", 10), ("In short", 9),
+    ("C8000v DMVPN Portal", 6, "s_title"), ("Running a DMVPN service by hand does not scale", 11, "s_problem"),
+    ("What the portal does", 10, "s_what"), ("Capabilities at a glance", 11, "s_caps"),
+    ("A tour of the portal", 3.5, "s_tour"), ("rec", "portal", None),
+    ("Customers, access and the API", 3.5, "s_customers"), ("rec", "customer", None),
+    ("Source of truth: Nautobot", 3.5, "s_nautobot"), ("Where the customers and the VPN live in Nautobot", 10, "s_nbmodel"),
+    ("rec", "nautobot", None),
+    ("How the lab is monitored", 10, "s_monitoring"), ("rec", "grafana", None),
+    ("Measured, not assumed", 10, "s_results"), ("In short", 9, "s_summary"),
 ]
+LEAD = 0.6                                                      # a slide's voice starts this long after it appears
 
 
 def run(args):
@@ -72,20 +79,41 @@ def page_titles():
     return out
 
 
-def slide_clip(page, secs, out):
+def audio_args(lines, secs):
+    """ffmpeg inputs and filter for a clip's sound: each (seconds, key) line delayed into place, silence elsewhere."""
+    if not NARRATED or not lines:
+        return SILENCE, ["-map", "0:v", "-map", "1:a"]
+    ins, parts = [], []
+    for i, (t, key) in enumerate(lines):
+        ins += ["-i", str(VOICE_DIR / f"{key}.wav")]
+        ms = max(0, int(t * 1000))
+        parts.append(f"[{i + 1}:a]aresample=48000,aformat=channel_layouts=stereo,adelay={ms}|{ms}[a{i}]")
+    mix = "".join(f"[a{i}]" for i in range(len(lines)))
+    graph = ";".join(parts) + f";{mix}amix=inputs={len(lines)}:normalize=0:dropout_transition=0,apad,atrim=0:{secs:.2f}[aout]"
+    return ins, ["-filter_complex", graph, "-map", "0:v", "-map", "[aout]"]
+
+
+def slide_clip(page, secs, out, key=None):
     png = BUILD / f"p{page:02d}"
     subprocess.run(["pdftoppm", "-png", "-r", "144", "-scale-to-x", "1920", "-scale-to-y", "1080", "-f", str(page), "-l", str(page),
                     "-singlefile", str(PDF), str(png)], check=True)
-    run(["-loop", "1", "-framerate", str(FPS), "-t", str(secs), "-i", f"{png}.png", *SILENCE,
-         "-vf", f"scale=1920:1080,fade=in:st=0:d=0.4,fade=out:st={secs - 0.4}:d=0.4", *X264, *AUDIO, str(out)])
+    if NARRATED and key:
+        secs = max(secs, LEAD + VOICE[key]["secs"] + 1.0)
+    ains, amap = audio_args([(LEAD, key)] if key else [], secs)
+    run(["-loop", "1", "-framerate", str(FPS), "-t", str(secs), "-i", f"{png}.png", *ains,
+         "-vf", f"scale=1920:1080,fade=in:st=0:d=0.4,fade=out:st={secs - 0.4}:d=0.4", *amap, *X264, *AUDIO, str(out)])
 
 
 def rec_clip(name, out, marks):
     src = REC / marks[name]["file"]
     start = marks[name]["start"]
     secs = duration(src) - start - 0.7                          # the end: the caption cleared, the context closing
-    run(["-ss", str(start), "-t", str(secs), "-i", str(src), *SILENCE,
-         "-vf", f"fps={FPS},scale=1920:1080,fade=in:st=0:d=0.5,fade=out:st={secs - 0.5}:d=0.5", *X264, *AUDIO, str(out)])
+    ains, amap = audio_args([(t - start, k) for t, k in marks[name].get("events", [])], secs)
+    run(["-ss", str(start), "-t", str(secs), "-i", str(src), *ains,
+         "-vf", f"fps={FPS},scale=1920:1080,fade=in:st=0:d=0.5,fade=out:st={secs - 0.5}:d=0.5", *amap, *X264, *AUDIO, str(out)])
+
+
+VOICE = json.loads((VOICE_DIR / "durations.json").read_text()) if NARRATED else {}
 
 
 def main():
@@ -93,7 +121,7 @@ def main():
     shutil.rmtree(BUILD, ignore_errors=True); BUILD.mkdir(parents=True)
     titles = page_titles()
     clips = []
-    for i, (what, arg) in enumerate(PLAN):
+    for i, (what, arg, key) in enumerate(PLAN):
         out = BUILD / f"{i:02d}.mp4"
         if what == "rec":
             if arg not in marks:
@@ -102,7 +130,7 @@ def main():
         else:
             if what not in titles:
                 sys.exit(f"no slide titled {what!r} in {PDF.name}")
-            slide_clip(titles[what], arg, out)
+            slide_clip(titles[what], arg, out, key)
         clips.append(out)
         print(f"{out.name}: {what if what != 'rec' else arg} ({duration(out):.1f} s)")
     (BUILD / "list.txt").write_text("".join(f"file '{c.name}'\n" for c in clips))

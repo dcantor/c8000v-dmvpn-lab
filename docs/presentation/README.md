@@ -11,6 +11,7 @@ screenshot, numbered callouts match the explanations beside it.
 | `nb_session.py` | signs in to Nautobot once: it asks for the username and password in the terminal and keeps the session in `~/.cache/c8d/nautobot-state.json`, outside the repo |
 | `demo.py` | records the demo walkthrough (the portal as staff and as a customer, Nautobot, Grafana) as browser videos, with captions, a pointer and highlight rings drawn into the page; the recordings go to `recordings/` (not in git) |
 | `make_video.py` | the recordings and slides from the PDF → `c8000v-dmvpn-portal-demo.mp4` (1920x1080, H.264, about 6 minutes) |
+| `narration.py` | the voice-over script, one line per scene, synthesized with Piper into `recordings/voice/` |
 | `topdf.py` | the .pptx → the .pdf, drawn from the slides themselves, so no office suite is needed |
 
 ## Rebuilding
@@ -48,3 +49,18 @@ webapp/.venv/bin/python docs/presentation/demo.py          # or one segment: por
 /tmp/deck/bin/pip install imageio-ffmpeg                   # when there is no ffmpeg with libx264
 /tmp/deck/bin/python docs/presentation/make_video.py
 ```
+
+### The narrated version
+
+`c8000v-dmvpn-portal-demo-narrated.mp4` (7 min 54 s) is the same tour with a female voice-over: Piper's
+`en_US-lessac-high` voice, synthesized offline. The walkthrough is re-recorded so it is paced to the voice. Each caption
+starts its line, and the next scene waits until the line is finished.
+
+```bash
+/tmp/deck/bin/python docs/presentation/narration.py                   # the voice (needs the voice in ~/.cache/c8d/piper/)
+webapp/.venv/bin/python docs/presentation/demo.py --narrated          # recordings paced to it
+/tmp/deck/bin/python docs/presentation/make_video.py --narrated
+```
+
+The Lessac voice was trained on the Blizzard 2013 Lessac data, which is licensed for research use. Check that licence
+before using the narrated video commercially.

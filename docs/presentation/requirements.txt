@@ -1,3 +1,6 @@
 python-pptx==1.0.2
 Pillow
 reportlab==5.0.1
+# the demo video
+imageio-ffmpeg        # an ffmpeg with libx264, when the system has none
+piper-tts==1.8.0      # the narrated video: offline text-to-speech (voice: see narration.py)

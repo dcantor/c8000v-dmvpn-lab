@@ -11,6 +11,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 While the version is 0.x, the lab's interfaces are still settling. The current version is in [`VERSION`](VERSION), in
 the portal's header, and in git as a `v<version>` tag.
 
+## [0.21.5] — 2026-09-27
+
+### Added
+- **A narrated demo video, `docs/presentation/c8000v-dmvpn-portal-demo-narrated.mp4`** (7 min 54 s). It is the same
+  tour with a female voice-over (Piper, `en_US-lessac-high`, synthesized offline).
+  - `narration.py` holds the script (45 lines, written to be spoken) and synthesizes it.
+  - `demo.py --narrated` re-records the walkthrough paced to the voice: each caption starts its line, and the next
+    scene waits for it to finish.
+  - `make_video.py --narrated` mixes the lines in where they were spoken, and gives each slide its line.
+  - The captioned video without narration stays as it was.
+
 ## [0.21.4] — 2026-09-27
 
 ### Added
@@ -541,6 +552,7 @@ the portal's header, and in git as a `v<version>` tag.
   - `nac/`, Network-as-Code for the C8000vs.
   - Robot suites, the README, and the first Nautobot seed.
 
+[0.21.5]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.21.4...v0.21.5
 [0.21.4]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.21.3...v0.21.4
 [0.21.3]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.21.2...v0.21.3
 [0.21.2]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.21.1...v0.21.2
