@@ -52,11 +52,13 @@ LINES = {
              "with a monthly P D F report.",
     "p_res1": "On the resilience page, you fail a hub, a provider or a circuit on purpose, while every host pings every other host.",
     "p_res2": "Each experiment is broken down flow by flow: who failed over, who was cut off, and for how long.",
+    "p_capacity": "The capacity page shows how many more customers fit, and which limit runs out first: today, the provider's "
+                  "customer ports. Each hub is measured against its limits: spokes, I P sec sessions, C P U, memory, and the licensed throughput.",
     "p_prov": "In Provision, every change is a job. You pick a task, review its plan, and it runs, with approval wherever the policy asks for it.",
     "p_add1": "Adding a customer takes one form. The router type, preferred hub, addresses, ports and tunnel index are allocated "
               "for you, and checked to be free.",
-    "p_add2": "Before anything runs, the plan shows exactly what will change. Here, a new Vy O S router, dual-homed onto both "
-              "providers, with no hub changes at all.",
+    "p_add2": "Before anything runs, the plan shows exactly what will change, and the capacity left afterwards. Here, a new "
+              "Vy O S router, dual-homed onto both providers, with no hub changes at all.",
     "p_mod": "Modifying a customer works the same way: its company, its applications, its preferred hub, a second provider, "
              "even its router type.",
     "p_mplan": "Again, the plan lists every router the change touches, and whether any of them has to be rebuilt, before anything happens.",

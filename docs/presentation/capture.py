@@ -185,6 +185,13 @@ def more(b):
     shot(p, "24_psk", [("#sec-body tr:nth-child(1)", "Only a fingerprint, never the key"), ("#sec-body tr:nth-child(2)", "When, by whom, which job"),
                        ("#sec-body tr:nth-child(3)", "Every router that uses it"), ("#sec-rotate", "Admins only")], scroll_to="#sec-card")
 
+    # capacity: hub load and room to grow
+    p.evaluate("show('capacity')"); p.wait_for_selector("#cap-hubs .caphub", timeout=90_000); time.sleep(1.5)
+    shot(p, "33_capacity", [("#cap-sum .cap-sum > .big:first-child", "Room to grow: and what runs out first"),
+                            ("#cap-hubs .caphub:first-child", "Each hub against its limits"),
+                            ("#cap-provs", "Provider ports"), ("#cap-host", "The lab host")], top=0)
+    p.evaluate("show('provision')"); time.sleep(1)
+
     # jobs: the list, a deploy, a test run
     p.evaluate("show('runs')"); time.sleep(2)
     shot(p, "25_jobs", [("#runs", "One job at a time; progress for each")], scroll_to="#runs")

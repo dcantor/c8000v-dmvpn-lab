@@ -213,6 +213,13 @@ def portal(b):
     s.cap("Resilience", "One experiment, flow by flow: who failed over, who was cut off, and for how long", 4, say="p_res2")
 
     p.evaluate("window.scrollTo({top:0, behavior:'smooth'})"); time.sleep(0.8)
+    s.point("nav a[data-view=capacity]", click=True)
+    p.wait_for_selector("#cap-hubs .caphub", timeout=90_000); time.sleep(1)
+    s.cap("Capacity", "How many more customers fit, what runs out first — and each hub against its limits", 0.5, say="p_capacity")
+    s.ring("#cap-sum .cap-sum > .big:first-child", 3.5); s.unring()
+    s.ring("#cap-hubs .caphub:first-child", 4.5); s.unring(); s.ring("#cap-host", 3); s.unring()
+
+    p.evaluate("window.scrollTo({top:0, behavior:'smooth'})"); time.sleep(0.8)
     s.point("nav a[data-view=provision]", click=True); time.sleep(1.5)
     s.cap("Provision", "Every change is a job: pick a task, see its plan, and it runs — with approval where the policy asks", 1, say="p_prov")
     s.ring("#tasks", 3); s.unring()
@@ -223,7 +230,7 @@ def portal(b):
     s.point("#w-dual", click=True, wait=False); time.sleep(3)
     p.evaluate("(() => { const d = document.getElementById('wiz'), e = document.getElementById('w-plan'); d.scrollTo({ top: e.offsetTop - 200, behavior: 'smooth' }); })()")
     time.sleep(1.2)
-    s.cap("Add a customer", "The plan before anything runs: a VyOS router, dual-homed onto both providers — no hub changes", 0.5, say="p_add2")
+    s.cap("Add a customer", "The plan before anything runs — and the capacity it leaves: a VyOS router on both providers, no hub changes", 0.5, say="p_add2")
     s.ring("#w-plan", 4); s.unring()
     s.point("#wiz button[onclick='wiz.close()']", click=True); time.sleep(0.8)
 

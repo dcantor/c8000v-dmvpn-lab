@@ -11,6 +11,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 While the version is 0.x, the lab's interfaces are still settling. The current version is in [`VERSION`](VERSION), in
 the portal's header, and in git as a `v<version>` tag.
 
+## [0.22.1] — 2026-09-27
+
+### Changed
+- **The presentation and both demo videos show Capacity.**
+  - **Deck and PDF (62 slides):**
+    - a new annotated slide covers room to grow, each hub against its limits, the provider ports and the lab host;
+    - the capabilities slide lists capacity under Prove;
+    - the Add-a-customer plan slide shows the new capacity line.
+  - **Videos:** the portal walkthrough has a Capacity scene. The narrated version adds a line for it, and the plan's
+    line now mentions the capacity it leaves.
+    - The captioned video is 6 min 42 s.
+    - The narrated video is 8 min 14 s.
+
 ## [0.22.0] — 2026-09-27
 
 ### Added
@@ -582,6 +595,7 @@ the portal's header, and in git as a `v<version>` tag.
   - `nac/`, Network-as-Code for the C8000vs.
   - Robot suites, the README, and the first Nautobot seed.
 
+[0.22.1]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.22.0...v0.22.1
 [0.22.0]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.21.6...v0.22.0
 [0.21.6]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.21.5...v0.21.6
 [0.21.5]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.21.4...v0.21.5

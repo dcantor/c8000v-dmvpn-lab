@@ -1,6 +1,6 @@
 # The portal presentation and demo video
 
-`c8000v-dmvpn-portal.pptx` (61 slides, 16:9, with speaker notes) and `c8000v-dmvpn-portal.pdf` present the portal.
+`c8000v-dmvpn-portal.pptx` (62 slides, 16:9, with speaker notes) and `c8000v-dmvpn-portal.pdf` present the portal.
 They cover the problem it solves, what it does and its capabilities. Then come four sections of annotated screenshots: the tour; Provision in depth, with every task and its dialog, plan and job; change control; customers, access and the API; Nautobot, where the customers and the VPN are modelled; and monitoring in Grafana. On each
 screenshot, numbered callouts match the explanations beside it.
 
@@ -10,7 +10,7 @@ screenshot, numbered callouts match the explanations beside it.
 | `build.py` | `shots/` → the .pptx |
 | `nb_session.py` | signs in to Nautobot once: it asks for the username and password in the terminal and keeps the session in `~/.cache/c8d/nautobot-state.json`, outside the repo |
 | `demo.py` | records the demo walkthrough (the portal as staff and as a customer, Nautobot, Grafana) as browser videos, with captions, a pointer and highlight rings drawn into the page; the recordings go to `recordings/` (not in git) |
-| `make_video.py` | the recordings and slides from the PDF → `c8000v-dmvpn-portal-demo.mp4` (1920x1080, H.264, about 6 minutes) |
+| `make_video.py` | the recordings and slides from the PDF → `c8000v-dmvpn-portal-demo.mp4` (1920x1080, H.264, about 6½ minutes) |
 | `narration.py` | the voice-over script, one line per scene, synthesized with Piper into `recordings/voice/` |
 | `music.py` | the videos' music, composed in code (no samples, nothing downloaded): a bed for the opening slides, a transition sting, a closing piece |
 | `topdf.py` | the .pptx → the .pdf, drawn from the slides themselves, so no office suite is needed |
@@ -35,9 +35,9 @@ The capture only opens dialogs and pages: it starts no job. The Restore slide up
 
 ## The demo video
 
-`c8000v-dmvpn-portal-demo.mp4` runs about 6 minutes, with captions and no narration. It opens with the title,
+`c8000v-dmvpn-portal-demo.mp4` runs about 6½ minutes, with captions and no narration. It opens with the title,
 problem, solution and capabilities slides, then walks through:
-- the portal: the cloud, the map and a phase 3 shortcut forming, SLA, resilience, Provision's plans, change control
+- the portal: the cloud, the map and a phase 3 shortcut forming, SLA, resilience, capacity, Provision's plans, change control
   and the rotation job's diff;
 - the customer's own view;
 - Nautobot: tenant, the hub's tunnels, prefixes, BGP and the config context;
@@ -53,7 +53,7 @@ webapp/.venv/bin/python docs/presentation/demo.py          # or one segment: por
 
 ### The narrated version
 
-`c8000v-dmvpn-portal-demo-narrated.mp4` (7 min 54 s) is the same tour with a female voice-over: Piper's
+`c8000v-dmvpn-portal-demo-narrated.mp4` (8 min 14 s) is the same tour with a female voice-over: Piper's
 `en_US-lessac-high` voice, synthesized offline. The walkthrough is re-recorded so it is paced to the voice. Each caption
 starts its line, and the next scene waits until the line is finished.
 

@@ -208,7 +208,7 @@ def caps_slide(n):
         ("Change", "Add, modify and remove customers, deploy the model, fix drift, back up and restore, choose the preferred hub or add a second provider."),
         ("Control", "Change requests with four-eyes approval, change windows, emergency changes, and maintenance mode that mutes alerts."),
         ("Audit", "Every job snapshots every router before and after it runs, records who asked and who approved, and shows a diff per router."),
-        ("Prove", "SLA per customer (availability, latency, loss), application checks, simulated failures and measured failover times."),
+        ("Prove", "SLA per customer, application checks, failure simulation with measured failover times, and capacity: hub load and room to grow."),
         ("Secure", "Sign-in with roles, admin-only pre-shared key rotation with a random key, and secrets masked in every view and log."),
         ("Customers", "A read-only customer portal: its own site and applications, SLA and PDF report, change requests and self-service tests."),
         ("Automate", "A REST API for everything (Swagger), Prometheus metrics, progress and ETA for each job, and a 73-test Robot suite after each change."),
@@ -557,7 +557,7 @@ TOUR = [
      "Nothing to look up or calculate: every address and port is allocated and checked free."),
     ("21_add_plan", "Provision in depth", "Add a customer: the plan, before anything runs", [
         ("Applications", "What the customer subscribes to; application checks start for them."),
-        ("The plan", "Router, cloud, hub, WAN, LAN and what changes: here a new VyOS router, both providers and Nautobot. No hub changes."),
+        ("The plan", "Router, cloud, hub, WAN, LAN, what changes, and the capacity left afterwards. Here, a new VyOS router on both providers, with no hub changes."),
         ("Provision", "Starts the job, or files a change request if the policy asks for approval.")],
      "Onboarding a customer takes one form and about 15 minutes, with the whole impact visible up front."),
     ("22_remove", "Provision in depth", "Remove a customer, safely", [
@@ -689,11 +689,17 @@ TOUR = [
     ("60_nb_graphql", "Source of truth", "Nautobot: the query the renderer reads", [
         ("Saved GraphQL query", "c8000v-dmvpn-lab-model: the config context, devices, interfaces, IPs and BGP in one call. The same renderer turns it into every configuration.")],
      "lab.sh nautobot render --check proves Nautobot and lab.conf produce identical configurations."),
+    ("33_capacity", "Prove", "Capacity: hub load and room to grow", [
+        ("Room to grow", "How many more C8000v or VyOS customers fit, and which limit runs out first: here, the provider's customer ports."),
+        ("Each hub", "Spokes against the planning figure, IPsec against the platform maximum, CPU and DRAM against the router's own levels, WAN traffic against the licensed throughput."),
+        ("Providers", "Customer ports used and free on each provider."),
+        ("The lab host", "Memory, CPU, and vCPUs allocated against its cores, for every lab on the machine.")],
+     "Growth is planned, not discovered: you see the next bottleneck before a hub or the lab fills up."),
 ]
 
 SECTIONS = [
     ("divider", "A tour of the portal", "Numbered callouts on each screenshot match the explanations beside it."),
-    "01_login", "02_cloud", "03_drift", "04_map", "05_path", "30_history", "06_sla", "07_resilience", "08_failover",
+    "01_login", "02_cloud", "03_drift", "04_map", "05_path", "30_history", "06_sla", "07_resilience", "08_failover", "33_capacity",
     ("divider", "Provision in depth", "Every change is a job: planned, approved, run, verified and recorded."),
     "09_provision", tasks_slide, "20_add", "21_add_plan", "10_modify", "22_remove", "26_deploy", "23_restore",
     "24_psk", "12_job", "27_tests", "29_maint",
