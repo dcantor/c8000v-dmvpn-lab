@@ -60,7 +60,7 @@ Version and changes: [`VERSION`](VERSION) and [`CHANGELOG.md`](CHANGELOG.md), wh
 | `tools/console.py`, `vyos_console.py`, `vyos_push.py`, `vyos_ssh.py`, `ios_cmd.py`, `vyos_cmd.py`, `host_cmd.py` | serial-console day-0, day-N over SSH, op-mode reads, the host ping matrix |
 | `tests/suites/` | `01_management`, `02_underlay`, `03_dmvpn`, `04_routing`, `05_nac_compliance`, `06_nautobot`, `07_portal`, `08_vyos_customers` |
 | `nautobot/` | `seed.py` (lab.conf → Nautobot), `render.py` (Nautobot → the same renderer, `--check`), `remove_customer.py`, the saved GraphQL query |
-| `webapp/` | the portal: `app.py` (the runs), `customers.py` (allocate, validate, plan, modify), `labconf.py` (edit `lab.conf`), `state.py` (what the routers are doing), `drift.py` (configuration drift), `sla.py` (probes and SLA reports), `backup.py` (backup / restore), `chaos.py` (simulated failures, failover timing), `changes.py` (change control), `cportal.py` (the customer portal), `static/index.html` |
+| `webapp/` | the portal: `app.py` (the runs), `customers.py` (allocate, validate, plan, modify), `labconf.py` (edit `lab.conf`), `state.py` (what the routers are doing), `drift.py` (configuration drift), `sla.py` (probes and SLA reports), `backup.py` (backup / restore), `chaos.py` (simulated failures, failover timing), `changes.py` (change control), `cportal.py` (the customer portal), `capacity.py` (hub load and room to grow), `static/index.html` |
 | `results/` | one folder per test run: `configs/pre-run`, `configs/post-run`, the diff, Robot report / log |
 | `docs/presentation/` | the portal presentation (.pptx, .pdf) and a demo video (.mp4), and the scripts that rebuild them from the live lab |
 
@@ -414,6 +414,28 @@ first rotation, lab.conf's public default is used). The committed renders carry 
 `nac/data/secrets.nac.yaml`, written by `gen_configs.py` and git-ignored. The portal shows the key only by its
 fingerprint, and masks it in every configuration it shows, the configuration history and drift reports. A backup
 does not include it.
+
+### Capacity
+
+The **Capacity** page shows how loaded each hub is and how much room the lab has left for customers.
+
+- **Each hub** is read over SSH at most every two minutes:
+  - the spokes registered, against a planning figure (40 by default);
+  - IPsec sessions, against the platform maximum (`show crypto eli`);
+  - control-plane CPU and DRAM, against the router's own warning and critical levels (`show platform resources`);
+  - WAN traffic (the 5-minute rate, in + out, on the provider links), against the licensed throughput level
+    (`show platform hardware throughput level`). The lab's hubs are licensed for 20 Mb/s, a real ceiling.
+- **Each provider:** its customer ports (eth4–eth11), used and free.
+- **The lab host:** memory in use, how busy its CPUs are, and the running VMs' vCPUs against its cores (every lab on
+  the machine counts).
+- **Room to grow:** how many more C8000v or VyOS customers fit, and which limit runs out first: the provider's
+  customer ports, host memory (a C8000v customer costs 4.3 GiB with its LAN host, a VyOS one 1.3 GiB, and 4 GiB is
+  kept back), or hub capacity.
+
+A resource is a warning at 75% of its limit and critical at 90%, or at the router's own levels. These thresholds,
+the planning figure and the memory reserve are editable on the page (admin). **Add a customer** shows the capacity
+after the new customer in its plan, and refuses a customer that would not fit. `GET /api/capacity` returns all of it,
+and `/metrics` publishes `lab_capacity_used_ratio{node,resource}` and `lab_capacity_room_customers{platform}`.
 
 ## Monitoring
 

@@ -39,6 +39,7 @@ import maint as M
 import chaos as X
 import drift as D
 import sla as SLA
+import capacity as CAP
 from state import HOST_PASS, HOST_USER, State, _ssh, ios, vtysh, vyos_op, vyos_show
 
 LAB = Path(__file__).resolve().parents[1]
@@ -133,7 +134,7 @@ def _need(method, path):
         return None
     if path == "/api/auth/password":
         return None
-    if path == "/api/policy":
+    if path in ("/api/policy", "/api/capacity/policy"):
         return ("admin",)
     if re.fullmatch(r"/api/changes/[^/]+/(approve|reject)", path):
         return ("approver",)
@@ -950,7 +951,14 @@ def api_suggest(region: str | None = None):
 @app.post("/api/customers/validate", tags=["provisioning"], summary="Check a customer against the running lab")
 def api_validate(spec: CustomerSpec):
     d = spec.model_dump()
-    return {"problems": C.validate(d), "plan": C.plan(d)}
+    problems, plan = C.validate(d), C.plan(d)
+    try:                                                         # what one more customer does to capacity
+        note, prob = CAP.plan_note(_capacity(max_age=300), d.get("platform", "c8000v"), bool(d.get("dual_homed")))
+        plan["capacity"] = note
+        problems += [prob] if prob else []
+    except Exception:                                            # noqa: BLE001 — capacity never blocks a plan by failing
+        pass
+    return {"problems": problems, "plan": plan}
 
 
 @app.get("/api/customers/{name}/removal", tags=["provisioning"], summary="What removing a customer takes away")
@@ -1217,6 +1225,57 @@ def api_security():
     last = next((r for r in registry.list(100) if r["mode"] == "rotatepsk" and r["status"] == "success"), None)
     return {"psk": SEC.psk_info(), "routers": C.facts()["hubs"] + C.facts()["customers"],
             "last_rotation": {k: last.get(k) for k in ("id", "finished", "started_by")} if last else None}
+
+
+
+# ---- capacity ------------------------------------------------------------------------------------------------------
+_cap = {"last": None}
+
+
+def _lab_conf_sizes():
+    text = (LAB / "lab.conf").read_text()
+    return {k: int(re.search(rf"^{k}=(\d+)", text, re.M)[1]) for k in ("C8000V_RAM_MIB", "VYOS_RAM_MIB", "HOST_RAM_MIB")}
+
+
+def _capacity(max_age=90):
+    last = _cap["last"]
+    if last and time.time() - last["generated"] < max_age:
+        return last
+    _cap["last"] = CAP.compute(C.facts(), _snap["snap"] or state.get(), _lab_conf_sizes())
+    return _cap["last"]
+
+
+def _capacity_refresher():
+    """Every two minutes while the lab runs, so /metrics has capacity without a scrape waiting on SSH."""
+    time.sleep(90)
+    while True:
+        try:
+            if any(st == "running" for st in _vm_states().values()):
+                _capacity(max_age=0)
+        except Exception:                                       # noqa: BLE001
+            pass
+        time.sleep(120)
+
+
+@app.get("/api/capacity", tags=["state"], summary="Capacity: how loaded each hub is, and how much room the lab has for more customers")
+def api_capacity(refresh: bool = False):
+    return _capacity(max_age=0 if refresh else 90)
+
+
+@app.get("/api/capacity/policy", tags=["state"], summary="The capacity planning figures and thresholds")
+def api_capacity_policy():
+    return CAP.policy()
+
+
+@app.put("/api/capacity/policy", tags=["state"], summary="Change the capacity planning figures and thresholds (admin)")
+def api_capacity_policy_put(p: dict):
+    merged = {**CAP.policy(), **{k: p[k] for k in CAP.DEFAULT if k in p}}
+    probs = CAP.validate_policy(merged)
+    if probs:
+        raise HTTPException(400, "; ".join(probs))
+    CAP.save_policy(merged)
+    _cap["last"] = None
+    return CAP.policy()
 
 
 # ---- maintenance ----------------------------------------------------------------------------------------------------
@@ -1806,6 +1865,7 @@ def _start_refresher():
     threading.Thread(target=_drift_scheduler, daemon=True).start()
     threading.Thread(target=_sla_prober, daemon=True).start()
     threading.Thread(target=_changes_scheduler, daemon=True).start()
+    threading.Thread(target=_capacity_refresher, daemon=True).start()
 
 
 def _vm_states():
@@ -1882,6 +1942,20 @@ def prometheus_metrics():
         out.append(metric_line("lab_health_problems", {"lab": L}, len(h.get("problems") or [])))
         out += _g("lab_collector_last_refresh_seconds", "When the live state behind these gauges was collected")
         out.append(metric_line("lab_collector_last_refresh_seconds", {"lab": L}, int(snap["generated"])))
+    cap = _cap["last"]
+    if cap:
+        out += _g("lab_capacity_used_ratio", "How much of a resource is in use: 0 to 1 (hub spokes, IPsec, CPU, DRAM, WAN throughput; provider ports; host)")
+        for h in cap["hubs"]:
+            for r in h["resources"]:
+                if r["pct"] is not None:
+                    out.append(metric_line("lab_capacity_used_ratio", {"lab": L, "node": h["name"], "resource": r["name"]}, round(r["pct"] / 100, 4)))
+        for x in cap["providers"]:
+            out.append(metric_line("lab_capacity_used_ratio", {"lab": L, "node": x["name"], "resource": "Customer ports"}, round(x["resource"]["pct"] / 100, 4)))
+        for r in cap["host"]["resources"]:
+            out.append(metric_line("lab_capacity_used_ratio", {"lab": L, "node": "lab-host", "resource": r["name"]}, round(r["pct"] / 100, 4)))
+        out += _g("lab_capacity_room_customers", "How many more customers of a platform fit before the first limit")
+        for plat in ("c8000v", "vyos"):
+            out.append(metric_line("lab_capacity_room_customers", {"lab": L, "platform": plat}, cap["room"][plat]["customers"]))
     out += prober.metrics(L, metric_line)
     out += M.metrics(L, metric_line, C.facts())
     rep = D.latest()

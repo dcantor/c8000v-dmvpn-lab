@@ -22,6 +22,18 @@ td { padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:top } 
 .mono { font-family:"DejaVu Sans Mono",Consolas,monospace; font-size:12.5px }
 .pill { display:inline-block; padding:1px 8px; border-radius:999px; font-size:11.5px; font-weight:600; background:var(--pill); color:var(--body) }
 .pill.ok { background:#dcf5e4; color:#15803d } .pill.bad { background:#fde2e2; color:#b91c1c }
+.cap-sum { display:flex; flex-wrap:wrap; gap:14px; align-items:stretch }
+.cap-sum .big { flex:1 1 260px; border:1px solid var(--line); border-radius:10px; padding:12px 16px; background:var(--bg) }
+.cap-sum .big .n { font-size:30px; font-weight:700 } .cap-sum .big .l { color:var(--muted); font-size:13px }
+.cap-sum .big.warning { border-color:#f3c77a } .cap-sum .big.critical { border-color:#f1a3a3 }
+.capgrid { display:grid; grid-template-columns:repeat(auto-fit,minmax(330px,1fr)); gap:14px }
+.caphub { border:1px solid var(--line); border-radius:10px; padding:12px 14px; background:var(--bg) }
+.caphub h3 { margin:0 0 8px; font-size:15px; display:flex; justify-content:space-between; align-items:center }
+.capres { margin:7px 0 } .capres .t { display:flex; justify-content:space-between; font-size:12.5px; gap:8px }
+.capres .t .v { color:var(--muted); white-space:nowrap } .capres .note { font-size:11px; color:var(--muted) }
+.capbar { position:relative; height:10px; border-radius:5px; background:var(--pill); overflow:hidden; margin-top:3px }
+.capbar .f { height:100%; border-radius:5px; background:var(--green) } .capbar.warning .f { background:#d97706 } .capbar.critical .f { background:var(--red) }
+.capbar .mk { position:absolute; top:0; bottom:0; width:2px; background:rgba(0,0,0,.28) }
 .pill.warn { background:#fdf0d5; color:#b45309 } .pill.teal { background:#d7eef3; color:#0e7490 }
 .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; margin-bottom:14px }
 .kpi { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 14px }
@@ -201,7 +213,7 @@ pre.diff .dp, #mapout .dp { color:#86efac } pre.diff .dm, #mapout .dm { color:#f
 <header>
   <div><h1>C8000v DMVPN Portal</h1>
     <div class="sub">three hubs &middot; Catalyst 8000v and VyOS customers &middot; two VyOS providers &middot; Network-as-Code &middot; Nautobot</div></div>
-  <nav><a href="#cloud" data-view="cloud" class="on">The cloud</a><a href="#map" data-view="map">Network map</a><a href="#sla" data-view="sla">SLA</a><a href="#requests" data-view="requests" class="conly">Requests</a><a href="#diag" data-view="diag" class="conly">Diagnostics</a><a href="#resilience" data-view="resilience">Resilience</a><a href="#provision" data-view="provision">Provision</a>
+  <nav><a href="#cloud" data-view="cloud" class="on">The cloud</a><a href="#map" data-view="map">Network map</a><a href="#sla" data-view="sla">SLA</a><a href="#requests" data-view="requests" class="conly">Requests</a><a href="#diag" data-view="diag" class="conly">Diagnostics</a><a href="#resilience" data-view="resilience">Resilience</a><a href="#capacity" data-view="capacity">Capacity</a><a href="#provision" data-view="provision">Provision</a>
        <a href="#runs" data-view="runs">Jobs</a><a href="#tools" data-view="tools">Lab Tools</a><a href="/docs" target="_blank">API</a></nav>
   <div class="right"><span class="me" id="who"></span> &middot; <a href="#runs" id="chg-hdr" hidden></a> <a id="ver" href="https://github.com/dcantor/c8000v-dmvpn-lab/blob/main/CHANGELOG.md" target="_blank" rel="noopener" title="what changed (CHANGELOG.md)"></a> &middot; <span id="hdr"></span> &middot; <a href="#" id="theme">&#9790; dark</a></div>
 </header>
@@ -327,6 +339,23 @@ pre.diff .dp, #mapout .dp { color:#86efac } pre.diff .dm, #mapout .dm { color:#f
       <th>Addresses</th><th>Other access</th></tr></thead><tbody></tbody></table>
     <p class="hint">Consoles are raw TCP on the lab host (127.0.0.1): <span class="cmd">./lab.sh console &lt;node&gt;</span> attaches with socat
       (exit: Ctrl-] then q). Credentials are the lab defaults, the same ones in the repository.</p></div>
+</section>
+
+<section id="v-capacity" class="view">
+  <div class="card"><h2>Capacity <small>how loaded each hub is, and how much room the lab has for more customers</small>
+    <span style="float:right"><span class="hint" id="cap-when"></span> <button id="cap-refresh">Refresh now</button></span></h2>
+    <div id="cap-sum"><p class="hint">loading…</p></div></div>
+  <div class="card"><h2>Hubs <small>spokes against the planning figure; IPsec, CPU and DRAM against the router's own limits; WAN traffic against the licensed throughput</small></h2>
+    <div class="capgrid" id="cap-hubs"></div></div>
+  <div class="capgrid">
+    <div class="card"><h2>Providers <small>customer ports eth4–eth11</small></h2><div id="cap-provs"></div></div>
+    <div class="card"><h2>The lab host <small>every lab on this machine</small></h2><div id="cap-host"></div></div></div>
+  <div class="card" id="cap-pol-card"><h2>Planning figures <small>what "full" means here; warnings start at the warning level</small></h2>
+    <div class="row"><div><label>Spokes per hub (planning figure)</label><input id="cp-max" type="number" min="1"></div>
+      <div><label>Warning at (%)</label><input id="cp-warn" type="number" min="1" max="99"></div>
+      <div><label>Critical at (%)</label><input id="cp-crit" type="number" min="2" max="100"></div>
+      <div><label>Memory the host keeps (MiB)</label><input id="cp-res" type="number" min="0"></div></div>
+    <div class="actions"><button class="primary adminonly" id="cp-save">Save</button><span class="msg" id="cp-msg"></span></div></div>
 </section>
 
 <section id="v-provision" class="view">
@@ -499,7 +528,7 @@ applyTheme(); $('theme').onclick = e => { e.preventDefault();
 document.querySelectorAll('nav a[data-view]').forEach(a => a.onclick = e => { e.preventDefault(); show(a.dataset.view); });
 function show(v) { document.querySelectorAll('.view').forEach(x => x.classList.toggle('on', x.id === 'v-' + v));
   document.querySelectorAll('nav a[data-view]').forEach(a => a.classList.toggle('on', a.dataset.view === v));
-  location.hash = v; if (v === 'runs') { loadRuns(); loadChanges(); loadMaint(); } if (v === 'provision') loadSecurity(); if (v === 'requests') loadRequests(); if (v === 'diag') openDiag(); if (v === 'tools') loadTools(); if (v === 'sla') openSla(); if (v === 'resilience') loadResilience(); }
+  location.hash = v; if (v === 'runs') { loadRuns(); loadChanges(); loadMaint(); } if (v === 'provision') loadSecurity(); if (v === 'requests') loadRequests(); if (v === 'diag') openDiag(); if (v === 'tools') loadTools(); if (v === 'sla') openSla(); if (v === 'resilience') loadResilience(); if (v === 'capacity') loadCapacity(); }
 const pill = (ok, text, warn) => `<span class="pill ${ok ? 'ok' : (warn ? 'warn' : 'bad')}">${esc(text)}</span>`;
 
 const TASKS = [
@@ -515,6 +544,48 @@ const TASKS = [
   { title: 'Rotate the pre-shared key', admin: true, what: 'A new random IKE pre-shared key on every router (it never leaves secrets/ on the lab host), then every router’s IKE sessions set up again and checked.', meta: 'admin · about 7 minutes', go: () => { loadSecurity().then(() => $('sec-rotate').click()); } },
   { title: 'Run the tests', what: 'The Robot Framework suites against the live lab, with the evidence kept.', meta: 'about 10 minutes', go: () => start({ mode: 'test' }) },
 ];
+// ---- capacity ---------------------------------------------------------------------------------------------------------
+const CAPNUM = (x, u) => u === 'MB' || u === 'MiB' ? `${Math.round(x).toLocaleString()} ${u}` : u === 'kb/s' ? `${x.toLocaleString()} kb/s` : u === '%' ? `${x}%` : `${x}`;
+function capRes(r) {
+  const pct = r.pct ?? 0, w = Math.min(100, pct);
+  const mk = [r.warn, r.crit].filter(x => x && x <= 100).map(x => `<span class="mk" style="left:${x}%" title="${x}%"></span>`).join('');
+  return `<div class="capres"><div class="t"><span>${esc(r.name)} ${r.state !== 'ok' ? pill(false, r.state, r.state === 'warning') : ''}</span>
+    <span class="v">${r.unit === '%' ? `${pct}%` : `${CAPNUM(r.used, r.unit)} of ${CAPNUM(r.max, r.unit)} · ${pct}%`}</span></div>
+    <div class="capbar ${r.state}"><div class="f" style="width:${w}%"></div>${mk}</div>${r.note ? `<div class="note">${esc(r.note)}</div>` : ''}</div>`;
+}
+async function loadCapacity(refresh) {
+  $('cap-refresh').onclick = () => { $('cap-when').textContent = 'reading the hubs…'; loadCapacity(true); };
+  const r = await fetch('/api/capacity' + (refresh ? '?refresh=1' : '')), c = await r.json();
+  if (!r.ok) { $('cap-sum').innerHTML = `<p class="msg">${esc(c.detail || 'capacity unavailable')}</p>`; return; }
+  $('cap-when').textContent = 'as of ' + new Date(c.generated * 1000).toLocaleTimeString();
+  const rc = c.room.c8000v, rv = c.room.vyos, st = x => x.customers === 0 ? 'critical' : x.customers <= 1 ? 'warning' : '';
+  $('cap-sum').innerHTML = `<div class="cap-sum">
+    <div class="big ${st(rc)}"><div class="n">${rc.customers}</div><div class="l">more Catalyst 8000v customers fit — first limit: <b>${esc(rc.limited_by)}</b></div></div>
+    <div class="big ${st(rv)}"><div class="n">${rv.customers}</div><div class="l">more VyOS customers fit — first limit: <b>${esc(rv.limited_by)}</b></div></div>
+    <div class="big ${c.state === 'ok' ? '' : c.state}"><div class="n">${pill(c.state === 'ok', c.state, c.state === 'warning')}</div>
+      <div class="l">${c.warnings.length ? c.warnings.map(esc).join('<br>') : 'nothing near its limit'}</div></div></div>
+    <p class="hint">Limits per customer: ${Object.entries(rc.limits).map(([k, v]) => `${esc(k)} ${v}`).join(' · ')} (C8000v) ·
+      ${Object.entries(rv.limits).map(([k, v]) => `${esc(k)} ${v}`).join(' · ')} (VyOS)${c.room.dual_homed_ports != null ? ` · second-provider ports free: ${c.room.dual_homed_ports}` : ''}</p>`;
+  $('cap-hubs').innerHTML = c.hubs.map(h => `<div class="caphub"><h3><span>${esc(h.name)} <small class="hint">${esc(h.region || '')}</small></span>
+      ${h.error ? pill(false, 'unreadable') : pill(h.state === 'ok', h.state, h.state === 'warning')}</h3>
+    ${h.error ? `<p class="msg">${esc(h.error)}</p>` : ''}${h.resources.map(capRes).join('')}
+    <div class="note hint" style="font-size:11.5px">spokes: ${h.spokes.map(esc).join(', ') || 'none'}${h.throughput_kbps ? ` · licensed throughput ${(h.throughput_kbps / 1000).toLocaleString()} Mb/s` : ''}</div></div>`).join('');
+  $('cap-provs').innerHTML = c.providers.map(x => `<h3 style="font-size:14px;margin:6px 0 2px">${esc(x.name)} <small class="hint">${x.which === 'provider2' ? 'second provider' : 'provider'} · ${x.free} free</small></h3>
+    ${capRes(x.resource)}<div class="note hint" style="font-size:11.5px">wired: ${x.used.map(esc).join(', ') || 'none'}</div>`).join('');
+  const hh = c.host;
+  $('cap-host').innerHTML = hh.resources.map(capRes).join('') + `<p class="hint" style="font-size:12px">${hh.cores} cores · ${hh.vms_running ?? '?'} VMs running ·
+    ${(hh.mem_available_mib / 1024).toFixed(1)} GiB available, ${(hh.reserve_mib / 1024).toFixed(1)} GiB kept back ·
+    one more customer costs ${(hh.customer_cost_mib.c8000v / 1024).toFixed(1)} GiB (C8000v) or ${(hh.customer_cost_mib.vyos / 1024).toFixed(1)} GiB (VyOS), router and LAN host</p>`;
+  const p = c.policy;
+  $('cp-max').value = p.hub_max_spokes; $('cp-warn').value = p.warn_pct; $('cp-crit').value = p.crit_pct; $('cp-res').value = p.host_reserve_mib;
+  ['cp-max', 'cp-warn', 'cp-crit', 'cp-res'].forEach(id => $(id).disabled = !document.body.classList.contains('isadmin'));
+  $('cp-save').onclick = async () => {
+    const body = { hub_max_spokes: +$('cp-max').value, warn_pct: +$('cp-warn').value, crit_pct: +$('cp-crit').value, host_reserve_mib: +$('cp-res').value };
+    const q = await fetch('/api/capacity/policy', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    const j = await q.json(); $('cp-msg').textContent = q.ok ? 'saved' : (j.detail || 'not saved'); if (q.ok) loadCapacity();
+  };
+}
+
 async function loadSecurity() {
   const r = await fetch('/api/security'); if (!r.ok) return; const d = await r.json();
   const ago = t => t ? `${fmtT(t)} (${Math.max(0, Math.round((Date.now() / 1000 - t) / 86400))} days ago)` : 'never rotated';
@@ -612,7 +683,7 @@ async function check() {
   const v = await (await fetch('/api/customers/validate', { ...J, body: JSON.stringify(spec) })).json();
   if (v.detail) { $('w-msg').textContent = JSON.stringify(v.detail); return null; }
   const p = v.plan;
-  $('w-plan').innerHTML = [['Company', p.company], ['Router', p.vm], ['Cloud', p.cloud], ['Hub', p.prefer], ['WAN', p.wan], ['LAN', p.lan], ['Changes', 'the new router, ' + p.changed.join(', ') + ', Nautobot']]
+  $('w-plan').innerHTML = [['Company', p.company], ['Router', p.vm], ['Cloud', p.cloud], ['Hub', p.prefer], ['WAN', p.wan], ['LAN', p.lan], ['Changes', 'the new router, ' + p.changed.join(', ') + ', Nautobot']].concat(p.capacity ? [['Capacity', p.capacity]] : [])
     .map(([k, x]) => `<tr><th>${esc(k)}</th><td>${esc(x)}</td></tr>`).join('');
   $('w-note').textContent = p.untouched;
   $('w-msg').textContent = (v.problems || []).join('\n');

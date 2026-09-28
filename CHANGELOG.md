@@ -11,6 +11,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 While the version is 0.x, the lab's interfaces are still settling. The current version is in [`VERSION`](VERSION), in
 the portal's header, and in git as a `v<version>` tag.
 
+## [0.22.0] — 2026-09-27
+
+### Added
+- **Capacity** (a new portal page) shows how loaded each hub is and how much room the lab has for more customers.
+  - **Hubs:** the spokes registered, against an editable planning figure; IPsec sessions, against the platform
+    maximum; control-plane CPU and DRAM, against the router's own warning and critical levels; and WAN traffic,
+    against the licensed throughput level (20 Mb/s on these hubs).
+  - **Providers:** their customer ports, used and free.
+  - **The lab host:** memory, CPU busy, and vCPUs allocated against its cores.
+  - **Room to grow:** how many more C8000v or VyOS customers fit, and which limit runs out first. It is 3 today, set
+    by the provider's customer ports.
+  - **Warnings:** at 75% and 90% of a limit, or at the router's own levels. The thresholds are editable (admin).
+- **Add a customer shows capacity.** Its plan says what the new customer leaves, for example "hub-east 6/40 spokes;
+  room for 2 more", and it refuses a customer that would not fit.
+- **API and metrics.** `GET /api/capacity`, `GET`/`PUT /api/capacity/policy` (admin), and on `/metrics`
+  `lab_capacity_used_ratio{node,resource}` and `lab_capacity_room_customers{platform}`, refreshed every two minutes.
+- **A portal test** for the capacity readings, the admin-only policy and the plan's capacity line.
+
 ## [0.21.6] — 2026-09-27
 
 ### Added
@@ -564,6 +582,7 @@ the portal's header, and in git as a `v<version>` tag.
   - `nac/`, Network-as-Code for the C8000vs.
   - Robot suites, the README, and the first Nautobot seed.
 
+[0.22.0]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.21.6...v0.22.0
 [0.21.6]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.21.5...v0.21.6
 [0.21.5]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.21.4...v0.21.5
 [0.21.4]: https://github.com/dcantor/c8000v-dmvpn-lab/compare/v0.21.3...v0.21.4

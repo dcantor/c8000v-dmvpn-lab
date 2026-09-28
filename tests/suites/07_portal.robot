@@ -401,6 +401,28 @@ The pre-shared key stays out of git and out of sight, and only an admin can rota
     Should Contain    ${cfg.json()}[output]    pre-shared-key <secret
     POST On Session    portal    /api/runs    json=${{{"mode": "rotatepsk"}}}    expected_status=403
 
+Capacity shows every hub's load and the room left, and the Add-a-customer plan counts it
+    [Documentation]    /api/capacity reads each hub (spokes, IPsec, control-plane CPU, DRAM, WAN traffic against the
+    ...                licensed throughput), the providers' customer ports and the lab host, and says how many more
+    ...                customers fit and what runs out first. Only an admin changes the planning figures.
+    ${cap}=    GET On Session    portal    /api/capacity
+    ${c}=    Set Variable    ${cap.json()}
+    Length Should Be    ${c}[hubs]    ${{len($HUBS)}}
+    FOR    ${h}    IN    @{c}[hubs]
+        Should Be Equal    ${h}[error]    ${None}    ${h}[name] could not be read
+        ${names}=    Evaluate    [r["name"] for r in $h["resources"]]
+        FOR    ${r}    IN    Spokes registered    IPsec sessions    Control-plane CPU    DRAM    WAN traffic
+            Should Contain    ${names}    ${r}    ${h}[name] has no ${r} reading
+        END
+        Should Be True    ${h}[resources][0][used] >= 1    ${h}[name] has no spokes registered
+    END
+    Should Be True    ${c}[room][c8000v][customers] >= 0
+    Should Not Be Empty    ${c}[room][c8000v][limited_by]
+    PUT On Session    portal    /api/capacity/policy    json=${{{"hub_max_spokes": 30}}}    expected_status=403
+    ${s}=    GET On Session    portal    /api/customers/suggest
+    ${v}=    POST On Session    portal    /api/customers/validate    json=${s.json()}
+    Should Contain    ${v.json()}[plan][capacity]    room for
+
 *** Keywords ***
 Sign In
     Create Session    portal    http://127.0.0.1:8094    timeout=180

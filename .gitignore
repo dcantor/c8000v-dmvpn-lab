@@ -29,6 +29,7 @@ webapp/changes/
 webapp/customer_portal/
 webapp/auth/
 webapp/confighist/
+webapp/capacity/
 webapp/maintenance/
 secrets/
 nac/data/secrets.nac.yaml
